@@ -12,3 +12,113 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  nickname     String           @unique
+  role         Role             @default(USER)
+  password     String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  sideId       String?
+  side         Side?
+  abilities    SoldierAbility[]
+  squadId      String?
+  squad        Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
+  leadingSquad Squad?           @relation("SquadLeader")
+  missions     Mission[]
+}
+
+model Squad {
+  id        String   @id @default(uuid())
+  name      String
+  leader    User     @relation("SquadLeader", fields: [leaderId], references: [id])
+  leaderId  String   @unique
+  side      Side     @relation(fields: [sideId], references: [id])
+  sideId    String
+  members   User[]   @relation("SquadMembers")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Side {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  type      SideType @default(UNASSIGNED)
+  squads    Squad[]
+  leader    User?    @relation(fields: [leaderId], references: [id])
+  leaderId  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vehicle {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Mission {
+  id               String       @id @default(uuid())
+  name             String
+  author           User?        @relation(fields: [authorId], references: [id])
+  authorId         String?
+  description      String
+  blueforSlots     Int?
+  redforSlots      Int?
+  independentSlots Int?
+  missionDays      MissionDay[] @relation("MissionToMissionDay")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model MissionDay {
+  id        String    @id @default(uuid())
+  name      String
+  missions  Mission[] @relation("MissionToMissionDay")
+  date      DateTime
+  weekend   Weekend   @relation(fields: [weekendId], references: [id])
+  weekendId String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Weekend {
+  id          String       @id @default(uuid())
+  name        String
+  days        MissionDay[]
+  description String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+/**
+ * enums
+ */
+
+enum SideType {
+  BLUE
+  RED
+  UNASSIGNED
+}
+
+enum Role {
+  OWNER
+  TECH_ADMIN
+  GAME_ADMIN
+  USER
+}
+
+enum SoldierAbility {
+  COMMANDER
+  MEDIC
+  SNIPER
+  ANTI_TANK
+  ANTI_AIR
+  HELI_PILOT
+  JET_PILOT
+  TANK_CREW
+  VEHICLE_CREW
+}
