@@ -19,8 +19,6 @@ model User {
   nickname     String           @unique
   role         Role             @default(USER)
   password     String
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
   sideId       String?
   side         Side?
   abilities    SoldierAbility[]
@@ -28,6 +26,8 @@ model User {
   squad        Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
   leadingSquad Squad?           @relation("SquadLeader")
   missions     Mission[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
 model Squad {

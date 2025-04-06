@@ -1,0 +1,36 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { LoginUserDto } from './dto/login-user.dto';
+import { GetMeDto } from './dto/get-me-dto';
+
+@Controller('users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) { }
+
+  @Get()
+  me(@Param('id') paramDto: GetMeDto) {
+    return this.usersService.me(paramDto);
+  }
+
+  @Post('/signup')
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.signUp(createUserDto);
+  }
+
+  @Post('login')
+  login(@Body() loginUserDto: LoginUserDto) {
+    return this.usersService.login(loginUserDto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(+id, updateUserDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(+id);
+  }
+}
