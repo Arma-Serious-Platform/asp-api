@@ -1,8 +1,10 @@
 
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role, User } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { ROLES_KEY } from 'src/decorators/roles.decorator';
+
+export const Roles = Reflector.createDecorator<string[]>();
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -17,12 +19,12 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const { user } = context.switchToHttp().getRequest() as { user: User };
+    const { userId, role } = context.switchToHttp().getRequest() as { userId: string, role: Role };
 
-    if (!user) {
+    if (!userId) {
       throw new UnauthorizedException('No access');
     };
 
-    return requiredRoles.some((role) => user.role === role);
+    return requiredRoles.some((requiredRole) => role === requiredRole);
   }
 }
