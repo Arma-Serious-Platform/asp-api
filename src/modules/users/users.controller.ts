@@ -1,18 +1,43 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { GetMeDto } from './dto/get-me-dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
+import { MailerService } from '@nestjs-modules/mailer';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly mailerService: MailerService,
+  ) {}
 
   @Get()
   me(@Param('id') paramDto: GetMeDto) {
     return this.usersService.me(paramDto);
+  }
+
+  @Post('/email')
+  testMail() {
+    this.mailerService.sendMail({
+      to: 'agentoswork@gmail.com',
+      subject: 'Test',
+      text: 'Test',
+    });
+
+    return {
+      test: 1,
+    };
   }
 
   @Post('/signup')

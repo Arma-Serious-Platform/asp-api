@@ -12,7 +12,16 @@ import { MailerModule } from '@nestjs-modules/mailer';
       envFilePath: '.env',
     }),
     MailerModule.forRoot({
-      transport: process.env.EMAIL_SMTP_TRANSPORT,
+      transport: {
+        host: process.env.EMAIL_HOST,
+        ignoreTLS: true,
+        secure: false,
+        port: 465,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      },
       defaults: {
         from: process.env.EMAIL_SMTP_FROM,
       },
