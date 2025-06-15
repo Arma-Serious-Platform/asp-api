@@ -4,6 +4,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { GetMeDto } from './dto/get-me-dto';
+import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 
 @Controller('users')
 export class UsersController {
@@ -17,6 +18,11 @@ export class UsersController {
   @Post('/signup')
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.signUp(createUserDto);
+  }
+
+  @Patch('/change-role')
+  changeUserRole(@Body() changeUserRoleDto: ChangeUserRoleDto) {
+    return this.usersService.changeUserRole(changeUserRoleDto);
   }
 
   @Post('login')

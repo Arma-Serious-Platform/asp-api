@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -6,10 +6,24 @@ import { compare, hash } from 'bcryptjs';
 import { LoginUserDto } from './dto/login-user.dto';
 import { JwtService } from '@nestjs/jwt';
 import { GetMeDto } from './dto/get-me-dto';
+import { MailerService } from '@nestjs-modules/mailer';
+import { randomBytes } from 'node:crypto';
+import { UserRole } from '@prisma/client';
+import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService, private readonly jwtService: JwtService) { }
+  constructor(private readonly prisma: PrismaService, private readonly jwtService: JwtService, private readonly mailerService: MailerService) { }
+
+  private generateActivationToken() {
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 1 day
+
+    return {
+      token,
+      expiresAt
+    }
+  }
 
   async me(dto: GetMeDto) {
     const user = await this.prisma.user.findFirst({
@@ -42,12 +56,47 @@ export class UsersService {
 
     const hashedPassword = await hash(createUserDto.password, 15);
 
-    await this.prisma.user.create({
+    const { email, activationToken } = await this.prisma.user.create({
       data: {
         ...createUserDto,
-        password: hashedPassword
+        password: hashedPassword,
+        role: 'USER',
+        status: 'INVITED',
+        ...this.generateActivationToken()
       }
     });
+
+    await this.mailerService.sendMail({
+      to: email,
+      subject: 'Welcome to the Arma Serious Platform',
+      html: `<p>Welcome to the ASP</p>
+      <p>Please, click on the link below to activate your account</p>
+      <a href="${process.env.FRONTEND_URL}/activate/${activationToken}">Activate</a>
+      `,
+    });
+  }
+
+  async changeUserRole(dto: ChangeUserRoleDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: dto.id }
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role === dto.role) {
+      throw new BadRequestException('User already has this role');
+    }
+
+    await this.prisma.user.update({
+      where: { id: dto.id },
+      data: { role: dto.role }
+    });
+
+    return {
+      message: 'User role updated successfully'
+    };
   }
 
   async login(loginUserDto: LoginUserDto) {

@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -17,51 +11,54 @@ model User {
   id           String           @id @default(uuid())
   email        String           @unique
   nickname     String           @unique
-  role         UserRole         @default(USER)
   password     String
-  sideId       String?
-  side         Side?
-  abilities    SoldierAbility[]
-  squadId      String?
-  squad        Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
-  leadingSquad Squad?           @relation("SquadLeader")
-  missions     Mission[]
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+  sideId       String?
+  abilities    SoldierAbility[]
+  squadId      String?
+  role         UserRole         @default(USER)
+  missions     Mission[]
+  side         Side?
+  leadingSquad Squad?           @relation("SquadLeader")
+  squad        Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
+  status       UserStatus       @default(ACTIVE)
+  activationToken String?
+  activationTokenExpiresAt DateTime?
 }
 
 model Squad {
   id        String   @id @default(uuid())
   name      String
-  leader    User     @relation("SquadLeader", fields: [leaderId], references: [id])
   leaderId  String   @unique
-  side      Side     @relation(fields: [sideId], references: [id])
   sideId    String
-  members   User[]   @relation("SquadMembers")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  leader    User     @relation("SquadLeader", fields: [leaderId], references: [id])
+  side      Side     @relation(fields: [sideId], references: [id])
+  members   User[]   @relation("SquadMembers")
 }
 
 model Side {
   id        String   @id @default(uuid())
   name      String   @unique
   type      SideType @default(UNASSIGNED)
-  squads    Squad[]
-  leader    User?    @relation(fields: [leaderId], references: [id])
   leaderId  String?  @unique
-  server    Server?  @relation(fields: [serverId], references: [id])
-  serverId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  serverId  String?
+  leader    User?    @relation(fields: [leaderId], references: [id])
+  server    Server?  @relation(fields: [serverId], references: [id])
+  squads    Squad[]
 }
 
 model Server {
   id        String       @id @default(uuid())
-  name      String
-  sides     Side[]
+  name      String       @unique
   status    ServerStatus @default(ACTIVE)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+  sides     Side[]
 }
 
 model Vehicle {
@@ -74,41 +71,37 @@ model Vehicle {
 model Mission {
   id               String       @id @default(uuid())
   name             String
-  author           User?        @relation(fields: [authorId], references: [id])
   authorId         String?
   description      String
   blueforSlots     Int?
   redforSlots      Int?
   independentSlots Int?
-  civilianSlots    Int?
-  missionDays      MissionDay[]
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  civilianSlots    Int?
+  author           User?        @relation(fields: [authorId], references: [id])
+  missionDays      MissionDay[] @relation("MissionToMissionDay")
 }
 
 model MissionDay {
   id        String    @id @default(uuid())
   name      String
-  missions  Mission[]
   date      DateTime
-  weekend   Weekend   @relation(fields: [weekendId], references: [id])
   weekendId String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  weekend   Weekend   @relation(fields: [weekendId], references: [id])
+  missions  Mission[] @relation("MissionToMissionDay")
 }
 
 model Weekend {
   id          String       @id @default(uuid())
   name        String
-  missionDays MissionDay[]
   description String
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  missionDays MissionDay[]
 }
-
-/**
- * Enums
- */
 
 enum ServerStatus {
   ACTIVE
