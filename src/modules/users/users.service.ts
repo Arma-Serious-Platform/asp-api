@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -13,7 +18,11 @@ import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService, private readonly jwtService: JwtService, private readonly mailerService: MailerService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+    private readonly mailerService: MailerService,
+  ) {}
 
   private generateActivationToken() {
     const token = randomBytes(32).toString('hex');
@@ -21,33 +30,42 @@ export class UsersService {
 
     return {
       token,
-      expiresAt
-    }
+      expiresAt,
+    };
   }
+
+  private sendActivationToken = async (email: string, token: string) => {
+    await this.mailerService.sendMail({
+      to: email,
+      subject: 'Activation token',
+      html: `<p>Please, click on the link below to activate your account</p>
+      <a href="${process.env.ACTIVATE_TOKEN_FRONTEND_URL}/${token}">Activate</a>
+      `,
+    });
+  };
 
   async me(dto: GetMeDto) {
     const user = await this.prisma.user.findFirst({
       where: {
-        id: dto.id
+        id: dto.id,
       },
 
       select: {
-        password: false
-      }
+        password: false,
+      },
     });
 
     return user;
   }
 
   async signUp(createUserDto: CreateUserDto) {
-
     const existedUser = await this.prisma.user.findFirst({
       where: {
         OR: [
           { email: createUserDto.email },
-          { nickname: createUserDto.nickname }
-        ]
-      }
+          { nickname: createUserDto.nickname },
+        ],
+      },
     });
 
     if (existedUser) {
@@ -62,23 +80,16 @@ export class UsersService {
         password: hashedPassword,
         role: 'USER',
         status: 'INVITED',
-        ...this.generateActivationToken()
-      }
+        ...this.generateActivationToken(),
+      },
     });
 
-    await this.mailerService.sendMail({
-      to: email,
-      subject: 'Welcome to the Arma Serious Platform',
-      html: `<p>Welcome to the ASP</p>
-      <p>Please, click on the link below to activate your account</p>
-      <a href="${process.env.FRONTEND_URL}/activate/${activationToken}">Activate</a>
-      `,
-    });
+    await this.sendActivationToken(email, activationToken!);
   }
 
   async changeUserRole(dto: ChangeUserRoleDto) {
     const user = await this.prisma.user.findFirst({
-      where: { id: dto.id }
+      where: { id: dto.id },
     });
 
     if (!user) {
@@ -91,11 +102,11 @@ export class UsersService {
 
     await this.prisma.user.update({
       where: { id: dto.id },
-      data: { role: dto.role }
+      data: { role: dto.role },
     });
 
     return {
-      message: 'User role updated successfully'
+      message: 'User role updated successfully',
     };
   }
 
@@ -103,7 +114,7 @@ export class UsersService {
     const { email, password } = loginUserDto;
 
     const user = await this.prisma.user.findFirst({
-      where: { email }
+      where: { email },
     });
 
     if (!user) {
@@ -116,19 +127,47 @@ export class UsersService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.status === 'INVITED') {
+      if (
+        !user.activationToken ||
+        !user.activationTokenExpiresAt ||
+        user.activationTokenExpiresAt < new Date()
+      ) {
+        const { token, expiresAt } = this.generateActivationToken();
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { activationToken: token, activationTokenExpiresAt: expiresAt },
+        });
+
+        await this.sendActivationToken(user.email, user.activationToken!);
+
+        throw new BadRequestException(
+          'Activation token expired. New token sent to your email',
+        );
+      } else {
+        throw new BadRequestException(
+          'Activation token expired. Check your email for a new token',
+        );
+      }
+    }
+
     const token = await this.jwtService.signAsync({
       userId: user.id,
       email: user.email,
       nickname: user.nickname,
-      role: user.role
+      role: user.role,
     });
 
-    const refreshToken = await this.jwtService.signAsync({
-      userId: user.id,
-    }, {
-      secret: process.env.JWT_SECRET,
-      expiresIn: '7d'
-    });
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        userId: user.id,
+      },
+      {
+        secret: process.env.JWT_SECRET,
+        expiresIn: '7d',
+      },
+    );
 
     const { password: _, ...userWithoutPassword } = user;
 
@@ -137,7 +176,7 @@ export class UsersService {
         ...userWithoutPassword,
       },
       token,
-      refreshToken
+      refreshToken,
     };
   }
 
