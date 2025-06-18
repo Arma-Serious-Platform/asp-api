@@ -14,6 +14,7 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { GetMeDto } from './dto/get-me-dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { MailerService } from '@nestjs-modules/mailer';
+import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
 
 @Controller('users')
 export class UsersController {
@@ -27,17 +28,9 @@ export class UsersController {
     return this.usersService.me(paramDto);
   }
 
-  @Post('/email')
-  testMail() {
-    this.mailerService.sendMail({
-      to: 'agentoswork@gmail.com',
-      subject: 'Test',
-      text: 'Test',
-    });
-
-    return {
-      test: 1,
-    };
+  @Post('/sign-up/confirm')
+  confirmSignUp(@Body() confirmSignUpDto: ConfirmSignUpDto) {
+    return this.usersService.confirmSignUp(confirmSignUpDto);
   }
 
   @Post('/signup')

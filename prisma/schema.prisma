@@ -8,35 +8,39 @@ datasource db {
 }
 
 model User {
-  id           String           @id @default(uuid())
-  email        String           @unique
-  nickname     String           @unique
-  password     String
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  sideId       String?
-  abilities    SoldierAbility[]
-  squadId      String?
-  role         UserRole         @default(USER)
-  missions     Mission[]
-  side         Side?
-  leadingSquad Squad?           @relation("SquadLeader")
-  squad        Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
-  status       UserStatus       @default(ACTIVE)
-  activationToken String?
+  id                       String           @id @default(uuid())
+  email                    String           @unique
+  nickname                 String           @unique
+  password                 String
+  sideId                   String?
+  abilities                SoldierAbility[]
+  squadId                  String?
+  role                     UserRole         @default(USER)
+  missions                 Mission[]
+  side                     Side?
+  leadingSquad             Squad?           @relation("SquadLeader")
+  squad                    Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
+  status                   UserStatus       @default(ACTIVE)
+  activationToken          String?
   activationTokenExpiresAt DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 }
 
 model Squad {
-  id        String   @id @default(uuid())
-  name      String
-  leaderId  String   @unique
-  sideId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  leader    User     @relation("SquadLeader", fields: [leaderId], references: [id])
-  side      Side     @relation(fields: [sideId], references: [id])
-  members   User[]   @relation("SquadMembers")
+  id          String   @id @default(uuid())
+  name        String   @unique
+  tag         String   @unique
+  description String?
+  activeCount Int      @default(0)
+  logoUrl     String?
+  sideId      String
+  leaderId    String   @unique
+  leader      User     @relation("SquadLeader", fields: [leaderId], references: [id])
+  side        Side     @relation(fields: [sideId], references: [id])
+  members     User[]   @relation("SquadMembers")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Side {
@@ -44,21 +48,21 @@ model Side {
   name      String   @unique
   type      SideType @default(UNASSIGNED)
   leaderId  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
   serverId  String?
   leader    User?    @relation(fields: [leaderId], references: [id])
   server    Server?  @relation(fields: [serverId], references: [id])
   squads    Squad[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Server {
   id        String       @id @default(uuid())
   name      String       @unique
   status    ServerStatus @default(ACTIVE)
+  sides     Side[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
-  sides     Side[]
 }
 
 model Vehicle {
@@ -76,11 +80,11 @@ model Mission {
   blueforSlots     Int?
   redforSlots      Int?
   independentSlots Int?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
   civilianSlots    Int?
   author           User?        @relation(fields: [authorId], references: [id])
   missionDays      MissionDay[] @relation("MissionToMissionDay")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 model MissionDay {
@@ -88,19 +92,19 @@ model MissionDay {
   name      String
   date      DateTime
   weekendId String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
   weekend   Weekend   @relation(fields: [weekendId], references: [id])
   missions  Mission[] @relation("MissionToMissionDay")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Weekend {
   id          String       @id @default(uuid())
   name        String
   description String
+  missionDays MissionDay[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  missionDays MissionDay[]
 }
 
 enum ServerStatus {

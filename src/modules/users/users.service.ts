@@ -15,6 +15,7 @@ import { MailerService } from '@nestjs-modules/mailer';
 import { randomBytes } from 'node:crypto';
 import { UserRole } from '@prisma/client';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
+import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
 
 @Injectable()
 export class UsersService {
@@ -56,6 +57,25 @@ export class UsersService {
     });
 
     return user;
+  }
+
+  async confirmSignUp(dto: ConfirmSignUpDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { activationToken: dto.token },
+    });
+
+    if (user?.status === 'INVITED') {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { status: 'ACTIVE' },
+      });
+
+      return {
+        message: 'User finished sign up successfully',
+      };
+    }
+
+    throw new BadRequestException('User already confirmed');
   }
 
   async signUp(createUserDto: CreateUserDto) {
