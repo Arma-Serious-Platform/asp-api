@@ -64,10 +64,18 @@ export class UsersService {
       where: { activationToken: dto.token },
     });
 
+    if (!user) {
+      throw new BadRequestException('Invalid token');
+    }
+
     if (user?.status === 'INVITED') {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { status: 'ACTIVE' },
+        data: {
+          status: 'ACTIVE',
+          activationToken: null,
+          activationTokenExpiresAt: null,
+        },
       });
 
       return {
@@ -93,6 +101,7 @@ export class UsersService {
     }
 
     const hashedPassword = await hash(createUserDto.password, 15);
+    const { token, expiresAt } = this.generateActivationToken();
 
     const { email, activationToken } = await this.prisma.user.create({
       data: {
@@ -100,7 +109,8 @@ export class UsersService {
         password: hashedPassword,
         role: 'USER',
         status: 'INVITED',
-        ...this.generateActivationToken(),
+        activationToken: token,
+        activationTokenExpiresAt: expiresAt,
       },
     });
 
@@ -135,6 +145,28 @@ export class UsersService {
 
     const user = await this.prisma.user.findFirst({
       where: { email },
+      omit: {
+        sideId: true,
+        squadId: true,
+      },
+      include: {
+        squad: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+            logoUrl: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                server: true,
+                type: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -209,8 +241,6 @@ export class UsersService {
   }
 
   update(id: number, updateUserDto: UpdateUserDto) {
-    console.log(updateUserDto);
-
     return `This action updates a #${id} user`;
   }
 

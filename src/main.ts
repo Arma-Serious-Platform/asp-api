@@ -12,7 +12,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Arma Serious Platform API')
     .setDescription('The core ASP API service')
-    .setVersion('0.0.1')
+    .setVersion(process.env.npm_package_version ?? '0.0.1')
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('swagger', app, documentFactory);
