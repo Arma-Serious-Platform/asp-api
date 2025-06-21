@@ -266,6 +266,14 @@ export class UsersService {
       },
     });
 
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Reset password token',
+      html: `<p>Please, click on the link below to reset your password</p>
+      <a href="${process.env.RESET_PASSWORD_FRONTEND_URL}?token=${token}">Reset password</a>
+      `,
+    });
+
     return {
       message: 'Reset password token sent to your email',
     };
@@ -277,7 +285,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new BadRequestException('Token is invalid');
     }
 
     if (
@@ -297,11 +305,19 @@ export class UsersService {
         resetPasswordTokenExpiresAt: null,
       },
     });
+
+    return {
+      message: 'Password changed successfully',
+    };
   }
 
-  async changePassword(dto: ChangePasswordDto) {
+  async changePassword(dto: ChangePasswordDto, userId: string) {
     const user = await this.prisma.user.findFirst({
-      where: { id: dto.id },
+      where: { id: userId },
+      select: {
+        id: true,
+        password: true,
+      }
     });
 
     if (!user) {

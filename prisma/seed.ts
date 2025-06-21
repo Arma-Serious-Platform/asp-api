@@ -7,8 +7,7 @@ import 'dotenv/config';
 
 const prisma = new PrismaClient();
 
-async function main() {
-
+export const seed = async () => {
   const ownerEmail = process.env.OWNER_EMAIL;
   const ownerPassword = process.env.OWNER_PASSWORD;
   const ownerNickname = process.env.OWNER_NICKNAME;
@@ -19,11 +18,10 @@ async function main() {
 
   const hashedPassword = await hash(ownerPassword, 15);
 
-  try {
+  const seedUser = async () => {
     await prisma.user.upsert({
       where: {
         email: ownerEmail,
-        nickname: ownerNickname
       },
       update: {},
       create: {
@@ -36,7 +34,9 @@ async function main() {
     });
 
     console.log(`User ${ownerNickname} created`);
+  }
 
+  const seedSides = async () => {
     const server = await prisma.server.upsert({
       where: {
         name: 'Server #1',
@@ -49,63 +49,57 @@ async function main() {
     });
 
     if (server?.id) {
-      await prisma.side.upsert({
-        where: {
-          name: 'Blue Side',
-          type: 'BLUE',
-        },
-        update: {},
-        create: {
-          name: 'Blue Side',
-          type: 'BLUE',
-          serverId: server.id,
-        }
-      });
+      await Promise.all([
+        prisma.side.upsert({
+          where: {
+            name: 'Blue Side',
+            type: 'BLUE',
+          },
+          update: {},
+          create: {
+            name: 'Blue Side',
+            type: 'BLUE',
+            serverId: server.id,
+          }
+        }),
 
-      await prisma.side.upsert({
-        where: {
-          name: 'Red Side',
-          type: 'RED',
-        },
-        update: {},
-        create: {
-          name: 'Red Side',
-          type: 'RED',
-          serverId: server.id,
-        }
-      });
+        prisma.side.upsert({
+          where: {
+            name: 'Red Side',
+            type: 'RED',
+          },
+          update: {},
+          create: {
+            name: 'Red Side',
+            type: 'RED',
+            serverId: server.id,
+          }
+        }),
+        prisma.side.upsert({
+          where: {
+            name: 'Unassigned',
+            type: 'UNASSIGNED',
+          },
+          update: {},
+          create: {
+            name: 'Unassigned',
+            type: 'UNASSIGNED',
+            serverId: server.id,
+          }
+        })
+      ])
 
-      await prisma.side.upsert({
-        where: {
-          name: 'Unassigned',
-          type: 'UNASSIGNED',
-        },
-        update: {},
-        create: {
-          name: 'Unassigned',
-          type: 'UNASSIGNED',
-          serverId: server.id,
-        }
-      });
+      console.log(`Sides created`);
     }
+  }
 
-    console.log(`Sides created`);
-
+  try {
+    await Promise.all([
+      seedUser(),
+      seedSides(),
+    ])
   } catch (error) {
     console.log('Error seeding database');
     console.error(error);
-    process.exit(1)
   }
-
-
-
 }
-
-main().then(() => {
-  console.log('Database seeded');
-  process.exit(0)
-}).catch((error) => {
-  console.log('Error seeding database');
-  console.error(error);
-  process.exit(1)
-})

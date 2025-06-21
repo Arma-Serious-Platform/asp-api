@@ -24,6 +24,9 @@ import { UserRole } from '@prisma/client';
 import { RequestType } from 'src/utils/types';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('users')
 export class UsersController {
@@ -50,6 +53,22 @@ export class UsersController {
   @Post('/sign-up/confirm')
   confirmSignUp(@Body() confirmSignUpDto: ConfirmSignUpDto) {
     return this.usersService.confirmSignUp(confirmSignUpDto);
+  }
+
+  @Post('/change-password')
+  @UseGuards(RolesGuard)
+  changePassword(@Body() changePasswordDto: ChangePasswordDto, @Req() req: RequestType) {
+    return this.usersService.changePassword(changePasswordDto, req.userId);
+  }
+
+  @Post('/forgot-password')
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.usersService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Post('/reset-password')
+  resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.usersService.resetPassword(resetPasswordDto);
   }
 
   @Post('/change-role')
