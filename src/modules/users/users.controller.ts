@@ -17,10 +17,10 @@ import { GetMeDto } from './dto/get-me-dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
-import { Roles } from 'src/decorators/roles.decorator';
-import { RolesGuard } from 'src/guards/roles.guard';
+import { Roles } from 'src/shared/decorators/roles.decorator';
+import { RolesGuard } from 'src/shared/guards/roles.guard';
 import { BanUserDto } from './dto/ban-user.dto';
-import { UserRole } from '@prisma/client';
+
 import { RequestType } from 'src/utils/types';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
