@@ -16,6 +16,9 @@ import { randomBytes } from 'node:crypto';
 import { UserRole } from '@prisma/client';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class UsersService {
@@ -25,9 +28,9 @@ export class UsersService {
     private readonly mailerService: MailerService,
   ) {}
 
-  private generateActivationToken() {
+  private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 1 day
+    const expiresAt = new Date(Date.now() + 1000 * 60 * minutes); // 10 minutes
 
     return {
       token,
@@ -229,6 +232,93 @@ export class UsersService {
       },
       token,
       refreshToken,
+    };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (
+      user.resetPasswordToken &&
+      user.resetPasswordTokenExpiresAt &&
+      user.resetPasswordTokenExpiresAt > new Date()
+    ) {
+      throw new BadRequestException('Reset password token is still valid');
+    }
+
+    const { token, expiresAt } = this.generateActivationToken(10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: token,
+        resetPasswordTokenExpiresAt: expiresAt,
+      },
+    });
+
+    return {
+      message: 'Reset password token sent to your email',
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { resetPasswordToken: dto.token },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (
+      user.resetPasswordTokenExpiresAt &&
+      user.resetPasswordTokenExpiresAt < new Date()
+    ) {
+      throw new BadRequestException('Reset password token expired');
+    }
+
+    const hashedPassword = await hash(dto.password, 15);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordTokenExpiresAt: null,
+      },
+    });
+  }
+
+  async changePassword(dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: dto.id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isPasswordValid = await compare(dto.oldPassword, user.password);
+
+    if (!isPasswordValid) {
+      throw new BadRequestException('Invalid old password');
+    }
+
+    const hashedPassword = await hash(dto.newPassword, 15);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    return {
+      message: 'Password changed successfully',
     };
   }
 

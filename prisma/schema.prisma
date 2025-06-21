@@ -23,6 +23,8 @@ model User {
   status                   UserStatus       @default(ACTIVE)
   activationToken          String?
   activationTokenExpiresAt DateTime?
+  resetPasswordToken       String?
+  resetPasswordTokenExpiresAt DateTime?
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
 }
