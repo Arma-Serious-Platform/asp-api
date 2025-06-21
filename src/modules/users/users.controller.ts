@@ -27,12 +27,20 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { GetUsersDto } from './dto/get-users.dto';
 
 @Controller('users')
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
   ) { }
+
+  @Post('/find')
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
+  find(@Body() dto: GetUsersDto) {
+    return this.usersService.findAll(dto);
+  }
 
   @Post('login')
   login(@Body() loginUserDto: LoginUserDto) {

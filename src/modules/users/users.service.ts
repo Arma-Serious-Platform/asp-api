@@ -19,8 +19,9 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
+import { GetUsersDto } from './dto/get-users.dto';
 
 @Injectable()
 export class UsersService {
@@ -342,8 +343,61 @@ export class UsersService {
     };
   }
 
-  findAll() {
-    return this.prisma.user.findMany();
+  async findAll(dto: GetUsersDto) {
+    const { search, take = 50, skip = 0 } = dto;
+
+    const options: Prisma.UserFindManyArgs = {}
+
+    if (search) {
+      options.where = {
+        OR: [
+          { email: { contains: dto.search, mode: 'insensitive' } },
+          { nickname: { contains: dto.search, mode: 'insensitive' } },
+        ],
+      }
+    }
+
+    options.skip = skip;
+    options.take = take;
+    options.include = {
+      side: {
+        select: {
+          id: true,
+          name: true,
+        }
+      },
+      squad: {
+        select: {
+          id: true,
+          name: true,
+          tag: true,
+        }
+      }
+    }
+    options.omit = {
+      sideId: true,
+      squadId: true,
+      email: true,
+      activationToken: true,
+      resetPasswordToken: true,
+      password: true,
+      abilities: true,
+      resetPasswordTokenExpiresAt: true,
+      activationTokenExpiresAt: true,
+    }
+    options.orderBy = {
+      createdAt: 'desc',
+    }
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany(options),
+      this.prisma.user.count({ where: options.where }),
+    ]);
+
+    return {
+      data,
+      total,
+    };
   }
 
   findOne(id: string) {
