@@ -42,15 +42,16 @@ export class UsersController {
     return this.usersService.findAll(dto);
   }
 
-  @Post('login')
+  @Post('/login')
   login(@Body() loginUserDto: LoginUserDto) {
     return this.usersService.login(loginUserDto);
   }
 
 
   @Get('/me')
-  me(@Param('id') paramDto: GetMeDto) {
-    return this.usersService.me(paramDto);
+  @UseGuards(RolesGuard)
+  me(@Req() req: RequestType) {
+    return this.usersService.me(req.userId);
   }
 
   @Post('/signup')

@@ -51,14 +51,37 @@ export class UsersService {
     });
   };
 
-  async me(dto: GetMeDto) {
+  async me(userId: string) {
     const user = await this.prisma.user.findFirst({
       where: {
-        id: dto.id,
+        id: userId,
       },
 
-      select: {
-        password: false,
+      include: {
+        side: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        squad: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+          }
+        }
+      },
+
+      omit: {
+        password: true,
+        sideId: true,
+        squadId: true,
+        abilities: true,
+        activationToken: true,
+        resetPasswordToken: true,
+        resetPasswordTokenExpiresAt: true,
+        activationTokenExpiresAt: true,
       },
     });
 
