@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiBody, ApiProperty } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { IsEnum, IsUUID } from "class-validator";
 
@@ -7,7 +7,10 @@ export class ChangeUserRoleDto {
   @IsUUID()
   id: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    enum: UserRole,
+    enumName: 'UserRole',
+  })
   @IsEnum(UserRole)
   role: UserRole;
 }

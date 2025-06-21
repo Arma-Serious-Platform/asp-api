@@ -4,8 +4,8 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { SignUpDto } from './dto/create-user.dto';
+
 import { PrismaService } from 'src/prisma/prisma.service';
 import { compare, hash } from 'bcryptjs';
 import { LoginUserDto } from './dto/login-user.dto';
@@ -13,12 +13,14 @@ import { JwtService } from '@nestjs/jwt';
 import { GetMeDto } from './dto/get-me-dto';
 import { MailerService } from '@nestjs-modules/mailer';
 import { randomBytes } from 'node:crypto';
-import { UserRole } from '@prisma/client';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { BanUserDto } from './dto/ban-user.dto';
+import { UserRole } from '@prisma/client';
+import { UnbanUserDto } from './dto/unban-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -26,7 +28,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
-  ) {}
+  ) { }
 
   private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
@@ -89,12 +91,12 @@ export class UsersService {
     throw new BadRequestException('User already confirmed');
   }
 
-  async signUp(createUserDto: CreateUserDto) {
+  async signUp(signUpDto: SignUpDto) {
     const existedUser = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { email: createUserDto.email },
-          { nickname: createUserDto.nickname },
+          { email: signUpDto.email },
+          { nickname: signUpDto.nickname },
         ],
       },
     });
@@ -103,12 +105,12 @@ export class UsersService {
       throw new BadRequestException('User already exists');
     }
 
-    const hashedPassword = await hash(createUserDto.password, 15);
+    const hashedPassword = await hash(signUpDto.password, 15);
     const { token, expiresAt } = this.generateActivationToken();
 
     const { email, activationToken } = await this.prisma.user.create({
       data: {
-        ...createUserDto,
+        ...signUpDto,
         password: hashedPassword,
         role: 'USER',
         status: 'INVITED',
@@ -133,6 +135,10 @@ export class UsersService {
       throw new BadRequestException('User already has this role');
     }
 
+    if (user.role === 'OWNER') {
+      throw new BadRequestException('You cannot change role of user with OWNER role');
+    }
+
     await this.prisma.user.update({
       where: { id: dto.id },
       data: { role: dto.role },
@@ -151,6 +157,7 @@ export class UsersService {
       omit: {
         sideId: true,
         squadId: true,
+        abilities: true,
       },
       include: {
         squad: {
@@ -209,9 +216,6 @@ export class UsersService {
 
     const token = await this.jwtService.signAsync({
       userId: user.id,
-      email: user.email,
-      nickname: user.nickname,
-      role: user.role,
     });
 
     const refreshToken = await this.jwtService.signAsync(
@@ -283,7 +287,7 @@ export class UsersService {
       throw new BadRequestException('Reset password token expired');
     }
 
-    const hashedPassword = await hash(dto.password, 15);
+    const hashedPassword = await hash(dto.newPassword, 15);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -323,18 +327,76 @@ export class UsersService {
   }
 
   findAll() {
-    return `This action returns all users`;
+    return this.prisma.user.findMany();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  findOne(id: string) {
+    return this.prisma.user.findFirst({
+      where: { id },
+    });
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  delete(id: string) {
+    return this.prisma.user.delete({
+      where: { id },
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async banUser(dto: BanUserDto, role: UserRole) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: dto.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role === role) {
+      throw new BadRequestException('You cannot ban user with your level of access');
+    }
+
+    if (user.status === 'BANNED') {
+      throw new BadRequestException('User is already banned');
+    }
+
+    if (role === 'OWNER') {
+      throw new BadRequestException('You cannot ban user with OWNER role');
+    }
+
+    return this.prisma.user.update({
+      where: { id: dto.userId },
+      data: { status: 'BANNED' },
+    });
+  }
+
+  async unbanUser(dto: UnbanUserDto, role: UserRole) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: dto.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role === role) {
+      throw new BadRequestException('You cannot unban user with your level of access');
+    }
+
+    return this.prisma.user.update({
+      where: { id: dto.userId },
+      data: { status: 'ACTIVE' },
+    });
+  }
+
+  async changeAvatar(avatar: File, userId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // const avatarUrl = await this.uploadAvatar(avatar);
   }
 }

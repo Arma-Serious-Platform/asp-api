@@ -11,6 +11,12 @@ async function bootstrap() {
     transform: true
   }));
 
+  app.enableCors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+
   const config = new DocumentBuilder()
     .setTitle('Arma Serious Platform API')
     .setDescription('The core ASP API service')
@@ -21,4 +27,5 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap();

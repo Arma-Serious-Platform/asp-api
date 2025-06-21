@@ -3,29 +3,48 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
+  UseGuards,
+  Req,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { SignUpDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { GetMeDto } from './dto/get-me-dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
-import { MailerService } from '@nestjs-modules/mailer';
+
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
+import { Roles } from 'src/decorators/roles.decorator';
+import { RolesGuard } from 'src/guards/roles.guard';
+import { BanUserDto } from './dto/ban-user.dto';
+import { UserRole } from '@prisma/client';
+import { RequestType } from 'src/utils/types';
+import { UnbanUserDto } from './dto/unban-user.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
-    private readonly mailerService: MailerService,
-  ) {}
+  ) { }
 
-  @Get()
+  @Post('login')
+  login(@Body() loginUserDto: LoginUserDto) {
+    return this.usersService.login(loginUserDto);
+  }
+
+
+  @Get('/me')
   me(@Param('id') paramDto: GetMeDto) {
     return this.usersService.me(paramDto);
+  }
+
+  @Post('/signup')
+  create(@Body() signUpDto: SignUpDto) {
+    return this.usersService.signUp(signUpDto);
   }
 
   @Post('/sign-up/confirm')
@@ -33,28 +52,36 @@ export class UsersController {
     return this.usersService.confirmSignUp(confirmSignUpDto);
   }
 
-  @Post('/signup')
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.signUp(createUserDto);
-  }
-
-  @Patch('/change-role')
+  @Post('/change-role')
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER'])
   changeUserRole(@Body() changeUserRoleDto: ChangeUserRoleDto) {
     return this.usersService.changeUserRole(changeUserRoleDto);
   }
 
-  @Post('login')
-  login(@Body() loginUserDto: LoginUserDto) {
-    return this.usersService.login(loginUserDto);
+  @Post('/change-avatar')
+  @UseGuards(RolesGuard)
+  @UseInterceptors(FileInterceptor('avatar'))
+  changeAvatar(@UploadedFile() avatar: File, @Req() req: RequestType) {
+    return this.usersService.changeAvatar(avatar, req.userId);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+  @Post(`/ban/:userId`)
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
+  banUser(@Param() paramDto: BanUserDto, @Req() req: RequestType) {
+    return this.usersService.banUser(paramDto, req.role);
+  }
+
+  @Post('/unban/:userId')
+  @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
+  unbanUser(@Param() params: UnbanUserDto, @Req() req: RequestType) {
+    return this.usersService.unbanUser(params, req.role);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  delete(@Param('id') id: string) {
+    return this.usersService.delete(id);
   }
 }

@@ -1,30 +1,50 @@
-
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { UserRole } from '@prisma/client';
-import { ROLES_KEY } from 'src/decorators/roles.decorator';
-
-export const Roles = Reflector.createDecorator<string[]>();
+import { JwtService } from '@nestjs/jwt';
+import { Roles } from 'src/decorators/roles.decorator';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) { }
+  constructor(
+    private reflector: Reflector,
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+  ) { }
 
-  canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (!requiredRoles) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const roles = this.reflector.get(Roles, context.getHandler());
+
+    if (!roles || roles.length === 0) {
       return true;
     }
 
-    const { userId, role } = context.switchToHttp().getRequest() as { userId: string, role: UserRole };
+    const request = context.switchToHttp().getRequest();
+    const authHeader = request.headers.authorization as string;
 
-    if (!userId) {
-      throw new UnauthorizedException('No access');
-    };
+    if (!authHeader || !authHeader.includes('Bearer')) return false;
 
-    return requiredRoles.some((requiredRole) => role === requiredRole);
+    const token = authHeader.split(' ')[1];
+
+    const decoded = this.jwtService.decode(token);
+
+    const userId = decoded?.userId as unknown as string | undefined;
+
+    if (!userId) return false;
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) return false;
+
+    request.userId = userId;
+    request.role = user.role;
+
+    return roles.includes(user.role);
   }
 }
