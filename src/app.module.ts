@@ -6,6 +6,7 @@ import { UsersModule } from './modules/users/users.module';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { SidesModule } from './modules/sides/sides.module';
 import { SquadsModule } from './modules/squads/squads.module';
+import { ServersModule } from './modules/servers/servers.module';
 
 @Module({
   imports: [
@@ -26,8 +27,9 @@ import { SquadsModule } from './modules/squads/squads.module';
         from: process.env.EMAIL_FROM,
       },
     }),
-    SquadsModule,
+    ServersModule,
     SidesModule,
+    SquadsModule,
     UsersModule,
   ],
   controllers: [AppController],
