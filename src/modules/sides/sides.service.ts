@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateSideDto } from './dto/create-side.dto';
+import { UpdateSideDto } from './dto/update-side.dto';
 
 @Injectable()
 export class SidesService {
@@ -22,6 +24,25 @@ export class SidesService {
           },
         },
       },
+    });
+  }
+
+  async create(data: CreateSideDto) {
+    return this.prisma.side.create({
+      data,
+    });
+  }
+
+  async update(id: string, data: UpdateSideDto) {
+    return this.prisma.side.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async delete(id: string) {
+    return this.prisma.side.delete({
+      where: { id },
     });
   }
 }

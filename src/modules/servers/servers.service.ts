@@ -1,13 +1,37 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { GameDig } from 'gamedig';
 import { PrismaService } from "src/prisma/prisma.service";
+import { Prisma, Server } from "@prisma/client";
 import { CreateServerDto } from "./dto/create-server.dto";
 import { FindServersDto } from "./dto/find-servers.dto";
-import { Prisma } from "@prisma/client";
 import { EditServerDto } from "./dto/edit-server.dto";
 
 @Injectable()
 export class ServersService {
   constructor(private readonly prisma: PrismaService) { }
+
+  private async getServerInfo(server: Server) {
+    return GameDig.query({
+      type: 'arma3',
+      host: server.ip,
+      port: server.port,
+    }).then((result) => {
+
+      return {
+        ...server,
+        info: {
+          name: result.name ?? null,
+          game: (result?.raw as any)?.game as string ?? null,
+          map: result.map ?? null,
+          maxPlayers: result.maxplayers ?? null,
+          players: result.numplayers ?? null,
+          ping: result.ping ?? null,
+        }
+      }
+    }).catch(() => {
+      return server;
+    });
+  }
 
   async findAll(findServersDto: FindServersDto) {
     const options: Prisma.ServerFindManyArgs = {};
@@ -26,7 +50,9 @@ export class ServersService {
       options.take = findServersDto.take;
     }
 
-    return this.prisma.server.findMany(options);
+    const servers = await this.prisma.server.findMany(options);
+
+    return Promise.all(servers.map((server) => this.getServerInfo(server)));
   }
 
   async findOne(id: string) {
@@ -69,6 +95,12 @@ export class ServersService {
     return this.prisma.server.update({
       where: { id },
       data: editServerDto,
+    });
+  }
+
+  async delete(id: string) {
+    return this.prisma.server.delete({
+      where: { id },
     });
   }
 }

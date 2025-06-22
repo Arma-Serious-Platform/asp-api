@@ -1,9 +1,13 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { SidesService } from './sides.service';
+import { CreateSideDto } from './dto/create-side.dto';
+import { UpdateSideDto } from './dto/update-side.dto';
+import { RolesGuard } from 'src/shared/guards/roles.guard';
+import { Roles } from 'src/shared/decorators/roles.decorator';
 
 @Controller('sides')
 export class SidesController {
-  constructor(private readonly sidesService: SidesService) {}
+  constructor(private readonly sidesService: SidesService) { }
 
   @Get()
   findAll() {
@@ -15,5 +19,24 @@ export class SidesController {
     return this.sidesService.findOne(id);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Post()
+  create(@Body() dto: CreateSideDto) {
+    return this.sidesService.create(dto);
+  }
 
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateSideDto) {
+    return this.sidesService.update(id, dto);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.sidesService.delete(id);
+  }
 }

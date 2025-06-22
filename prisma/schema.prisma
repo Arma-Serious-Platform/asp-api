@@ -54,7 +54,7 @@ model Side {
   leaderId  String?  @unique
   serverId  String?
   leader    User?    @relation(fields: [leaderId], references: [id])
-  server    Server?  @relation(fields: [serverId], references: [id])
+  server    Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
   squads    Squad[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

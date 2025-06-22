@@ -5,3 +5,13 @@ declare module 'express' {
     role?: UserRole;
   }
 }
+
+declare module 'gamedig' {
+  interface QueryResult {
+    name: string;
+    map: string;
+    maxPlayers: number;
+    players: Player[];
+    ping: number;
+  }
+}
