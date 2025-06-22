@@ -63,6 +63,8 @@ model Side {
 model Server {
   id        String       @id @default(uuid())
   name      String       @unique
+  ip        String       @default("127.0.0.1")
+  port      Int          @default(2302)
   status    ServerStatus @default(ACTIVE)
   sides     Side[]
   createdAt DateTime     @default(now())

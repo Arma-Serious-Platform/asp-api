@@ -9,6 +9,7 @@ import {
   Req,
   UseInterceptors,
   UploadedFile,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { SignUpDto } from './dto/create-user.dto';
@@ -35,10 +36,10 @@ export class UsersController {
     private readonly usersService: UsersService,
   ) { }
 
-  @Post('/find')
+  @Get()
   @UseGuards(RolesGuard)
   @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
-  find(@Body() dto: GetUsersDto) {
+  find(@Query() dto: GetUsersDto) {
     return this.usersService.findAll(dto);
   }
 
