@@ -27,12 +27,12 @@ import { ServersModule } from './modules/servers/servers.module';
         from: process.env.EMAIL_FROM,
       },
     }),
+    UsersModule,
     ServersModule,
     SidesModule,
     SquadsModule,
-    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

@@ -4,6 +4,8 @@ import { CreateSideDto } from './dto/create-side.dto';
 import { UpdateSideDto } from './dto/update-side.dto';
 import { RolesGuard } from 'src/shared/guards/roles.guard';
 import { Roles } from 'src/shared/decorators/roles.decorator';
+import { AssignSquadDto } from './dto/assign-squad.dto';
+import { UnassignSquadDto } from './dto/unassign-squad.dto';
 
 @Controller('sides')
 export class SidesController {
@@ -38,5 +40,19 @@ export class SidesController {
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.sidesService.delete(id);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Post(':id/assign-squad/:squadId')
+  assignSquad(@Param() params: AssignSquadDto) {
+    return this.sidesService.assignSquad(params);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Post(':id/unassign-squad/:squadId')
+  unassignSquad(@Param() params: UnassignSquadDto) {
+    return this.sidesService.unassignSquad(params);
   }
 }
