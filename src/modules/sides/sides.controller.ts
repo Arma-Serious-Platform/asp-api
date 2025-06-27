@@ -6,6 +6,7 @@ import { RolesGuard } from 'src/shared/guards/roles.guard';
 import { Roles } from 'src/shared/decorators/roles.decorator';
 import { AssignSquadDto } from './dto/assign-squad.dto';
 import { UnassignSquadDto } from './dto/unassign-squad.dto';
+import { AssignLeaderDto } from './dto/assign-leader.dto';
 
 @Controller('sides')
 export class SidesController {
@@ -47,6 +48,13 @@ export class SidesController {
   @Post(':id/assign-squad/:squadId')
   assignSquad(@Param() params: AssignSquadDto) {
     return this.sidesService.assignSquad(params);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Post(':sideId/assign-leader/:leaderId')
+  assignLeader(@Param() params: AssignLeaderDto) {
+    return this.sidesService.assignLeader(params);
   }
 
   @UseGuards(RolesGuard)

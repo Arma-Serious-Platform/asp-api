@@ -75,7 +75,6 @@ export class UsersService {
 
       omit: {
         password: true,
-        sideId: true,
         squadId: true,
         abilities: true,
         activationToken: true,
@@ -179,7 +178,6 @@ export class UsersService {
     const user = await this.prisma.user.findFirst({
       where: { email },
       omit: {
-        sideId: true,
         squadId: true,
         abilities: true,
       },
@@ -398,7 +396,6 @@ export class UsersService {
       }
     }
     options.omit = {
-      sideId: true,
       squadId: true,
       email: true,
       activationToken: true,

@@ -12,6 +12,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
     skipMissingProperties: true,
+    skipUndefinedProperties: false,
+    whitelist: true,
   }));
 
   app.enableCors({
