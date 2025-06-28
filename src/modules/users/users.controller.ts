@@ -19,7 +19,7 @@ import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
 import { Roles } from 'src/shared/decorators/roles.decorator';
-import { RolesGuard } from 'src/shared/guards/roles.guard';
+import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { BanUserDto } from './dto/ban-user.dto';
 
 import { RequestType } from 'src/utils/types';
@@ -37,7 +37,7 @@ export class UsersController {
   ) { }
 
   @Get()
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
   find(@Query() dto: GetUsersDto) {
     return this.usersService.findAll(dto);
@@ -50,7 +50,7 @@ export class UsersController {
 
 
   @Get('/me')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   me(@Req() req: RequestType) {
     return this.usersService.me(req.userId);
   }
@@ -66,7 +66,7 @@ export class UsersController {
   }
 
   @Post('/change-password')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   changePassword(@Body() changePasswordDto: ChangePasswordDto, @Req() req: RequestType) {
     return this.usersService.changePassword(changePasswordDto, req.userId);
   }
@@ -82,21 +82,21 @@ export class UsersController {
   }
 
   @Post('/change-role')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Roles(['OWNER'])
   changeUserRole(@Body() changeUserRoleDto: ChangeUserRoleDto) {
     return this.usersService.changeUserRole(changeUserRoleDto);
   }
 
   @Post('/change-avatar')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('avatar'))
   changeAvatar(@UploadedFile() avatar: File, @Req() req: RequestType) {
     return this.usersService.changeAvatar(avatar, req.userId);
   }
 
   @Post(`/ban/:userId`)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
   banUser(@Param() paramDto: BanUserDto, @Req() req: RequestType) {
     return this.usersService.banUser(paramDto, req.role);

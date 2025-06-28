@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateSquadDto } from './dto/create-squad.dto';
-
+import { InviteToSquadDto } from './dto/invite-to-squad.dto';
+import { SquadInviteStatus } from '@prisma/client';
 
 @Injectable()
 export class SquadsService {
@@ -167,6 +168,243 @@ export class SquadsService {
       await tx.squad.delete({
         where: { id },
       });
+    });
+  }
+
+  async inviteToSquad(dto: InviteToSquadDto, leaderId: string) {
+    const squad = await this.prisma.squad.findUnique({
+      where: { id: dto.squadId },
+    });
+
+    if (!squad) {
+      throw new NotFoundException('Squad not found');
+    }
+
+    const leader = await this.prisma.user.findUnique({
+      where: { id: leaderId },
+      select: {
+        id: true,
+        leadingSquad: {
+          select: {
+            id: true,
+          }
+        },
+      }
+    });
+
+    if (leader?.leadingSquad?.id !== squad.id) {
+      throw new BadRequestException('You are not the leader of this squad');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+      select: {
+        id: true,
+        squadId: true,
+        squadInvites: {
+          select: {
+            id: true,
+            squadId: true,
+            status: true,
+          }
+        },
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.squadId) {
+      throw new BadRequestException('User already in a squad');
+    }
+
+    const alreadyInvited = await this.prisma.squadInvitation.findFirst({
+      where: {
+        userId: dto.userId,
+        squadId: dto.squadId,
+        status: {
+          equals: SquadInviteStatus.PENDING
+        }
+      },
+    });
+
+    if (alreadyInvited) {
+      throw new BadRequestException('User already has an invitation to this squad');
+    }
+
+    return this.prisma.squadInvitation.create({
+      data: {
+        status: SquadInviteStatus.PENDING,
+        user: {
+          connect: { id: dto.userId },
+        },
+        squad: {
+          connect: { id: dto.squadId },
+        },
+      },
+    });
+  }
+
+  async acceptInvitation(invitationId: string, userId: string) {
+    const invitation = await this.prisma.squadInvitation.findUnique({
+      where: { id: invitationId },
+    });
+
+    const me = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        squad: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+
+    if (!me) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (me.squad?.id) {
+      await this.prisma.squadInvitation.delete({
+        where: { id: invitationId },
+      });
+
+      throw new BadRequestException('You are already in a squad');
+    }
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== SquadInviteStatus.PENDING) {
+      throw new BadRequestException('Invitation is not pending');
+    }
+
+    return this.prisma.squadInvitation.update({
+      where: { id: invitationId },
+      data: { status: SquadInviteStatus.ACCEPTED },
+    });
+  }
+
+  async getMyInvitations(userId: string) {
+    return this.prisma.squadInvitation.findMany({
+      where: {
+        userId,
+        status: SquadInviteStatus.PENDING,
+      },
+      include: {
+        squad: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+            logoUrl: true,
+            description: true
+          }
+        }
+      }
+    });
+  }
+
+  async getMySquadInvitations(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        leadingSquad: {
+          where: {
+            invites: {
+              every: {
+                status: SquadInviteStatus.PENDING
+              }
+            },
+          },
+          select: {
+            id: true,
+            invites: {
+              select: {
+                id: true,
+                status: true,
+                user: {
+                  select: {
+                    id: true,
+                    nickname: true,
+                    status: true,
+                    avatarUrl: true,
+                  }
+                }
+              }
+            }
+          }
+        },
+      }
+    })
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.leadingSquad) {
+      throw new BadRequestException('You are not a leader of any squad');
+    }
+
+    return user.leadingSquad.invites;
+  }
+
+  async rejectInvitation(invitationId: string, userId: string) {
+    const invitation = await this.prisma.squadInvitation.findUnique({
+      where: { id: invitationId, },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== SquadInviteStatus.PENDING) {
+      throw new BadRequestException('Invitation is not pending');
+    }
+
+    return this.prisma.squadInvitation.update({
+      where: { id: invitationId },
+      data: { status: SquadInviteStatus.REJECTED },
+    });
+  }
+
+  async cancelInvitation(invitationId: string, userId: string) {
+    const invitation = await this.prisma.squadInvitation.findUnique({
+      where: { id: invitationId },
+      select: {
+        id: true,
+        status: true,
+        squad: {
+          select: {
+            leader: {
+              select: {
+                id: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== SquadInviteStatus.PENDING) {
+      throw new BadRequestException('Invitation is not pending');
+    }
+
+    if (invitation.squad.leader.id !== userId) {
+      throw new BadRequestException('You are not the leader of this squad');
+    }
+
+    return this.prisma.squadInvitation.delete({
+      where: { id: invitationId },
     });
   }
 }

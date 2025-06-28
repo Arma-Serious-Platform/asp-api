@@ -7,7 +7,7 @@ import { Roles } from 'src/shared/decorators/roles.decorator';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
-export class RolesGuard implements CanActivate {
+export class AuthGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private prisma: PrismaService,
@@ -16,10 +16,6 @@ export class RolesGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const roles = this.reflector.get(Roles, context.getHandler());
-
-    if (!roles || roles.length === 0) {
-      return true;
-    }
 
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization as string;
@@ -45,6 +41,6 @@ export class RolesGuard implements CanActivate {
     request.userId = userId;
     request.role = user.role;
 
-    return roles.includes(user.role);
+    return !roles || !roles.length || roles.includes(user.role);
   }
 }

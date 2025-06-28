@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ServersService } from "./servers.service";
 import { CreateServerDto } from "./dto/create-server.dto";
-import { RolesGuard } from "src/shared/guards/roles.guard";
+import { AuthGuard } from "src/shared/guards/auth.guard";
 import { Roles } from "src/shared/decorators/roles.decorator";
 import { FindServersDto } from "./dto/find-servers.dto";
 import { EditServerDto } from "./dto/edit-server.dto";
@@ -21,21 +21,21 @@ export class ServersController {
   }
 
   @Post()
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'TECH_ADMIN'])
   create(@Body() createServerDto: CreateServerDto) {
     return this.serversService.create(createServerDto);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'TECH_ADMIN'])
   update(@Param('id') id: string, @Body() editServerDto: EditServerDto) {
     return this.serversService.update(id, editServerDto);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'TECH_ADMIN'])
   delete(@Param('id') id: string) {
     return this.serversService.delete(id);

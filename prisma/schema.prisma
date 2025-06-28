@@ -8,42 +8,55 @@ datasource db {
 }
 
 model User {
-  id                          String           @id @default(uuid())
-  email                       String           @unique
-  nickname                    String           @unique
-  avatarUrl                   String?
+  id                          String            @id @default(uuid())
+  email                       String            @unique
+  nickname                    String            @unique
   password                    String
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
   abilities                   SoldierAbility[]
   squadId                     String?
-  role                        UserRole         @default(USER)
-  missions                    Mission[]
-  side                        Side?
-  leadingSquad                Squad?           @relation("SquadLeader")
-  squad                       Squad?           @relation("SquadMembers", fields: [squadId], references: [id])
-  status                      UserStatus       @default(ACTIVE)
   activationToken             String?
   activationTokenExpiresAt    DateTime?
+  status                      UserStatus        @default(ACTIVE)
+  role                        UserRole          @default(USER)
   resetPasswordToken          String?
   resetPasswordTokenExpiresAt DateTime?
+  avatarUrl                   String?
   bannedUntil                 DateTime?
-  createdAt                   DateTime         @default(now())
-  updatedAt                   DateTime         @updatedAt
+  missions                    Mission[]
+  side                        Side?
+  leadingSquad                Squad?            @relation("SquadLeader")
+  squadInvites                SquadInvitation[]
+  squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
 }
 
 model Squad {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  tag         String   @unique
-  description String?
-  activeCount Int      @default(0)
-  logoUrl     String?
+  id          String            @id @default(uuid())
+  name        String            @unique
+  leaderId    String            @unique
   sideId      String
-  leaderId    String   @unique
-  leader      User     @relation("SquadLeader", fields: [leaderId], references: [id])
-  side        Side     @relation(fields: [sideId], references: [id])
-  members     User[]   @relation("SquadMembers")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  activeCount Int               @default(0)
+  description String?
+  logoUrl     String?
+  tag         String            @unique
+  leader      User              @relation("SquadLeader", fields: [leaderId], references: [id])
+  side        Side              @relation(fields: [sideId], references: [id])
+  invites     SquadInvitation[]
+  members     User[]            @relation("SquadMembers")
+}
+
+model SquadInvitation {
+  id        String            @id @default(uuid())
+  userId    String
+  squadId   String
+  status    SquadInviteStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  squad     Squad             @relation(fields: [squadId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
 }
 
 model Side {
@@ -51,23 +64,23 @@ model Side {
   name      String   @unique
   type      SideType @default(UNASSIGNED)
   leaderId  String?  @unique
-  serverId  String?
-  leader    User?    @relation(fields: [leaderId], references: [id])
-  server    Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
-  squads    Squad[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  serverId  String?
+  leader    User?    @relation(fields: [leaderId], references: [id])
+  server    Server?  @relation(fields: [serverId], references: [id])
+  squads    Squad[]
 }
 
 model Server {
   id        String       @id @default(uuid())
   name      String       @unique
-  ip        String       @default("127.0.0.1")
-  port      Int          @default(2302)
   status    ServerStatus @default(ACTIVE)
-  sides     Side[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+  ip        String       @default("127.0.0.1")
+  port      Int          @default(2302)
+  sides     Side[]
 }
 
 model Vehicle {
@@ -85,11 +98,11 @@ model Mission {
   blueforSlots     Int?
   redforSlots      Int?
   independentSlots Int?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
   civilianSlots    Int?
   author           User?        @relation(fields: [authorId], references: [id])
   missionDays      MissionDay[] @relation("MissionToMissionDay")
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
 }
 
 model MissionDay {
@@ -97,19 +110,19 @@ model MissionDay {
   name      String
   date      DateTime
   weekendId String
-  weekend   Weekend   @relation(fields: [weekendId], references: [id])
-  missions  Mission[] @relation("MissionToMissionDay")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  weekend   Weekend   @relation(fields: [weekendId], references: [id])
+  missions  Mission[] @relation("MissionToMissionDay")
 }
 
 model Weekend {
   id          String       @id @default(uuid())
   name        String
   description String
-  missionDays MissionDay[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  missionDays MissionDay[]
 }
 
 enum ServerStatus {
@@ -152,4 +165,11 @@ enum SoldierAbility {
   JET_PILOT
   TANK_CREW
   VEHICLE_CREW
+}
+
+enum SquadInviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  LEAVED
 }
