@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { CreateSideDto } from './dto/create-side.dto';
 import { UpdateSideDto } from './dto/update-side.dto';
 import { AssignSquadDto } from './dto/assign-squad.dto';

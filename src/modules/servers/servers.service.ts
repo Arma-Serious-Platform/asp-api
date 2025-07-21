@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { GameDig } from 'gamedig';
-import { PrismaService } from "src/prisma/prisma.service";
+import { PrismaService } from "src/infrastructure/prisma/prisma.service";
 import { Prisma, Server } from "@prisma/client";
 import { CreateServerDto } from "./dto/create-server.dto";
 import { FindServersDto } from "./dto/find-servers.dto";

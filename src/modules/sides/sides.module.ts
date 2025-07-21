@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SidesService } from './sides.service';
 import { SidesController } from './sides.controller';
-import { PrismaModule } from 'src/prisma/prisma.module';
+import { PrismaModule } from 'src/infrastructure/prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
