@@ -46,7 +46,7 @@ export class UsersService {
       to: email,
       subject: 'Activation token',
       html: `<p>Please, click on the link below to activate your account</p>
-      <a href="${process.env.ACTIVATE_TOKEN_FRONTEND_URL}/${token}">Activate</a>
+      <a href="${process.env.ACTIVATE_TOKEN_FRONTEND_URL}?token=${token}">Activate</a>
       `,
     });
   };
