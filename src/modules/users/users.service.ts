@@ -464,7 +464,7 @@ export class UsersService {
       throw new BadRequestException('User is already banned');
     }
 
-    if (role === 'OWNER') {
+    if (user.role === 'OWNER') {
       throw new BadRequestException('You cannot ban user with OWNER role');
     }
 
