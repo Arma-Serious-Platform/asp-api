@@ -29,7 +29,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
-  ) { }
+  ) {}
 
   private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
@@ -62,15 +62,15 @@ export class UsersService {
           select: {
             id: true,
             name: true,
-          }
+          },
         },
         squad: {
           select: {
             id: true,
             name: true,
             tag: true,
-          }
-        }
+          },
+        },
       },
 
       omit: {
@@ -117,10 +117,7 @@ export class UsersService {
   async signUp(signUpDto: SignUpDto) {
     const existedUser = await this.prisma.user.findFirst({
       where: {
-        OR: [
-          { email: signUpDto.email },
-          { nickname: signUpDto.nickname },
-        ],
+        OR: [{ email: signUpDto.email }, { nickname: signUpDto.nickname }],
       },
     });
 
@@ -159,7 +156,9 @@ export class UsersService {
     }
 
     if (user.role === 'OWNER') {
-      throw new BadRequestException('You cannot change role of user with OWNER role');
+      throw new BadRequestException(
+        'You cannot change role of user with OWNER role',
+      );
     }
 
     await this.prisma.user.update({
@@ -339,7 +338,7 @@ export class UsersService {
       select: {
         id: true,
         password: true,
-      }
+      },
     });
 
     if (!user) {
@@ -367,7 +366,7 @@ export class UsersService {
   async findAll(dto: GetUsersDto) {
     const { search, take = 50, skip = 0 } = dto;
 
-    const options: Prisma.UserFindManyArgs = {}
+    const options: Prisma.UserFindManyArgs = {};
 
     if (search) {
       options.where = {
@@ -375,7 +374,21 @@ export class UsersService {
           { email: { contains: dto.search, mode: 'insensitive' } },
           { nickname: { contains: dto.search, mode: 'insensitive' } },
         ],
-      }
+      };
+    }
+
+    if (dto.role) {
+      options.where = {
+        ...options.where,
+        role: dto.role,
+      };
+    }
+
+    if (dto.status) {
+      options.where = {
+        ...options.where,
+        status: dto.status,
+      };
     }
 
     options.skip = skip;
@@ -385,16 +398,16 @@ export class UsersService {
         select: {
           id: true,
           name: true,
-        }
+        },
       },
       squad: {
         select: {
           id: true,
           name: true,
           tag: true,
-        }
-      }
-    }
+        },
+      },
+    };
     options.omit = {
       squadId: true,
       email: true,
@@ -404,10 +417,10 @@ export class UsersService {
       abilities: true,
       resetPasswordTokenExpiresAt: true,
       activationTokenExpiresAt: true,
-    }
+    };
     options.orderBy = {
       createdAt: 'desc',
-    }
+    };
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.user.findMany(options),
@@ -442,7 +455,9 @@ export class UsersService {
     }
 
     if (user.role === role) {
-      throw new BadRequestException('You cannot ban user with your level of access');
+      throw new BadRequestException(
+        'You cannot ban user with your level of access',
+      );
     }
 
     if (user.status === 'BANNED') {
@@ -469,7 +484,9 @@ export class UsersService {
     }
 
     if (user.role === role) {
-      throw new BadRequestException('You cannot unban user with your level of access');
+      throw new BadRequestException(
+        'You cannot unban user with your level of access',
+      );
     }
 
     return this.prisma.user.update({

@@ -32,9 +32,7 @@ import { GetUsersDto } from './dto/get-users.dto';
 
 @Controller('users')
 export class UsersController {
-  constructor(
-    private readonly usersService: UsersService,
-  ) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
   @UseGuards(AuthGuard)
@@ -47,7 +45,6 @@ export class UsersController {
   login(@Body() loginUserDto: LoginUserDto) {
     return this.usersService.login(loginUserDto);
   }
-
 
   @Get('/me')
   @UseGuards(AuthGuard)
@@ -67,7 +64,10 @@ export class UsersController {
 
   @Post('/change-password')
   @UseGuards(AuthGuard)
-  changePassword(@Body() changePasswordDto: ChangePasswordDto, @Req() req: RequestType) {
+  changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() req: RequestType,
+  ) {
     return this.usersService.changePassword(changePasswordDto, req.userId);
   }
 
