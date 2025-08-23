@@ -52,7 +52,12 @@ export class ServersService {
 
     const servers = await this.prisma.server.findMany(options);
 
-    return Promise.all(servers.map((server) => this.getServerInfo(server)));
+    if (findServersDto.fetchActualInfo) {
+      return Promise.all(servers.map((server) => this.getServerInfo(server)));
+    } else {
+      return servers;
+    }
+
   }
 
   async findOne(id: string) {
