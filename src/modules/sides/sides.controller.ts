@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { SidesService } from './sides.service';
 import { CreateSideDto } from './dto/create-side.dto';
 import { UpdateSideDto } from './dto/update-side.dto';
@@ -7,14 +17,15 @@ import { Roles } from 'src/shared/decorators/roles.decorator';
 import { AssignSquadDto } from './dto/assign-squad.dto';
 import { UnassignSquadDto } from './dto/unassign-squad.dto';
 import { AssignLeaderDto } from './dto/assign-leader.dto';
+import { FindSidesDto } from './dto/find-sides.dto';
 
 @Controller('sides')
 export class SidesController {
-  constructor(private readonly sidesService: SidesService) { }
+  constructor(private readonly sidesService: SidesService) {}
 
   @Get()
-  findAll() {
-    return this.sidesService.findAll();
+  findAll(@Query() dto: FindSidesDto) {
+    return this.sidesService.findAll(dto);
   }
 
   @Get(':id')
