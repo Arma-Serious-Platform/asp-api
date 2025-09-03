@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { SquadsService } from './squads.service';
 
 import { AuthGuard } from 'src/shared/guards/auth.guard';
@@ -8,14 +18,15 @@ import { DeleteSquadDto } from './dto/delete-squad.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
 import { RequestType } from 'src/utils/types';
+import { FindSquadsDto } from './dto/find-squads.dto';
 
 @Controller('squads')
 export class SquadsController {
-  constructor(private readonly squadsService: SquadsService) { }
+  constructor(private readonly squadsService: SquadsService) {}
 
   @Get()
-  findAll() {
-    return this.squadsService.findAll();
+  findAll(@Query() dto: FindSquadsDto) {
+    return this.squadsService.findAll(dto);
   }
 
   @Get(':id')

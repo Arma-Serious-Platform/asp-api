@@ -29,6 +29,9 @@ export class SidesService {
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.side.findMany({
+        orderBy: {
+          serverId: 'asc',
+        },
         include: {
           leader: {
             select: {

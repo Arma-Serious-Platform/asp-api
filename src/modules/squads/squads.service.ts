@@ -1,15 +1,22 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { CreateSquadDto } from './dto/create-squad.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
-import { SquadInviteStatus } from '@prisma/client';
+import { Prisma, SquadInviteStatus } from '@prisma/client';
+import { FindSquadsDto } from './dto/find-squads.dto';
 
 @Injectable()
 export class SquadsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.squad.findMany({
+  async findAll(dto: FindSquadsDto) {
+    const { take = 50, skip = 0 } = dto;
+
+    const options: Prisma.SquadFindManyArgs = {
       omit: {
         leaderId: true,
         sideId: true,
@@ -21,7 +28,7 @@ export class SquadsService {
             id: true,
             nickname: true,
             avatarUrl: true,
-          }
+          },
         },
         side: {
           select: {
@@ -32,13 +39,36 @@ export class SquadsService {
                 id: true,
                 name: true,
                 status: true,
-              }
+              },
             },
             type: true,
-          }
-        }
-      }
-    });
+          },
+        },
+      },
+    };
+
+    if (dto.search) {
+      options.where = {
+        OR: [
+          { name: { contains: dto.search, mode: 'insensitive' } },
+          { tag: { contains: dto.search, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.squad.findMany({
+        ...options,
+        skip,
+        take,
+      }),
+      this.prisma.squad.count(),
+    ]);
+
+    return {
+      data,
+      total,
+    };
   }
 
   async findOne(id: string) {
@@ -46,7 +76,7 @@ export class SquadsService {
       where: { id },
       omit: {
         sideId: true,
-        leaderId: true
+        leaderId: true,
       },
       include: {
         members: {
@@ -58,15 +88,15 @@ export class SquadsService {
             status: true,
           },
           orderBy: {
-            nickname: 'asc'
-          }
+            nickname: 'asc',
+          },
         },
         leader: {
           select: {
             id: true,
             nickname: true,
             avatarUrl: true,
-          }
+          },
         },
         side: {
           select: {
@@ -91,15 +121,14 @@ export class SquadsService {
 
     const existingSquad = await this.prisma.squad.findFirst({
       where: {
-        OR: [
-          { name: dto.name },
-          { tag: dto.tag },
-        ],
+        OR: [{ name: dto.name }, { tag: dto.tag }],
       },
     });
 
     if (existingSquad) {
-      throw new BadRequestException('Squad with this name or tag already exists');
+      throw new BadRequestException(
+        'Squad with this name or tag already exists',
+      );
     }
 
     const leader = await this.prisma.user.findUnique({
@@ -107,7 +136,7 @@ export class SquadsService {
       select: {
         id: true,
         leadingSquad: true,
-      }
+      },
     });
 
     if (!leader) {
@@ -187,9 +216,9 @@ export class SquadsService {
         leadingSquad: {
           select: {
             id: true,
-          }
+          },
         },
-      }
+      },
     });
 
     if (leader?.leadingSquad?.id !== squad.id) {
@@ -206,9 +235,9 @@ export class SquadsService {
             id: true,
             squadId: true,
             status: true,
-          }
+          },
         },
-      }
+      },
     });
 
     if (!user) {
@@ -224,13 +253,15 @@ export class SquadsService {
         userId: dto.userId,
         squadId: dto.squadId,
         status: {
-          equals: SquadInviteStatus.PENDING
-        }
+          equals: SquadInviteStatus.PENDING,
+        },
       },
     });
 
     if (alreadyInvited) {
-      throw new BadRequestException('User already has an invitation to this squad');
+      throw new BadRequestException(
+        'User already has an invitation to this squad',
+      );
     }
 
     return this.prisma.squadInvitation.create({
@@ -257,10 +288,10 @@ export class SquadsService {
         id: true,
         squad: {
           select: {
-            id: true
-          }
-        }
-      }
+            id: true,
+          },
+        },
+      },
     });
 
     if (!me) {
@@ -302,10 +333,10 @@ export class SquadsService {
             name: true,
             tag: true,
             logoUrl: true,
-            description: true
-          }
-        }
-      }
+            description: true,
+          },
+        },
+      },
     });
   }
 
@@ -318,8 +349,8 @@ export class SquadsService {
           where: {
             invites: {
               every: {
-                status: SquadInviteStatus.PENDING
-              }
+                status: SquadInviteStatus.PENDING,
+              },
             },
           },
           select: {
@@ -334,14 +365,14 @@ export class SquadsService {
                     nickname: true,
                     status: true,
                     avatarUrl: true,
-                  }
-                }
-              }
-            }
-          }
+                  },
+                },
+              },
+            },
+          },
         },
-      }
-    })
+      },
+    });
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -356,7 +387,7 @@ export class SquadsService {
 
   async rejectInvitation(invitationId: string, userId: string) {
     const invitation = await this.prisma.squadInvitation.findUnique({
-      where: { id: invitationId, },
+      where: { id: invitationId },
     });
 
     if (!invitation) {
@@ -384,11 +415,11 @@ export class SquadsService {
             leader: {
               select: {
                 id: true,
-              }
-            }
-          }
-        }
-      }
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!invitation) {
