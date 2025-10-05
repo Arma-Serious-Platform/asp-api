@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { SignUpDto } from './dto/create-user.dto';
 
+import { Multer } from 'multer';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { compare, hash } from 'bcryptjs';
 import { LoginUserDto } from './dto/login-user.dto';
@@ -22,6 +23,8 @@ import { BanUserDto } from './dto/ban-user.dto';
 import { Prisma, UserRole } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
+import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
+import { MinioService } from 'src/infrastructure/minio/minio.service';
 
 @Injectable()
 export class UsersService {
@@ -29,6 +32,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
+    private readonly minioService: MinioService,
   ) {}
 
   private generateActivationToken(minutes = 10) {
@@ -495,7 +499,7 @@ export class UsersService {
     });
   }
 
-  async changeAvatar(avatar: File, userId: string) {
+  async changeAvatar(avatar: Multer.File, userId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId },
     });
@@ -504,6 +508,28 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // const avatarUrl = await this.uploadAvatar(avatar);
+    if (user.avatarId) {
+      await this.minioService.deleteFile(user.avatarId);
+    }
+
+    const avatarUrl = await this.minioService.uploadFile(
+      ASP_BUCKET.AVATARS,
+      avatar,
+    );
+
+    return this.prisma.user.update({
+      include: {
+        avatar: {
+          select: {
+            id: true,
+            url: true,
+            filename: true,
+            bucket: true,
+          },
+        },
+      },
+      where: { id: userId },
+      data: { avatarId: avatarUrl.id },
+    });
   }
 }

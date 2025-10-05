@@ -7,8 +7,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model File {
+  id        String   @id @default(uuid())
+  bucket    String
+  filename  String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User[]
+  Squad     Squad[]
+}
+
 model User {
   id                          String            @id @default(uuid())
+  avatarId                    String?
+  avatar                      File?             @relation(fields: [avatarId], references: [id])
   email                       String            @unique
   nickname                    String            @unique
   password                    String
@@ -46,6 +59,8 @@ model Squad {
   side        Side              @relation(fields: [sideId], references: [id])
   invites     SquadInvitation[]
   members     User[]            @relation("SquadMembers")
+  logo        File?             @relation(fields: [logoId], references: [id])
+  logoId      String?
 }
 
 model SquadInvitation {

@@ -4,11 +4,13 @@ import { UsersController } from './users.controller';
 import { PrismaModule } from 'src/infrastructure/prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
+import { MinioModule } from 'src/infrastructure/minio/minio.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     PrismaModule,
+    MinioModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '3d' },

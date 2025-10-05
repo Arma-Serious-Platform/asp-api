@@ -1,3 +1,4 @@
+import { Multer } from 'multer';
 import {
   Controller,
   Get,
@@ -91,7 +92,7 @@ export class UsersController {
   @Post('/change-avatar')
   @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('avatar'))
-  changeAvatar(@UploadedFile() avatar: File, @Req() req: RequestType) {
+  changeAvatar(@UploadedFile() avatar: Multer.File, @Req() req: RequestType) {
     return this.usersService.changeAvatar(avatar, req.userId);
   }
 

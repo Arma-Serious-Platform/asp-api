@@ -34,10 +34,12 @@
     "class-validator": "^0.14.1",
     "dotenv": "^16.5.0",
     "gamedig": "^5.3.1",
-    "nestjs-minio-client": "^2.2.0",
+    "minio": "^8.0.6",
+    "multer": "^2.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "swagger-themes": "^1.4.3"
+    "swagger-themes": "^1.4.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
