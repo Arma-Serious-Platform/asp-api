@@ -30,6 +30,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { GetUsersDto } from './dto/get-users.dto';
+import { FileValidation } from 'src/shared/decorators/file.dectorator';
 
 @Controller('users')
 export class UsersController {
@@ -92,7 +93,7 @@ export class UsersController {
   @Post('/change-avatar')
   @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('avatar'))
-  changeAvatar(@UploadedFile() avatar: Multer.File, @Req() req: RequestType) {
+  changeAvatar(@FileValidation() avatar: Multer.File, @Req() req: RequestType) {
     return this.usersService.changeAvatar(avatar, req.userId);
   }
 

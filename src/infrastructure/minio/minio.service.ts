@@ -61,6 +61,7 @@ export class MinioService {
       const id = uuid();
       const ext = path.extname(file.originalname);
       const objectName = `${id}${ext}`;
+      const url = `https://${process.env.MINIO_ENDPOINT}/${bucket}/${objectName}`;
 
       await this.minioClient.putObject(bucket, objectName, file.buffer);
 
@@ -74,7 +75,7 @@ export class MinioService {
           id,
           bucket,
           filename: objectName,
-          url: await this.minioClient.presignedGetObject(bucket, objectName, ),
+          url,
         },
       });
 
@@ -88,8 +89,6 @@ export class MinioService {
   async deleteFile(fileId: string) {
     try {
       const file = await this.prisma.file.findUnique({ where: { id: fileId } });
-
-      console.log('file', file);
 
       if (!file) {
         return true;

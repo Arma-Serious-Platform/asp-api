@@ -62,6 +62,12 @@ export class UsersService {
       },
 
       include: {
+        avatar: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
         side: {
           select: {
             id: true,
@@ -398,6 +404,12 @@ export class UsersService {
     options.skip = skip;
     options.take = take;
     options.include = {
+      avatar: {
+        select: {
+          id: true,
+          url: true,
+        },
+      },
       side: {
         select: {
           id: true,
