@@ -3,7 +3,8 @@ import { Client } from 'minio';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { Multer } from 'multer';
-import * as path from 'path';
+import { fileTypeFromBuffer } from 'file-type';
+import * as sharp from 'sharp';
 import { v4 as uuid } from 'uuid';
 import { ASP_BUCKET } from './minio.lib';
 
@@ -22,6 +23,12 @@ export class MinioService {
       accessKey: process.env.MINIO_ACCESS_KEY,
       secretKey: process.env.MINIO_SECRET_KEY,
     });
+  }
+
+  private async convertImageToWebp(file: Multer.File) {
+    const buffer = await sharp(file.buffer).webp().toBuffer();
+
+    return buffer;
   }
 
   private async ensureBucket(bucket: ASP_BUCKET) {
@@ -58,12 +65,24 @@ export class MinioService {
     try {
       await this.ensureBucket(bucket);
 
+      let buffer: Buffer = file.buffer as Buffer;
+
       const id = uuid();
-      const ext = path.extname(file.originalname);
-      const objectName = `${id}${ext}`;
+      const fileExtension = (await fileTypeFromBuffer(file.buffer))?.ext;
+      const isWebpConversion = ['png', 'jpg', 'jpeg'].includes(
+        fileExtension || '',
+      );
+      const extension = isWebpConversion ? 'webp' : fileExtension;
+
+      if (isWebpConversion) {
+        buffer = await this.convertImageToWebp(file);
+      }
+      const objectName = `${id}.${extension}`;
       const url = `https://${process.env.MINIO_ENDPOINT}/${bucket}/${objectName}`;
 
-      await this.minioClient.putObject(bucket, objectName, file.buffer);
+      if (!extension) throw new Error('Unsupported file type');
+
+      await this.minioClient.putObject(bucket, objectName, buffer);
 
       const dbFile = await this.prisma.file.create({
         select: {

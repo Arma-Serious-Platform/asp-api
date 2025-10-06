@@ -33,11 +33,13 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.5.0",
+    "file-type": "^21.0.0",
     "gamedig": "^5.3.1",
     "minio": "^8.0.6",
     "multer": "^2.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.4",
     "swagger-themes": "^1.4.3",
     "uuid": "^13.0.0"
   },
