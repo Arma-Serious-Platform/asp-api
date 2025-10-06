@@ -42,7 +42,7 @@ export class SquadsController {
   @UseInterceptors(FileInterceptor('logo'))
   @Post()
   create(@FileValidation() logo: File, @Body() dto: CreateSquadDto) {
-    return this.squadsService.create({...dto, });
+    return this.squadsService.create({ ...dto, logo });
   }
 
   @UseGuards(AuthGuard)

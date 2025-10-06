@@ -35,6 +35,12 @@ export class SquadsService {
             avatarUrl: true,
           },
         },
+        logo: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
         side: {
           select: {
             id: true,
