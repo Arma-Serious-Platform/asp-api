@@ -196,7 +196,12 @@ export class UsersService {
             id: true,
             name: true,
             tag: true,
-            logoUrl: true,
+            logo: {
+              select: {
+                id: true,
+                url: true
+              }
+            },
             side: {
               select: {
                 id: true,

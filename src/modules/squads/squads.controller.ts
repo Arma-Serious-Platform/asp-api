@@ -8,6 +8,7 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { SquadsService } from './squads.service';
 
@@ -19,6 +20,8 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
 import { RequestType } from 'src/utils/types';
 import { FindSquadsDto } from './dto/find-squads.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { FileValidation } from 'src/shared/decorators/file.dectorator';
 
 @Controller('squads')
 export class SquadsController {
@@ -36,9 +39,10 @@ export class SquadsController {
 
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'TECH_ADMIN'])
+  @UseInterceptors(FileInterceptor('logo'))
   @Post()
-  create(@Body() dto: CreateSquadDto) {
-    return this.squadsService.create(dto);
+  create(@FileValidation() logo: File, @Body() dto: CreateSquadDto) {
+    return this.squadsService.create({...dto, });
   }
 
   @UseGuards(AuthGuard)

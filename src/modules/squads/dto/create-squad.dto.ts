@@ -1,6 +1,13 @@
-import { Optional } from "@nestjs/common";
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDefined, IsNotEmpty, IsNumber, IsString, IsUUID } from "class-validator";
+import { Optional } from '@nestjs/common';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsDefined,
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateSquadDto {
   @ApiProperty()
@@ -34,8 +41,8 @@ export class CreateSquadDto {
 
   @ApiPropertyOptional()
   @Optional()
-  @IsString()
-  logoUrl: string;
+  @Type(() => File)
+  logo: File;
 
   @ApiPropertyOptional()
   @Optional()

@@ -8,10 +8,15 @@ import { CreateSquadDto } from './dto/create-squad.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
 import { Prisma, SquadInviteStatus } from '@prisma/client';
 import { FindSquadsDto } from './dto/find-squads.dto';
+import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
+import { MinioService } from 'src/infrastructure/minio/minio.service';
 
 @Injectable()
 export class SquadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly minioService: MinioService,
+  ) {}
 
   async findAll(dto: FindSquadsDto) {
     const { take = 50, skip = 0 } = dto;
@@ -164,9 +169,20 @@ export class SquadsService {
             },
           },
           activeCount: dto.activeCount,
-          logoUrl: dto.logoUrl,
         },
       });
+
+      if (dto.logo) {
+        const url = await this.minioService.uploadFile(
+          ASP_BUCKET.SQUADS,
+          dto.logo,
+        );
+
+        await tx.squad.update({
+          where: { id: squad.id },
+          data: { logoId: url.id },
+        });
+      }
 
       await tx.user.update({
         where: { id: dto.leaderId },
@@ -332,7 +348,12 @@ export class SquadsService {
             id: true,
             name: true,
             tag: true,
-            logoUrl: true,
+            logo: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
             description: true,
           },
         },
