@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json yarn.lock ./
 
 # Install yarn and global tools, then install dependencies
-RUN npm install -g yarn @nestjs/cli
+RUN npm install -g @nestjs/cli
 RUN yarn install --frozen-lockfile
 
 # Copy the rest of the application code
