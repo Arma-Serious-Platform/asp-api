@@ -28,5 +28,5 @@ RUN yarn build
 # Expose the application port
 EXPOSE 3000
 
-# Command to run the application
-CMD ["yarn", "start:prod"]
+# Command to run migrations then start the application
+CMD ["sh", "-c", "yarn prisma migrate deploy && yarn start:prod"]
