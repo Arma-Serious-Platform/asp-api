@@ -4,6 +4,14 @@ FROM node:22.20.0-slim
 # Set the working directory inside the container
 WORKDIR /app
 
+# Install OpenSSL and libssl for runtime crypto needs
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    openssl \
+    libssl3 \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy package.json and yarn.lock
 COPY package.json yarn.lock ./
 
