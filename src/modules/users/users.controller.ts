@@ -31,6 +31,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { FileValidation } from 'src/shared/decorators/file.dectorator';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Controller('users')
 export class UsersController {
@@ -46,6 +47,11 @@ export class UsersController {
   @Post('/login')
   login(@Body() loginUserDto: LoginUserDto) {
     return this.usersService.login(loginUserDto);
+  }
+
+  @Post('/refresh-token')
+  refreshToken(@Body() dto: RefreshTokenDto) {
+    return this.usersService.refreshToken(dto);
   }
 
   @Get('/me')

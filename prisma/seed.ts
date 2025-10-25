@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+ 
+ 
+ 
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs';
 import 'dotenv/config';
@@ -28,6 +28,7 @@ export const seed = async () => {
         email: ownerEmail,
         nickname: ownerNickname,
         password: hashedPassword,
+        isEmailVerified: true,
         role: 'OWNER',
         status: 'ACTIVE'
       }

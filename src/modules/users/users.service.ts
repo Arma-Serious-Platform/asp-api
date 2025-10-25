@@ -20,11 +20,12 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Prisma, UserRole } from '@prisma/client';
+import { Prisma, User, UserRole } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Injectable()
 export class UsersService {
@@ -106,11 +107,11 @@ export class UsersService {
       throw new BadRequestException('Invalid token');
     }
 
-    if (user?.status === 'INVITED') {
+    if (!user.isEmailVerified) {
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          status: 'ACTIVE',
+          isEmailVerified: true,
           activationToken: null,
           activationTokenExpiresAt: null,
         },
@@ -143,7 +144,7 @@ export class UsersService {
         ...signUpDto,
         password: hashedPassword,
         role: 'USER',
-        status: 'INVITED',
+        isEmailVerified: false,
         activationToken: token,
         activationTokenExpiresAt: expiresAt,
       },
@@ -181,6 +182,33 @@ export class UsersService {
     };
   }
 
+  private async generateTokens(user: { id: string }) {
+    const token = await this.jwtService.signAsync(
+      {
+        userId: user.id,
+      },
+      {
+        secret: process.env.JWT_SECRET,
+        expiresIn: '24h',
+      },
+    );
+
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        userId: user.id,
+      },
+      {
+        secret: process.env.JWT_SECRET,
+        expiresIn: '7d',
+      },
+    );
+
+    return {
+      token,
+      refreshToken,
+    };
+  }
+
   async login(loginUserDto: LoginUserDto) {
     const { email, password } = loginUserDto;
 
@@ -199,8 +227,8 @@ export class UsersService {
             logo: {
               select: {
                 id: true,
-                url: true
-              }
+                url: true,
+              },
             },
             side: {
               select: {
@@ -225,7 +253,7 @@ export class UsersService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (user.status === 'INVITED') {
+    if (!user.isEmailVerified) {
       if (
         !user.activationToken ||
         !user.activationTokenExpiresAt ||
@@ -250,19 +278,7 @@ export class UsersService {
       }
     }
 
-    const token = await this.jwtService.signAsync({
-      userId: user.id,
-    });
-
-    const refreshToken = await this.jwtService.signAsync(
-      {
-        userId: user.id,
-      },
-      {
-        secret: process.env.JWT_SECRET,
-        expiresIn: '7d',
-      },
-    );
+    const data = await this.generateTokens(user);
 
     const { password: _, ...userWithoutPassword } = user;
 
@@ -270,8 +286,29 @@ export class UsersService {
       user: {
         ...userWithoutPassword,
       },
-      token,
-      refreshToken,
+      ...data,
+    };
+  }
+
+  async refreshToken(dto: RefreshTokenDto) {
+    const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
+      dto.refreshToken,
+      {
+        secret: process.env.JWT_SECRET,
+      },
+    );
+
+    const user = await this.me(userId);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const data = await this.generateTokens(user);
+
+    return {
+      user,
+      ...data,
     };
   }
 
