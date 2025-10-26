@@ -38,6 +38,10 @@ export const seed = async () => {
   }
 
   const seedSides = async () => {
+    const serverExists = await prisma.server.findFirst();
+
+    if (serverExists) return;
+
     const server = await prisma.server.upsert({
       where: {
         name: 'Server #1',
