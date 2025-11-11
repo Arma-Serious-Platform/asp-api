@@ -80,6 +80,13 @@ export class UsersService {
             id: true,
             name: true,
             tag: true,
+            side: {
+              select: {
+                id: true,
+                type: true,
+                name: true
+              }
+            }
           },
         },
       },

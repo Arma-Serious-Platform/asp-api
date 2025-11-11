@@ -10,13 +10,14 @@ import { Prisma, SquadInviteStatus } from '@prisma/client';
 import { FindSquadsDto } from './dto/find-squads.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
+import { UpdateSquadDto } from './dto/update-squad.dto';
 
 @Injectable()
 export class SquadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
-  ) {}
+  ) { }
 
   async findAll(dto: FindSquadsDto) {
     const { take = 50, skip = 0 } = dto;
@@ -196,6 +197,74 @@ export class SquadsService {
           squadId: squad.id,
         },
       });
+
+      return squad;
+    });
+  }
+
+  async update(id: string, dto: UpdateSquadDto) {
+    if (dto.sideId) {
+      const side = await this.prisma.side.findUnique({
+        where: { id: dto.sideId },
+      });
+
+      if (!side) {
+        throw new NotFoundException('Side not found');
+      }
+    }
+
+    if (dto.leaderId) {
+      const leader = await this.prisma.user.findUnique({
+        where: { id: dto.leaderId },
+        select: {
+          id: true,
+          leadingSquad: true,
+        },
+      });
+
+      if (!leader) {
+        throw new NotFoundException('Leader not found');
+      }
+
+      if (leader.leadingSquad) {
+        throw new BadRequestException('Leader already in a squad');
+      }
+    }
+
+
+    return this.prisma.$transaction(async (tx) => {
+      const squad = await tx.squad.update({
+        where: { id },
+        data: {
+          ...(dto.sideId && { side: { connect: { id: dto.sideId } } }),
+          ...(dto.leaderId && { leader: { connect: { id: dto.leaderId } } }),
+          ...(dto.name && { name: dto.name }),
+          ...(dto.tag && { tag: dto.tag }),
+          ...(dto.description && { description: dto.description }),
+          ...(typeof dto.activeCount === 'number' && { activeCount: dto.activeCount }),
+        },
+      });
+
+      if (dto.logo) {
+        const url = await this.minioService.uploadFile(
+          ASP_BUCKET.SQUADS,
+          dto.logo,
+        );
+
+        await tx.squad.update({
+          where: { id: squad.id },
+          data: { logoId: url.id },
+        });
+      }
+
+      if (dto.leaderId) {
+        await tx.user.update({
+          where: { id: dto.leaderId },
+          data: {
+            squadId: squad.id,
+          },
+        });
+      }
 
       return squad;
     });

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -22,6 +23,7 @@ import { RequestType } from 'src/utils/types';
 import { FindSquadsDto } from './dto/find-squads.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileValidation } from 'src/shared/decorators/file.dectorator';
+import { UpdateSquadDto } from './dto/update-squad.dto';
 
 @Controller('squads')
 export class SquadsController {
@@ -43,6 +45,14 @@ export class SquadsController {
   @Post()
   create(@FileValidation() logo: File, @Body() dto: CreateSquadDto) {
     return this.squadsService.create({ ...dto, logo });
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  @UseInterceptors(FileInterceptor('logo'))
+  @Patch(':id')
+  update(@FileValidation({required: false}) logo: File, @Param('id') id: string, @Body() dto: UpdateSquadDto) {
+    return this.squadsService.update(id, { ...dto, logo });
   }
 
   @UseGuards(AuthGuard)
