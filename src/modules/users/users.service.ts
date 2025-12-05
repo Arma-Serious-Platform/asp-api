@@ -298,25 +298,36 @@ export class UsersService {
   }
 
   async refreshToken(dto: RefreshTokenDto) {
-    const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
-      dto.refreshToken,
-      {
-        secret: process.env.JWT_SECRET,
-      },
-    );
+    try {
+      const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
+        dto.refreshToken,
+        {
+          secret: process.env.JWT_SECRET,
+        },
+      );
 
-    const user = await this.me(userId);
+      const user = await this.me(userId);
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid refresh token');
+      if (!user) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const data = await this.generateTokens(user);
+
+      return {
+        user,
+        ...data,
+      };
+    } catch (error) {
+      if (
+        error?.name === 'JsonWebTokenError' ||
+        error?.name === 'TokenExpiredError' ||
+        error?.name === 'NotBeforeError'
+      ) {
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+      throw error;
     }
-
-    const data = await this.generateTokens(user);
-
-    return {
-      user,
-      ...data,
-    };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
