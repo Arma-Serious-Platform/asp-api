@@ -220,7 +220,9 @@ export class UsersService {
     const { emailOrNickname, password } = loginUserDto;
 
     const user = await this.prisma.user.findFirst({
-      where: { OR: [{ email: emailOrNickname }, { nickname: emailOrNickname }] },
+      where: {
+        OR: [{ email: emailOrNickname }, { nickname: emailOrNickname }],
+      },
       omit: {
         squadId: true,
         abilities: true,
@@ -249,6 +251,8 @@ export class UsersService {
         },
       },
     });
+
+    console.log(user);
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
