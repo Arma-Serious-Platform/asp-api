@@ -34,7 +34,7 @@ export class UsersService {
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
     private readonly minioService: MinioService,
-  ) {}
+  ) { }
 
   private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
@@ -217,10 +217,10 @@ export class UsersService {
   }
 
   async login(loginUserDto: LoginUserDto) {
-    const { email, password } = loginUserDto;
+    const { emailOrNickname, password } = loginUserDto;
 
     const user = await this.prisma.user.findFirst({
-      where: { email },
+      where: { OR: [{ email: emailOrNickname }, { nickname: emailOrNickname }] },
       omit: {
         squadId: true,
         abilities: true,
