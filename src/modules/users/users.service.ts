@@ -252,8 +252,6 @@ export class UsersService {
       },
     });
 
-    console.log(user);
-
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
