@@ -472,17 +472,12 @@ export class UsersService {
           url: true,
         },
       },
-      side: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
       squad: {
         select: {
           id: true,
           name: true,
           tag: true,
+          side: true
         },
       },
     };

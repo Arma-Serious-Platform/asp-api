@@ -28,7 +28,11 @@ export class SquadsService {
         sideId: true,
       },
       include: {
-        _count: true,
+        _count: {
+          select: {
+            members: true
+          }
+        },
         leader: {
           select: {
             id: true,

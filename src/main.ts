@@ -30,12 +30,15 @@ async function bootstrap() {
     .setDescription('The core ASP API service')
     .setVersion(process.env.npm_package_version ?? '0.0.1')
     .build();
-  const theme = new SwaggerTheme();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('swagger', app, documentFactory, {
-    customCss: theme.getBuffer(SwaggerThemeNameEnum.DARK),
-    explorer: true,
-  });
+
+  if (process.env.ENABLE_SWAGGER === 'true') {
+    const theme = new SwaggerTheme();
+    const documentFactory = () => SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('swagger', app, documentFactory, {
+      customCss: theme.getBuffer(SwaggerThemeNameEnum.DARK),
+      explorer: true,
+    });
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }

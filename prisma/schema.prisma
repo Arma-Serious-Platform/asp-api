@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model File {
@@ -61,6 +60,7 @@ model Squad {
   members     User[]            @relation("SquadMembers")
   logoId      String?
   logo        File?             @relation(fields: [logoId], references: [id])
+  recruiting  Boolean           @default(true)
 }
 
 model SquadInvitation {
