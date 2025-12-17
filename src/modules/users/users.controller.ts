@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  Patch,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { SignUpDto } from './dto/create-user.dto';
@@ -32,10 +33,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Get()
   @UseGuards(AuthGuard)
@@ -58,6 +60,12 @@ export class UsersController {
   @UseGuards(AuthGuard)
   me(@Req() req: RequestType) {
     return this.usersService.me(req.userId);
+  }
+
+  @Patch('/me')
+  @UseGuards(AuthGuard)
+  updateMe(@Body() updateMeDto: UpdateMeDto, @Req() req: RequestType) {
+    return this.usersService.updateMe(req.userId, updateMeDto);
   }
 
   @Post('/signup')

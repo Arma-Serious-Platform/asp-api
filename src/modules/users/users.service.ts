@@ -26,6 +26,7 @@ import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 
 @Injectable()
 export class UsersService {
@@ -55,6 +56,21 @@ export class UsersService {
       `,
     });
   };
+
+  async updateMe(userId: string, updateMeDto: UpdateMeDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: updateMeDto,
+    });
+  }
 
   async me(userId: string) {
     const user = await this.prisma.user.findFirst({

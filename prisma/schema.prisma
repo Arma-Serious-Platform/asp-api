@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model File {
@@ -24,6 +25,7 @@ model User {
   email                       String            @unique
   nickname                    String            @unique
   password                    String
+  steamId                     String?           @unique
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
   abilities                   SoldierAbility[]
@@ -42,6 +44,10 @@ model User {
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
+  telegramUrl                 String?
+  discordUrl                  String?
+  youtubeUrl                  String?
+  twitchUrl                   String?
 }
 
 model Squad {
