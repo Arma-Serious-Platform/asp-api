@@ -24,10 +24,12 @@ import { FindSquadsDto } from './dto/find-squads.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { UpdateSquadDto } from './dto/update-squad.dto';
+import { KickFromSquadDto } from './dto/kick-from-squad.dto';
+import { LeaveSquadDto } from './dto/leave-squad.dto';
 
 @Controller('squads')
 export class SquadsController {
-  constructor(private readonly squadsService: SquadsService) {}
+  constructor(private readonly squadsService: SquadsService) { }
 
   @Get()
   findAll(@Query() dto: FindSquadsDto) {
@@ -51,7 +53,7 @@ export class SquadsController {
   @Roles(['OWNER', 'TECH_ADMIN'])
   @UseInterceptors(FileInterceptor('logo'))
   @Patch(':id')
-  update(@FileValidation({required: false}) logo: File, @Param('id') id: string, @Body() dto: UpdateSquadDto) {
+  update(@FileValidation({ required: false }) logo: File, @Param('id') id: string, @Body() dto: UpdateSquadDto) {
     return this.squadsService.update(id, { ...dto, logo });
   }
 
@@ -87,8 +89,20 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
-  @Post('/invitations/cancel/:invitationId')
-  cancelInvitation(@Param() dto: AcceptInvitationDto, @Req() req: RequestType) {
-    return this.squadsService.cancelInvitation(dto.invitationId, req.userId);
+  @Post('/kick/:userId')
+  kickFromSquad(@Param() dto: KickFromSquadDto, @Req() req: RequestType) {
+    return this.squadsService.kickFromSquad(dto, req.userId);
   }
+
+  @UseGuards(AuthGuard)
+  @Post('/leave')
+  leaveFromSquad(@Body() dto: LeaveSquadDto, @Req() req: RequestType) {
+    return this.squadsService.leaveFromSquad(req.userId, dto.newLeaderId);
+  }
+
+  // @UseGuards(AuthGuard)
+  // @Post('/invitations/cancel/:invitationId')
+  // cancelInvitation(@Param() dto: AcceptInvitationDto, @Req() req: RequestType) {
+  //   return this.squadsService.cancelInvitation(dto.invitationId, req.userId);
+  // }
 }

@@ -11,6 +11,7 @@ import { FindSquadsDto } from './dto/find-squads.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { UpdateSquadDto } from './dto/update-squad.dto';
+import { KickFromSquadDto } from './dto/kick-from-squad.dto';
 
 @Injectable()
 export class SquadsService {
@@ -369,6 +370,102 @@ export class SquadsService {
           connect: { id: squad.id },
         },
       },
+    });
+  }
+
+  async kickFromSquad(dto: KickFromSquadDto, leaderId: string) {
+    const squad = await this.prisma.squad.findUnique({
+      where: { leaderId },
+    });
+
+    if (!squad) {
+      throw new NotFoundException('Squad not found');
+    }
+
+    if (squad.leaderId !== leaderId) {
+      throw new BadRequestException('You are not the leader of this squad');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+      select: {
+        id: true,
+        squadId: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.squadId !== squad.id) {
+      throw new BadRequestException('User is not in this squad');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: dto.userId },
+        data: { squadId: null },
+      });
+
+      return await tx.squadInvitation.deleteMany({
+        where: { userId: dto.userId, squadId: squad.id },
+      });
+    });
+  }
+
+  async leaveFromSquad(userId: string, newLeaderId?: string) {
+    if (userId === newLeaderId) {
+      throw new BadRequestException('You cannot leave the squad & assign yourself as the new leader');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        squadId: true,
+        squad: {
+          select: {
+            id: true,
+            leaderId: true
+          }
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+
+    if (!user.squadId) {
+      throw new NotFoundException('Squad not found');
+    }
+
+    const isUserLeader = user.id === user?.squad?.leaderId;
+
+    if (isUserLeader && !newLeaderId) {
+      throw new BadRequestException('You are the leader of this squad & you need to assign a new leader');
+    }
+
+    if (isUserLeader && newLeaderId) {
+      const newLeader = await this.prisma.user.findUnique({
+        where: { id: newLeaderId, squadId: user.squadId },
+      });
+
+      if (!newLeader) {
+        throw new NotFoundException('New leader not found');
+      }
+
+      await this.prisma.squad.update({
+        where: { id: user.squadId },
+        data: { leaderId: newLeaderId },
+      });
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { squadId: null },
     });
   }
 

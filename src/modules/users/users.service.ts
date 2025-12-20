@@ -117,7 +117,11 @@ export class UsersService {
             id: true,
             name: true,
             tag: true,
-            members: true,
+            members: {
+              include: {
+                avatar: true
+              }
+            },
             leader: {
               select: {
                 id: true,
