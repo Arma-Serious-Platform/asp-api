@@ -91,11 +91,38 @@ export class UsersService {
             name: true,
           },
         },
+        squadInvites: {
+          select: {
+            id: true,
+            status: true,
+            squadId: true,
+            createdAt: true,
+            updatedAt: true,
+            squad: {
+              select: {
+                id: true,
+                name: true,
+                tag: true,
+                logo: {
+                  select: {
+                    url: true
+                  }
+                }
+              },
+            },
+          },
+        },
         squad: {
           select: {
             id: true,
             name: true,
             tag: true,
+            members: true,
+            leader: {
+              select: {
+                id: true,
+              },
+            },
             side: {
               select: {
                 id: true,
@@ -451,7 +478,7 @@ export class UsersService {
     };
   }
 
-  async findAll(dto: GetUsersDto) {
+  async findAll(dto: GetUsersDto, userRole: UserRole) {
     const { search, take = 50, skip = 0 } = dto;
 
     const options: Prisma.UserFindManyArgs = {};
@@ -459,7 +486,7 @@ export class UsersService {
     if (search) {
       options.where = {
         OR: [
-          { email: { contains: dto.search, mode: 'insensitive' } },
+          [UserRole.OWNER, UserRole.TECH_ADMIN].some(role => role === userRole) ? { email: { contains: dto.search, mode: 'insensitive' } } : {},
           { nickname: { contains: dto.search, mode: 'insensitive' } },
         ],
       };

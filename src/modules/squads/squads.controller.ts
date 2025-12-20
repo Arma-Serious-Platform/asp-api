@@ -63,15 +63,9 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
-  @Post('/my/invitations/:userId')
+  @Post('/invite/:userId')
   inviteToSquad(@Param() dto: InviteToSquadDto, @Req() req: RequestType) {
     return this.squadsService.inviteToSquad(dto, req.userId);
-  }
-
-  @UseGuards(AuthGuard)
-  @Get('/my/invitations')
-  getMySquadInvitations(@Req() req: RequestType) {
-    return this.squadsService.getMyInvitations(req.userId);
   }
 
   @UseGuards(AuthGuard)

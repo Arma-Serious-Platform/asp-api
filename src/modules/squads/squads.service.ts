@@ -297,7 +297,7 @@ export class SquadsService {
 
   async inviteToSquad(dto: InviteToSquadDto, leaderId: string) {
     const squad = await this.prisma.squad.findUnique({
-      where: { id: dto.squadId },
+      where: { leaderId },
     });
 
     if (!squad) {
@@ -346,7 +346,7 @@ export class SquadsService {
     const alreadyInvited = await this.prisma.squadInvitation.findFirst({
       where: {
         userId: dto.userId,
-        squadId: dto.squadId,
+        squadId: squad.id,
         status: {
           equals: SquadInviteStatus.PENDING,
         },
@@ -366,7 +366,7 @@ export class SquadsService {
           connect: { id: dto.userId },
         },
         squad: {
-          connect: { id: dto.squadId },
+          connect: { id: squad.id },
         },
       },
     });
@@ -409,9 +409,16 @@ export class SquadsService {
       throw new BadRequestException('Invitation is not pending');
     }
 
-    return this.prisma.squadInvitation.update({
-      where: { id: invitationId },
-      data: { status: SquadInviteStatus.ACCEPTED },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { squadId: invitation.squadId },
+      });
+
+      return await tx.squadInvitation.update({
+        where: { id: invitationId },
+        data: { status: SquadInviteStatus.ACCEPTED },
+      });
     });
   }
 

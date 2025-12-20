@@ -14,7 +14,8 @@ export class UpdateMeDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  steamId?: null;
+  @IsString()
+  steamId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

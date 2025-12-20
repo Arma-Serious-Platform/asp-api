@@ -41,9 +41,8 @@ export class UsersController {
 
   @Get()
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
-  find(@Query() dto: GetUsersDto) {
-    return this.usersService.findAll(dto);
+  find(@Query() dto: GetUsersDto, @Req() req: RequestType) {
+    return this.usersService.findAll(dto, req.role);
   }
 
   @Post('/login')

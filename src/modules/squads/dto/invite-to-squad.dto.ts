@@ -6,9 +6,4 @@ export class InviteToSquadDto {
   @IsNotEmpty()
   @IsUUID()
   userId: string;
-
-  @ApiProperty()
-  @IsNotEmpty()
-  @IsUUID()
-  squadId: string;
 }
