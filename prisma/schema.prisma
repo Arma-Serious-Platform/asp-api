@@ -16,6 +16,7 @@ model File {
   updatedAt DateTime @updatedAt
   User      User[]
   Squad     Squad[]
+  MissionVersion MissionVersion[]
 }
 
 model User {
@@ -111,19 +112,50 @@ model Vehicle {
   updatedAt DateTime @updatedAt
 }
 
+
+
+model MissionWeaponry {
+  id String @id @default(uuid())
+  name String
+  description String?
+  count Int
+  missionVersionId String
+  missionVersion MissionVersion @relation(fields: [missionVersionId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MissionVersion {
+  id String @id @default(uuid())
+  version String
+  missionId String
+  mission Mission @relation(fields: [missionId], references: [id])
+  status MissionStatus @default(PENDING_APPROVAL)
+  attackSideType MissionGameSide
+  defenseSideType MissionGameSide
+  attackSideSlots Int
+  defenseSideSlots Int
+  attackSideName String
+  defenseSideName String
+  attackSideWeaponry MissionWeaponry[]
+  defenseSideWeaponry MissionWeaponry[]
+  rating Int
+  fileId String
+  file File @relation(fields: [fileId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Mission {
   id               String       @id @default(uuid())
   name             String
-  authorId         String?
   description      String
-  blueforSlots     Int?
-  redforSlots      Int?
-  independentSlots Int?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  civilianSlots    Int?
+  authorId         String?
   author           User?        @relation(fields: [authorId], references: [id])
   missionDays      MissionDay[] @relation("MissionToMissionDay")
+  missionVersions MissionVersion[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 model MissionDay {
@@ -141,6 +173,7 @@ model Weekend {
   id          String       @id @default(uuid())
   name        String
   description String
+  date        DateTime
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   missionDays MissionDay[]
@@ -192,4 +225,10 @@ enum SquadInviteStatus {
   ACCEPTED
   REJECTED
   LEAVED
+}
+
+enum MissionGameSide {
+  BLUE
+  RED
+  GREEN
 }
