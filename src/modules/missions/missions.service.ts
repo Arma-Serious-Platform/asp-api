@@ -3,6 +3,11 @@ import { FindMissionsDto } from "./dto/find-missions.dto";
 import { CreateMissionDto } from "./dto/create-mission.dto";
 import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
+import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
+import { MissionStatus } from "@prisma/client";
+import { UpdateMissionDto } from "./dto/update-mission.dto";
+import { NotFoundException } from "@nestjs/common";
+import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 
 export class MissionsService {
   constructor(private readonly prisma: PrismaService, private readonly minioService: MinioService) { }
@@ -32,18 +37,108 @@ export class MissionsService {
     });
   }
 
-  async createMission(dto: CreateMissionDto, image?: File) {
-
+  async createMission(dto: CreateMissionDto, authorId: string, image?: File) {
     let fileId = '';
+
     if (image) {
       const file = await this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, image);
 
       fileId = file.id;
     }
 
-    // await this.prisma.mission.create({
+    return await this.prisma.mission.create({
+      data: {
+        name: dto.name,
+        description: dto.description,
+        authorId: authorId,
+        imageId: fileId
+      },
+    });
+  }
 
-    // });
+  async updateMission(dto: UpdateMissionDto, missionId: string) {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: {
+        imageId: true,
+      }
+    });
 
+    if (!mission) {
+      throw new NotFoundException('Mission not found');
+    }
+
+    let newFileId = '';
+
+    if (dto.image) {
+      const file = await this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, dto.image);
+
+      newFileId = file.id;
+    }
+
+    return await this.prisma.mission.update({
+      where: { id: missionId },
+      data: {
+        name: dto.name,
+        description: dto.description,
+        imageId: newFileId || mission.imageId || null,
+      },
+    });
+  }
+
+  async createMissionVersion(dto: CreateMissionVersionDto, missionId: string) {
+    const { id: fileId } = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, dto.file);
+
+    return await this.prisma.missionVersion.create({
+      data: {
+        fileId,
+        version: dto.version,
+        missionId: missionId,
+        attackSideType: dto.attackSideType,
+        defenseSideType: dto.defenseSideType,
+        attackSideSlots: dto.attackSideSlots,
+        defenseSideSlots: dto.defenseSideSlots,
+        attackSideName: dto.attackSideName,
+        defenseSideName: dto.defenseSideName,
+        status: MissionStatus.PENDING_APPROVAL,
+        rating: dto.rating,
+        attackSideWeaponry: dto.attackSideWeaponry
+          ? {
+            create: dto.attackSideWeaponry.map((weaponry) => ({
+              name: weaponry.name,
+              description: weaponry.description,
+              count: weaponry.count,
+            })),
+          }
+          : undefined,
+        defenseSideWeaponry: dto.defenseSideWeaponry
+          ? {
+            create: dto.defenseSideWeaponry.map((weaponry) => ({
+              name: weaponry.name,
+              description: weaponry.description,
+              count: weaponry.count,
+            })),
+          }
+          : undefined,
+      },
+      include: {
+        attackSideWeaponry: true,
+        defenseSideWeaponry: true,
+      },
+    });
+  }
+
+  async updateMissionVersion(dto: UpdateMissionVersionDto, missionVersionId: string) {
+    return await this.prisma.missionVersion.update({
+      where: { id: missionVersionId },
+      data: {
+        version: dto.version,
+        attackSideName: dto.attackSideName,
+        defenseSideName: dto.defenseSideName,
+        attackSideSlots: dto.attackSideSlots,
+        defenseSideSlots: dto.defenseSideSlots,
+        attackSideType: dto.attackSideType
+      },
+    });
   }
 }

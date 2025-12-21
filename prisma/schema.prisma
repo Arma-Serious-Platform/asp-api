@@ -119,8 +119,10 @@ model MissionWeaponry {
   name String
   description String?
   count Int
-  missionVersionId String
-  missionVersion MissionVersion @relation(fields: [missionVersionId], references: [id])
+  attackWeaponryId String?
+  defenseWeaponryId String?
+  attackMissionVersion MissionVersion? @relation("AttackSideWeaponry", fields: [attackWeaponryId], references: [id])
+  defenseMissionVersion MissionVersion? @relation("DefenseSideWeaponry", fields: [defenseWeaponryId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -137,9 +139,9 @@ model MissionVersion {
   defenseSideSlots Int
   attackSideName String
   defenseSideName String
-  attackSideWeaponry MissionWeaponry[]
-  defenseSideWeaponry MissionWeaponry[]
-  rating Int
+  attackSideWeaponry MissionWeaponry[] @relation("AttackSideWeaponry")
+  defenseSideWeaponry MissionWeaponry[] @relation("DefenseSideWeaponry")
+  rating Int?
   fileId String
   file File @relation(fields: [fileId], references: [id])
   createdAt DateTime @default(now())
@@ -154,6 +156,7 @@ model Mission {
   author           User?        @relation(fields: [authorId], references: [id])
   missionDays      MissionDay[] @relation("MissionToMissionDay")
   missionVersions MissionVersion[]
+  imageId          String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }
