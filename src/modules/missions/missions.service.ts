@@ -4,7 +4,7 @@ import { CreateMissionDto } from "./dto/create-mission.dto";
 import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
-import { MissionStatus } from "@prisma/client";
+import { MissionStatus, Prisma } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
@@ -17,7 +17,7 @@ export class MissionsService {
   async findAll(dto: FindMissionsDto) {
     const { search, authorId, minSlots, maxSlots, status } = dto;
 
-    return await this.prisma.mission.findMany({
+    const options: Prisma.MissionFindManyArgs = {
       where: {
         name: { contains: search, mode: 'insensitive' },
         ...(authorId ? { authorId } : {}),
@@ -47,7 +47,20 @@ export class MissionsService {
           },
         },
       },
-    });
+    }
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.mission.count({ where: options.where }),
+      this.prisma.mission.findMany({
+        where: options.where,
+        include: options.include,
+      }),
+    ]);
+
+    return {
+      data,
+      total,
+    };
   }
 
   async findById(dto: FindMissionByIdDto) {
@@ -67,10 +80,7 @@ export class MissionsService {
   }
 
   async createMission(dto: CreateMissionDto, authorId: string, image?: File) {
-
-    console.log(dto, authorId)
-
-    let fileId = '';
+    let fileId: string | null = null;
 
     if (image) {
       const file = await this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, image);
@@ -103,7 +113,7 @@ export class MissionsService {
       throw new NotFoundException('Mission not found');
     }
 
-    let newFileId = '';
+    let newFileId: string | null = null;
 
     if (dto.image) {
       const file = await this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, dto.image);
@@ -116,7 +126,7 @@ export class MissionsService {
       data: {
         name: dto.name,
         description: dto.description,
-        imageId: newFileId || mission.imageId || null,
+        imageId: newFileId ?? mission.imageId ?? null,
       },
     });
   }

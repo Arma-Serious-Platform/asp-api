@@ -1,14 +1,9 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { MissionStatus } from "@prisma/client";
 import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
+import { PaginationDto } from "src/shared/dto/pagination.dto";
 
-export class FindMissionsDto {
-  @IsString()
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  search?: string;
-
+export class FindMissionsDto extends PaginationDto {
   @IsOptional()
   @IsUUID()
   authorId?: string;

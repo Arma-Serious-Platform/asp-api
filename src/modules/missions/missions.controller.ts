@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { FindMissionsDto } from "./dto/find-missions.dto";
 import { MissionsService } from "./missions.service";
 import { AuthGuard } from "src/shared/guards/auth.guard";
@@ -24,12 +25,14 @@ export class MissionsController {
 
   @Post()
   @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('image'))
   create(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) image: File, @Body() createMissionDto: CreateMissionDto, @Req() req: RequestType) {
     return this.missionsService.createMission(createMissionDto, req.userId, image);
   }
 
   @Post(':id/versions')
   @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
   createVersion(@FileValidation() file: File, @Body() createMissionVersionDto: CreateMissionVersionDto, @Param('id') id: string) {
     return this.missionsService.createMissionVersion({ ...createMissionVersionDto, file }, id);
   }
