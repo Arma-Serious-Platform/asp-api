@@ -1,8 +1,13 @@
-import { Get, Param, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { FindMissionsDto } from "./dto/find-missions.dto";
 import { MissionsService } from "./missions.service";
 import { AuthGuard } from "src/shared/guards/auth.guard";
+import { CreateMissionDto } from "./dto/create-mission.dto";
+import { RequestType } from "src/utils/types";
+import { FileValidation } from "src/shared/decorators/file.dectorator";
+import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 
+@Controller('missions')
 export class MissionsController {
   constructor(private readonly missionsService: MissionsService) { }
 
@@ -12,8 +17,20 @@ export class MissionsController {
     return this.missionsService.findAll(findMissionsDto);
   }
 
-  // @Get(':id')
-  // findOne(@Param('id') id: string) {
-  //   return this.missionsService.findOne(id);
-  // }
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    return this.missionsService.findById({ id });
+  }
+
+  @Post()
+  @UseGuards(AuthGuard)
+  create(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) image: File, @Body() createMissionDto: CreateMissionDto, @Req() req: RequestType) {
+    return this.missionsService.createMission(createMissionDto, req.userId, image);
+  }
+
+  @Post(':id/versions')
+  @UseGuards(AuthGuard)
+  createVersion(@FileValidation() file: File, @Body() createMissionVersionDto: CreateMissionVersionDto, @Param('id') id: string) {
+    return this.missionsService.createMissionVersion({ ...createMissionVersionDto, file }, id);
+  }
 }

@@ -8,6 +8,7 @@ import { MissionStatus } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
+import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 
 export class MissionsService {
   constructor(private readonly prisma: PrismaService, private readonly minioService: MinioService) { }
@@ -18,8 +19,13 @@ export class MissionsService {
     return await this.prisma.mission.findMany({
       where: {
         name: { contains: search, mode: 'insensitive' },
+        ...(authorId ? { authorId } : {}),
+        ...(minSlots ? { missionVersions: { some: { attackSideSlots: { gte: minSlots } } } } : {}),
+        ...(maxSlots ? { missionVersions: { some: { attackSideSlots: { lte: maxSlots } } } } : {}),
+        ...(status ? { missionVersions: { some: { status } } } : {}),
       },
       include: {
+        image: true,
         author: {
           select: {
             id: true,
@@ -28,11 +34,33 @@ export class MissionsService {
             squad: {
               select: {
                 id: true,
-                tag: true
+                tag: true,
+                side: {
+                  select: {
+                    id: true,
+                    type: true
+                  }
+                }
               }
             }
           },
         },
+      },
+    });
+  }
+
+  async findById(dto: FindMissionByIdDto) {
+    return await this.prisma.mission.findUnique({
+      where: { id: dto.id },
+      include: {
+        image: true,
+        missionVersions: {
+          include: {
+            file: true,
+            attackSideWeaponry: true,
+            defenseSideWeaponry: true
+          }
+        }
       },
     });
   }
@@ -53,6 +81,9 @@ export class MissionsService {
         authorId: authorId,
         imageId: fileId
       },
+      include: {
+        image: true
+      }
     });
   }
 

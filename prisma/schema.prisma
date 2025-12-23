@@ -16,6 +16,7 @@ model File {
   updatedAt DateTime @updatedAt
   User      User[]
   Squad     Squad[]
+  Mission   Mission[]
   MissionVersion MissionVersion[]
 }
 
@@ -157,6 +158,7 @@ model Mission {
   missionDays      MissionDay[] @relation("MissionToMissionDay")
   missionVersions MissionVersion[]
   imageId          String?
+  image            File?        @relation(fields: [imageId], references: [id])
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }

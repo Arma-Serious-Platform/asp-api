@@ -7,6 +7,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import { SidesModule } from './modules/sides/sides.module';
 import { SquadsModule } from './modules/squads/squads.module';
 import { ServersModule } from './modules/servers/servers.module';
+import { MissionsModule } from './modules/missions/missions.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ServersModule } from './modules/servers/servers.module';
     ServersModule,
     SidesModule,
     SquadsModule,
+    MissionsModule
   ],
   controllers: [AppController],
   providers: [AppService],
