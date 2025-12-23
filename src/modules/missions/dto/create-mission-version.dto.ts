@@ -28,11 +28,13 @@ export class CreateMissionVersionDto {
   @ApiProperty()
   @IsNumber()
   @IsNotEmpty()
+  @Type(() => Number)
   attackSideSlots: number;
 
   @ApiProperty()
   @IsNumber()
   @IsNotEmpty()
+  @Type(() => Number)
   defenseSideSlots: number;
 
   @ApiProperty()
@@ -45,17 +47,9 @@ export class CreateMissionVersionDto {
   @IsNotEmpty()
   defenseSideName: string;
 
-  @ApiProperty()
-  @IsDefined()
-  @IsNotEmpty()
-  @Type(() => File)
-  file: File;
-
   @ApiPropertyOptional()
   @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
-  rating?: number;
+  file?: File;
 
   @ApiPropertyOptional({ type: [CreateMissionWeaponryDto] })
   @IsOptional()

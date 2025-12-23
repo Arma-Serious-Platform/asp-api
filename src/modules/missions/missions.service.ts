@@ -146,7 +146,6 @@ export class MissionsService {
         attackSideName: dto.attackSideName,
         defenseSideName: dto.defenseSideName,
         status: MissionStatus.PENDING_APPROVAL,
-        rating: dto.rating,
         attackSideWeaponry: dto.attackSideWeaponry
           ? {
             create: dto.attackSideWeaponry.map((weaponry) => ({
