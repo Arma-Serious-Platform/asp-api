@@ -6,10 +6,11 @@ import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { MissionStatus } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
-import { NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 
+@Injectable()
 export class MissionsService {
   constructor(private readonly prisma: PrismaService, private readonly minioService: MinioService) { }
 
@@ -66,6 +67,9 @@ export class MissionsService {
   }
 
   async createMission(dto: CreateMissionDto, authorId: string, image?: File) {
+
+    console.log(dto, authorId)
+
     let fileId = '';
 
     if (image) {
