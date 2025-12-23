@@ -68,7 +68,15 @@ export class MinioService {
       let buffer: Buffer = file.buffer as Buffer;
 
       const id = uuid();
-      const fileExtension = (await fileTypeFromBuffer(file.buffer))?.ext;
+      const detectedExtension = (await fileTypeFromBuffer(file.buffer))?.ext;
+      
+      // Fallback to original filename extension if file-type can't detect it
+      const getExtensionFromFilename = (filename: string): string | undefined => {
+        const parts = filename.split('.');
+        return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : undefined;
+      };
+      
+      const fileExtension = detectedExtension || getExtensionFromFilename(file.originalname);
       const isWebpConversion = ['png', 'jpg', 'jpeg'].includes(
         fileExtension || '',
       );
