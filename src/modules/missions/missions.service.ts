@@ -6,7 +6,7 @@ import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { MissionStatus, Prisma } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 
@@ -101,11 +101,13 @@ export class MissionsService {
     });
   }
 
-  async updateMission(dto: UpdateMissionDto, missionId: string) {
+  async updateMission(dto: UpdateMissionDto, missionId: string, authorId: string, image?: File) {
     const mission = await this.prisma.mission.findUnique({
       where: { id: missionId },
       select: {
+        id: true,
         imageId: true,
+        authorId: true,
       }
     });
 
@@ -113,10 +115,14 @@ export class MissionsService {
       throw new NotFoundException('Mission not found');
     }
 
+    if (mission.authorId !== authorId) {
+      throw new ForbiddenException('You are not the author of this mission');
+    }
+
     let newFileId: string | null = null;
 
-    if (dto.image) {
-      const file = await this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, dto.image);
+    if (image) {
+      const file = await this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, image);
 
       newFileId = file.id;
     }
@@ -181,7 +187,28 @@ export class MissionsService {
         defenseSideName: dto.defenseSideName,
         attackSideSlots: dto.attackSideSlots,
         defenseSideSlots: dto.defenseSideSlots,
-        attackSideType: dto.attackSideType
+        attackSideType: dto.attackSideType,
+        defenseSideType: dto.defenseSideType,
+        attackSideWeaponry: dto.attackSideWeaponry
+          ? {
+            deleteMany: {},
+            create: dto.attackSideWeaponry.map((weaponry) => ({
+              name: weaponry.name,
+              description: weaponry.description,
+              count: weaponry.count,
+            })),
+          }
+          : undefined,
+        defenseSideWeaponry: dto.defenseSideWeaponry
+          ? {
+            deleteMany: {},
+            create: dto.defenseSideWeaponry.map((weaponry) => ({
+              name: weaponry.name,
+              description: weaponry.description,
+              count: weaponry.count,
+            })),
+          }
+          : undefined,
       },
     });
   }

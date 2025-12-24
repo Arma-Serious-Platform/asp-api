@@ -1,6 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { IsDefined, IsOptional, IsString } from "class-validator";
+import { IsOptional, IsString } from "class-validator";
 
 export class UpdateMissionDto {
   @ApiPropertyOptional()
@@ -12,9 +11,4 @@ export class UpdateMissionDto {
   @IsString()
   @IsOptional()
   description?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => File)
-  image?: File;
 }

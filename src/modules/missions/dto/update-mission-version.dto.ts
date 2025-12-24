@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { MissionGameSide } from "@prisma/client";
-import { IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
+import { Type } from "class-transformer";
 
 export class UpdateMissionVersionDto {
   @ApiPropertyOptional()
@@ -37,4 +39,18 @@ export class UpdateMissionVersionDto {
   @IsEnum(MissionGameSide)
   @IsOptional()
   defenseSideType?: MissionGameSide;
+
+  @ApiPropertyOptional({ type: [CreateMissionWeaponryDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateMissionWeaponryDto)
+  attackSideWeaponry?: CreateMissionWeaponryDto[];
+
+  @ApiPropertyOptional({ type: [CreateMissionWeaponryDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateMissionWeaponryDto)
+  defenseSideWeaponry?: CreateMissionWeaponryDto[];
 }
