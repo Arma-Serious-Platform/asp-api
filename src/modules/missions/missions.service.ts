@@ -4,11 +4,12 @@ import { CreateMissionDto } from "./dto/create-mission.dto";
 import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
-import { MissionStatus, Prisma } from "@prisma/client";
+import { MissionStatus, Prisma, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
+import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
 
 @Injectable()
 export class MissionsService {
@@ -27,6 +28,26 @@ export class MissionsService {
       },
       include: {
         image: true,
+        missionVersions: {
+          take: 1,
+          skip: 0,
+          select: {
+            id: true,
+            attackSideName: true,
+            defenseSideName: true,
+            attackSideSlots: true,
+            defenseSideSlots: true,
+            attackSideType: true,
+            defenseSideType: true,
+            version: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
         author: {
           select: {
             id: true,
@@ -210,6 +231,29 @@ export class MissionsService {
           }
           : undefined,
       },
+    });
+  }
+
+  async changeMissionVersionStatus(dto: ChangeMissionVersionStatusDto, versionId: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role !== UserRole.MISSION_REVIEWER && user.role !== UserRole.OWNER && user.role !== UserRole.TECH_ADMIN) {
+      throw new ForbiddenException('You are not authorized to change mission version status');
+    }
+
+    return await this.prisma.missionVersion.update({
+      where: { id: versionId },
+      data: { status: dto.status },
     });
   }
 }

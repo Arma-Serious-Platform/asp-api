@@ -8,6 +8,7 @@ import { RequestType } from "src/utils/types";
 import { FileValidation } from "src/shared/decorators/file.dectorator";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
+import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
 
 @Controller('missions')
 export class MissionsController {
@@ -43,5 +44,11 @@ export class MissionsController {
   @UseInterceptors(FileInterceptor('file'))
   createVersion(@FileValidation() file: File, @Body() createMissionVersionDto: CreateMissionVersionDto, @Param('id') id: string) {
     return this.missionsService.createMissionVersion({ ...createMissionVersionDto, file }, id);
+  }
+
+  @Post(':id/versions/:versionId/change-status')
+  @UseGuards(AuthGuard)
+  changeStatus(@Param('versionId') versionId: string, @Body() dto: ChangeMissionVersionStatusDto, @Req() req: RequestType) {
+    return this.missionsService.changeMissionVersionStatus(dto, versionId, req.userId);
   }
 }
