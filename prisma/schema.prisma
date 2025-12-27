@@ -36,12 +36,14 @@ model User {
   activationTokenExpiresAt    DateTime?
   status                      UserStatus        @default(ACTIVE)
   role                        UserRole          @default(USER)
+  isMissionReviewer           Boolean           @default(false)
   resetPasswordToken          String?
   resetPasswordTokenExpiresAt DateTime?
   avatarUrl                   String?
   bannedUntil                 DateTime?
   isEmailVerified             Boolean           @default(false)
   missions                    Mission[]
+  missionComments             MissionComment[]
   side                        Side?
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
@@ -143,7 +145,6 @@ model MissionVersion {
   attackSideWeaponry MissionWeaponry[] @relation("AttackSideWeaponry")
   defenseSideWeaponry MissionWeaponry[] @relation("DefenseSideWeaponry")
   changesDescription String?
-  discussions MissionVersionDiscussion[]
   rating Int?
   fileId String
   file File @relation(fields: [fileId], references: [id])
@@ -151,10 +152,10 @@ model MissionVersion {
   updatedAt DateTime @updatedAt
 }
 
-model MissionVersionDiscussion {
+model MissionComment {
   id String @id @default(uuid())
-  missionVersionId String
-  missionVersion MissionVersion @relation(fields: [missionVersionId], references: [id])
+  missionId String
+  mission Mission @relation(fields: [missionId], references: [id])
   userId String
   user User @relation(fields: [userId], references: [id])
   message String
@@ -172,6 +173,7 @@ model Mission {
   missionVersions MissionVersion[]
   imageId          String?
   image            File?        @relation(fields: [imageId], references: [id])
+  comments         MissionComment[]
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }
@@ -223,7 +225,6 @@ enum UserRole {
   OWNER
   TECH_ADMIN
   GAME_ADMIN
-  MISSION_REVIEWER
   USER
 }
 

@@ -34,6 +34,7 @@ import { GetUsersDto } from './dto/get-users.dto';
 import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 
 @Controller('users')
 export class UsersController {
@@ -101,6 +102,13 @@ export class UsersController {
   @Roles(['OWNER'])
   changeUserRole(@Body() changeUserRoleDto: ChangeUserRoleDto) {
     return this.usersService.changeUserRole(changeUserRoleDto);
+  }
+
+  @Post('/change-is-mission-reviewer')
+  @UseGuards(AuthGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  changeIsMissionReviewer(@Body() dto: ChangeIsMissionReviewerDto) {
+    return this.usersService.changeIsMissionReviewer(dto);
   }
 
   @Post('/change-avatar')

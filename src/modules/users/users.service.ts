@@ -27,6 +27,7 @@ import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 
 @Injectable()
 export class UsersService {
@@ -233,6 +234,25 @@ export class UsersService {
 
     return {
       message: 'User role updated successfully',
+    };
+  }
+
+  async changeIsMissionReviewer(dto: ChangeIsMissionReviewerDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: dto.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.update({
+      where: { id: dto.userId },
+      data: { isMissionReviewer: dto.isMissionReviewer },
+    });
+
+    return {
+      message: dto.isMissionReviewer ? 'User is now a mission reviewer' : 'User is no longer a mission reviewer',
     };
   }
 
@@ -556,6 +576,16 @@ export class UsersService {
   findOne(id: string) {
     return this.prisma.user.findFirst({
       where: { id },
+      omit: {
+        password: true,
+        squadId: true,
+        abilities: true,
+        activationToken: true,
+        resetPasswordToken: true,
+        resetPasswordTokenExpiresAt: true,
+        activationTokenExpiresAt: true,
+        email: true,
+      },
     });
   }
 

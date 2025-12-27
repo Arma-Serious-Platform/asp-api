@@ -243,6 +243,7 @@ export class MissionsService {
       select: {
         id: true,
         role: true,
+        isMissionReviewer: true,
       }
     });
 
@@ -250,7 +251,7 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.role !== UserRole.MISSION_REVIEWER && user.role !== UserRole.OWNER && user.role !== UserRole.TECH_ADMIN) {
+    if (!user.isMissionReviewer && (user.role !== UserRole.OWNER && user.role !== UserRole.TECH_ADMIN)) {
       throw new ForbiddenException('You are not authorized to change mission version status');
     }
 
