@@ -90,6 +90,9 @@ export class MissionsService {
       include: {
         image: true,
         missionVersions: {
+          orderBy: {
+            createdAt: 'desc',
+          },
           include: {
             file: true,
             attackSideWeaponry: true,

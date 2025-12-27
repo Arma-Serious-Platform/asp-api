@@ -142,9 +142,22 @@ model MissionVersion {
   defenseSideName String
   attackSideWeaponry MissionWeaponry[] @relation("AttackSideWeaponry")
   defenseSideWeaponry MissionWeaponry[] @relation("DefenseSideWeaponry")
+  changesDescription String?
+  discussions MissionVersionDiscussion[]
   rating Int?
   fileId String
   file File @relation(fields: [fileId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MissionVersionDiscussion {
+  id String @id @default(uuid())
+  missionVersionId String
+  missionVersion MissionVersion @relation(fields: [missionVersionId], references: [id])
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  message String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
