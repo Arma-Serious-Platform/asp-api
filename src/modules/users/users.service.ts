@@ -80,6 +80,11 @@ export class UsersService {
       },
 
       include: {
+        _count: {
+          select: {
+            missions: true
+          }
+        },
         avatar: {
           select: {
             id: true,
