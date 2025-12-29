@@ -76,7 +76,7 @@ export class MinioService {
         return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : undefined;
       };
       
-      const fileExtension = detectedExtension || getExtensionFromFilename(file.originalname);
+      const fileExtension = detectedExtension || getExtensionFromFilename(file.originalname as string);
       const isWebpConversion = ['png', 'jpg', 'jpeg'].includes(
         fileExtension || '',
       );
@@ -85,7 +85,7 @@ export class MinioService {
       if (isWebpConversion) {
         buffer = await this.convertImageToWebp(file);
       }
-      const objectName = `${id}.${extension}`;
+      const objectName = isWebpConversion ? `${id}.${extension}` : file.originalname as string;
       const url = `https://${process.env.MINIO_ENDPOINT}/${bucket}/${objectName}`;
 
       if (!extension) throw new Error('Unsupported file type');
