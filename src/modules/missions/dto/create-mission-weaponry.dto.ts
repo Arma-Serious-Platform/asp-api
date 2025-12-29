@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { MissionGameSide } from "@prisma/client";
 import { Type } from "class-transformer";
-import { IsDefined, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsDefined, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 
 export class CreateMissionWeaponryDto {
   @ApiProperty()
@@ -20,5 +21,11 @@ export class CreateMissionWeaponryDto {
   @IsNumber()
   @Type(() => Number)
   count: number;
+
+  @ApiProperty()
+  @IsDefined()
+  @IsNotEmpty()
+  @IsEnum(MissionGameSide)
+  type: MissionGameSide;
 }
 

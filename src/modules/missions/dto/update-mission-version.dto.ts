@@ -45,12 +45,5 @@ export class UpdateMissionVersionDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateMissionWeaponryDto)
-  attackSideWeaponry?: CreateMissionWeaponryDto[];
-
-  @ApiPropertyOptional({ type: [CreateMissionWeaponryDto] })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateMissionWeaponryDto)
-  defenseSideWeaponry?: CreateMissionWeaponryDto[];
+  weaponry?: CreateMissionWeaponryDto[];
 }

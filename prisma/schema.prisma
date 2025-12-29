@@ -8,15 +8,15 @@ datasource db {
 }
 
 model File {
-  id        String   @id @default(uuid())
-  bucket    String
-  filename  String
-  url       String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  User      User[]
-  Squad     Squad[]
-  Mission   Mission[]
+  id             String           @id @default(uuid())
+  bucket         String
+  filename       String
+  url            String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  User           User[]
+  Squad          Squad[]
+  Mission        Mission[]
   MissionVersion MissionVersion[]
 }
 
@@ -115,67 +115,63 @@ model Vehicle {
   updatedAt DateTime @updatedAt
 }
 
-
-
 model MissionWeaponry {
-  id String @id @default(uuid())
-  name String
-  description String?
-  count Int
-  attackWeaponryId String?
-  defenseWeaponryId String?
-  attackMissionVersion MissionVersion? @relation("AttackSideWeaponry", fields: [attackWeaponryId], references: [id])
-  defenseMissionVersion MissionVersion? @relation("DefenseSideWeaponry", fields: [defenseWeaponryId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String          @id @default(uuid())
+  name             String
+  description      String?
+  count            Int
+  type             MissionGameSide
+  missionVersion   MissionVersion  @relation("MissionVersionWeaponry", fields: [missionVersionId], references: [id])
+  missionVersionId String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 }
 
 model MissionVersion {
-  id String @id @default(uuid())
-  version String
-  missionId String
-  mission Mission @relation(fields: [missionId], references: [id])
-  status MissionStatus @default(PENDING_APPROVAL)
-  attackSideType MissionGameSide
-  defenseSideType MissionGameSide
-  attackSideSlots Int
-  defenseSideSlots Int
-  attackSideName String
-  defenseSideName String
-  attackSideWeaponry MissionWeaponry[] @relation("AttackSideWeaponry")
-  defenseSideWeaponry MissionWeaponry[] @relation("DefenseSideWeaponry")
+  id                 String            @id @default(uuid())
+  version            String
+  missionId          String
+  mission            Mission           @relation(fields: [missionId], references: [id])
+  status             MissionStatus     @default(PENDING_APPROVAL)
+  attackSideType     MissionGameSide
+  defenseSideType    MissionGameSide
+  attackSideSlots    Int
+  defenseSideSlots   Int
+  attackSideName     String
+  defenseSideName    String
+  weaponry           MissionWeaponry[] @relation("MissionVersionWeaponry")
   changesDescription String?
-  rating Int?
-  fileId String
-  file File @relation(fields: [fileId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  rating             Int?
+  fileId             String
+  file               File              @relation(fields: [fileId], references: [id])
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }
 
 model MissionComment {
-  id String @id @default(uuid())
+  id        String   @id @default(uuid())
   missionId String
-  mission Mission @relation(fields: [missionId], references: [id])
-  userId String
-  user User @relation(fields: [userId], references: [id])
-  message String
+  mission   Mission  @relation(fields: [missionId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Mission {
-  id               String       @id @default(uuid())
-  name             String
-  description      String
-  authorId         String?
-  author           User?        @relation(fields: [authorId], references: [id])
-  missionDays      MissionDay[] @relation("MissionToMissionDay")
+  id              String           @id @default(uuid())
+  name            String
+  description     String
+  authorId        String?
+  author          User?            @relation(fields: [authorId], references: [id])
+  missionDays     MissionDay[]     @relation("MissionToMissionDay")
   missionVersions MissionVersion[]
-  imageId          String?
-  image            File?        @relation(fields: [imageId], references: [id])
-  comments         MissionComment[]
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  imageId         String?
+  image           File?            @relation(fields: [imageId], references: [id])
+  comments        MissionComment[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model MissionDay {

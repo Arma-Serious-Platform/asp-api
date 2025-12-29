@@ -95,8 +95,7 @@ export class MissionsService {
           },
           include: {
             file: true,
-            attackSideWeaponry: true,
-            defenseSideWeaponry: true
+            weaponry: true,
           }
         }
       },
@@ -176,33 +175,61 @@ export class MissionsService {
         attackSideName: dto.attackSideName,
         defenseSideName: dto.defenseSideName,
         status: MissionStatus.PENDING_APPROVAL,
-        attackSideWeaponry: dto.attackSideWeaponry
+        weaponry: dto.weaponry
           ? {
-            create: dto.attackSideWeaponry.map((weaponry) => ({
+            create: dto.weaponry.map((weaponry) => ({
               name: weaponry.name,
               description: weaponry.description,
               count: weaponry.count,
-            })),
-          }
-          : undefined,
-        defenseSideWeaponry: dto.defenseSideWeaponry
-          ? {
-            create: dto.defenseSideWeaponry.map((weaponry) => ({
-              name: weaponry.name,
-              description: weaponry.description,
-              count: weaponry.count,
+              type: weaponry.type,
             })),
           }
           : undefined,
       },
       include: {
-        attackSideWeaponry: true,
-        defenseSideWeaponry: true,
+        weaponry: true,
       },
     });
   }
 
-  async updateMissionVersion(dto: UpdateMissionVersionDto, missionVersionId: string) {
+  async updateMissionVersion(dto: UpdateMissionVersionDto, missionVersionId: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        isMissionReviewer: true,
+      }
+    });
+    
+    if (!user) {
+      return new NotFoundException('User not found');
+    }
+
+    const missionVersion = await this.prisma.missionVersion.findUnique({
+      where: { id: missionVersionId },
+      select: {
+        id: true,
+        attackSideType: true,
+        defenseSideType: true,
+        mission: {
+          select: {
+            authorId: true
+          }
+        }
+      },
+    });
+
+    if (!missionVersion) {
+      return new NotFoundException('Mission version not found');
+    }
+
+    const canChangeAnyMissionVersion = user.isMissionReviewer || (user.role === UserRole.OWNER || user.role === UserRole.TECH_ADMIN);
+
+    if (missionVersion.mission.authorId !== userId && !canChangeAnyMissionVersion) {
+      throw new ForbiddenException('You are not the author of this mission');
+    }
+
     return await this.prisma.missionVersion.update({
       where: { id: missionVersionId },
       data: {
@@ -213,23 +240,15 @@ export class MissionsService {
         defenseSideSlots: dto.defenseSideSlots,
         attackSideType: dto.attackSideType,
         defenseSideType: dto.defenseSideType,
-        attackSideWeaponry: dto.attackSideWeaponry
+        weaponry: dto.weaponry
           ? {
             deleteMany: {},
-            create: dto.attackSideWeaponry.map((weaponry) => ({
+            create: dto.weaponry.map((weaponry) => ({
               name: weaponry.name,
               description: weaponry.description,
               count: weaponry.count,
-            })),
-          }
-          : undefined,
-        defenseSideWeaponry: dto.defenseSideWeaponry
-          ? {
-            deleteMany: {},
-            create: dto.defenseSideWeaponry.map((weaponry) => ({
-              name: weaponry.name,
-              description: weaponry.description,
-              count: weaponry.count,
+              missionVersionId,
+              type: weaponry.type
             })),
           }
           : undefined,
