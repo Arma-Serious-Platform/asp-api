@@ -23,11 +23,13 @@ export class UpdateMissionVersionDto {
   @ApiPropertyOptional()
   @IsNumber()
   @IsOptional()
+  @Type(() => Number)
   attackSideSlots?: number;
 
   @ApiPropertyOptional()
   @IsNumber()
   @IsOptional()
+  @Type(() => Number)
   defenseSideSlots?: number;  
 
   @ApiPropertyOptional()

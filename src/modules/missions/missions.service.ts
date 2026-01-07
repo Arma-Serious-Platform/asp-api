@@ -6,7 +6,7 @@ import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { MissionStatus, Prisma, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
@@ -192,7 +192,7 @@ export class MissionsService {
     });
   }
 
-  async updateMissionVersion(dto: UpdateMissionVersionDto, missionVersionId: string, userId: string) {
+  async updateMissionVersion(dto: UpdateMissionVersionDto, missionVersionId: string, userId: string, file?: File) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -201,23 +201,20 @@ export class MissionsService {
         isMissionReviewer: true,
       }
     });
-    
+
     if (!user) {
       return new NotFoundException('User not found');
     }
 
     const missionVersion = await this.prisma.missionVersion.findUnique({
       where: { id: missionVersionId },
-      select: {
-        id: true,
-        attackSideType: true,
-        defenseSideType: true,
+      include: {
         mission: {
           select: {
             authorId: true
           }
         }
-      },
+      }
     });
 
     if (!missionVersion) {
@@ -230,29 +227,65 @@ export class MissionsService {
       throw new ForbiddenException('You are not the author of this mission');
     }
 
+    const updateDto: Prisma.MissionVersionUpdateInput = {};
+
+    if (file) {
+      const newFile = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, file);
+      await this.minioService.deleteFile(missionVersion.fileId);
+
+      updateDto.file = {
+        update: {
+          id: newFile.id,
+          filename: newFile.filename,
+          url: newFile.url,
+        }
+      };
+    }
+
+
+    if (dto.version) {
+      updateDto.version = dto.version;
+    }
+
+    if (dto.attackSideName) {
+      updateDto.attackSideName = dto.attackSideName;
+    }
+
+    if (dto.defenseSideName) {
+      updateDto.defenseSideName = dto.defenseSideName;
+    }
+
+    if (dto.attackSideSlots) {
+      updateDto.attackSideSlots = dto.attackSideSlots;
+    }
+
+    if (dto.defenseSideSlots) {
+      updateDto.defenseSideSlots = dto.defenseSideSlots;
+    }
+
+    if (dto.attackSideType) {
+      updateDto.attackSideType = dto.attackSideType;
+    }
+
+    if (dto.defenseSideType) {
+      updateDto.defenseSideType = dto.defenseSideType;
+    }
+
+    if (dto.weaponry) {
+      updateDto.weaponry = {
+        deleteMany: {},
+        create: dto.weaponry.map((weaponry) => ({
+          name: weaponry.name,
+          description: weaponry.description,
+          count: weaponry.count,
+          type: weaponry.type,
+        })),
+      };
+    }
+
     return await this.prisma.missionVersion.update({
       where: { id: missionVersionId },
-      data: {
-        version: dto.version,
-        attackSideName: dto.attackSideName,
-        defenseSideName: dto.defenseSideName,
-        attackSideSlots: dto.attackSideSlots,
-        defenseSideSlots: dto.defenseSideSlots,
-        attackSideType: dto.attackSideType,
-        defenseSideType: dto.defenseSideType,
-        weaponry: dto.weaponry
-          ? {
-            deleteMany: {},
-            create: dto.weaponry.map((weaponry) => ({
-              name: weaponry.name,
-              description: weaponry.description,
-              count: weaponry.count,
-              missionVersionId,
-              type: weaponry.type
-            })),
-          }
-          : undefined,
-      },
+      data: updateDto,
     });
   }
 

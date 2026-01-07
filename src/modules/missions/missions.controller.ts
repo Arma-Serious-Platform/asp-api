@@ -49,8 +49,9 @@ export class MissionsController {
 
   @Patch(':id/versions/:versionId')
   @UseGuards(AuthGuard)
-  updateVersion(@Body() dto: UpdateMissionVersionDto, @Param('versionId') versionId: string, @Req() req: RequestType) {
-    return this.missionsService.updateMissionVersion(dto, versionId, req.userId);
+  @UseInterceptors(FileInterceptor('file'))
+  updateVersion(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) file: File, @Body() dto: UpdateMissionVersionDto, @Param('versionId') versionId: string, @Req() req: RequestType) {
+    return this.missionsService.updateMissionVersion(dto, versionId, req.userId, file);
   }
 
   @Post(':id/versions/:versionId/change-status')
