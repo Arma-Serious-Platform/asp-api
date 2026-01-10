@@ -46,6 +46,12 @@ export class UsersController {
     return this.usersService.findAll(dto, req.role);
   }
 
+  @Get(':id')
+  @UseGuards(AuthGuard)
+  findOne(@Param('id') idOrName: string) {
+    return this.usersService.findOne(idOrName);
+  }
+
   @Post('/login')
   login(@Body() loginUserDto: LoginUserDto) {
     return this.usersService.login(loginUserDto);

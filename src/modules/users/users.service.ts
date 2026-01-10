@@ -578,18 +578,34 @@ export class UsersService {
     };
   }
 
-  findOne(id: string) {
+  findOne(idOrName: string) {
     return this.prisma.user.findFirst({
-      where: { id },
-      omit: {
-        password: true,
-        squadId: true,
-        abilities: true,
-        activationToken: true,
-        resetPasswordToken: true,
-        resetPasswordTokenExpiresAt: true,
-        activationTokenExpiresAt: true,
+      where: { OR: [{ id: idOrName }, { nickname: idOrName }] },
+      select: {
+        id: true,
+        nickname: true,
         email: true,
+        status: true,
+        role: true,
+        squad: {
+          select: {
+            tag: true,
+            side: true,
+            leaderId: true
+          },
+        },
+        avatar: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
+        isMissionReviewer: true,
+        discordUrl: true,
+        youtubeUrl: true,
+        twitchUrl: true,
+        telegramUrl: true,
+        steamId: true,
       },
     });
   }
