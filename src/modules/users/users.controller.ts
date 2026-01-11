@@ -46,6 +46,12 @@ export class UsersController {
     return this.usersService.findAll(dto, req.role);
   }
 
+  @Get('/me')
+  @UseGuards(AuthGuard)
+  me(@Req() req: RequestType) {
+    return this.usersService.me(req.userId);
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard)
   findOne(@Param('id') idOrName: string) {
@@ -60,12 +66,6 @@ export class UsersController {
   @Post('/refresh-token')
   refreshToken(@Body() dto: RefreshTokenDto) {
     return this.usersService.refreshToken(dto);
-  }
-
-  @Get('/me')
-  @UseGuards(AuthGuard)
-  me(@Req() req: RequestType) {
-    return this.usersService.me(req.userId);
   }
 
   @Patch('/me')
