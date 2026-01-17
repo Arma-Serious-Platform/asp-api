@@ -30,12 +30,47 @@ export class MissionsService {
   async findAll(dto: FindMissionsDto) {
     const { search, authorId, minSlots, maxSlots, status, islandId } = dto;
 
+    // Get mission IDs that match slot criteria using raw SQL
+    let missionIdsWithValidSlots: string[] | null = null;
+    if (minSlots || maxSlots) {
+      if (minSlots && maxSlots) {
+        const result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+          SELECT DISTINCT "missionId"
+          FROM "MissionVersion"
+          WHERE ("attackSideSlots" + "defenseSideSlots") >= ${minSlots}
+            AND ("attackSideSlots" + "defenseSideSlots") <= ${maxSlots}
+        `;
+        missionIdsWithValidSlots = result.map((r) => r.missionId);
+      } else if (minSlots) {
+        const result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+          SELECT DISTINCT "missionId"
+          FROM "MissionVersion"
+          WHERE ("attackSideSlots" + "defenseSideSlots") >= ${minSlots}
+        `;
+        missionIdsWithValidSlots = result.map((r) => r.missionId);
+      } else if (maxSlots) {
+        const result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+          SELECT DISTINCT "missionId"
+          FROM "MissionVersion"
+          WHERE ("attackSideSlots" + "defenseSideSlots") <= ${maxSlots}
+        `;
+        missionIdsWithValidSlots = result.map((r) => r.missionId);
+      }
+      
+      // If no missions match the slot criteria, return empty result
+      if (missionIdsWithValidSlots && missionIdsWithValidSlots.length === 0) {
+        return {
+          data: [],
+          total: 0,
+        };
+      }
+    }
+
     const options: Prisma.MissionFindManyArgs = {
       where: {
         name: { contains: search, mode: 'insensitive' },
         ...(authorId ? { authorId } : {}),
-        ...(minSlots ? { missionVersions: { some: { attackSideSlots: { gte: minSlots } } } } : {}),
-        ...(maxSlots ? { missionVersions: { some: { attackSideSlots: { lte: maxSlots } } } } : {}),
+        ...(missionIdsWithValidSlots ? { id: { in: missionIdsWithValidSlots } } : {}),
         ...(status ? { missionVersions: { some: { status } } } : {}),
         ...(islandId ? { islandId } : {}),
       },

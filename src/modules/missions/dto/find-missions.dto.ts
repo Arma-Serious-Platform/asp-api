@@ -17,7 +17,7 @@ export class FindMissionsDto extends PaginationDto {
 
   @IsOptional()
   @IsInt()
-  @Max(100)
+  @Min(0)
   @Transform(({ value }) => parseInt(value as string))
   maxSlots?: number;
 
