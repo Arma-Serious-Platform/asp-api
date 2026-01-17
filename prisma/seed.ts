@@ -4,6 +4,7 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs';
 import 'dotenv/config';
+import { ISLANDS } from './data';
 
 const prisma = new PrismaClient();
 
@@ -17,6 +18,21 @@ export const seed = async () => {
   }
 
   const hashedPassword = await hash(ownerPassword, 15);
+
+  const seedIslands = async () => {
+    const islands = await prisma.island.findMany();
+
+    if (islands.length > 0) return;
+
+    await Promise.all(ISLANDS.map(async (island) => {
+      return prisma.island.create({
+        data: {
+          name: island.name,
+          code: island.code,
+        },
+      });
+    }));
+  }
 
   const seedUser = async () => {
     await prisma.user.upsert({
@@ -102,6 +118,7 @@ export const seed = async () => {
     await Promise.all([
       seedUser(),
       seedSides(),
+      seedIslands()
     ])
   } catch (error) {
     console.log('Error seeding database');

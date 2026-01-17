@@ -15,8 +15,20 @@ import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-stat
 export class MissionsService {
   constructor(private readonly prisma: PrismaService, private readonly minioService: MinioService) { }
 
+  async findAllIslands() {
+    return await this.prisma.island.findMany({
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        // createdAt: true,
+        // updatedAt: true
+      }
+    });
+  }
+
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, status } = dto;
+    const { search, authorId, minSlots, maxSlots, status, islandId } = dto;
 
     const options: Prisma.MissionFindManyArgs = {
       where: {
@@ -25,9 +37,17 @@ export class MissionsService {
         ...(minSlots ? { missionVersions: { some: { attackSideSlots: { gte: minSlots } } } } : {}),
         ...(maxSlots ? { missionVersions: { some: { attackSideSlots: { lte: maxSlots } } } } : {}),
         ...(status ? { missionVersions: { some: { status } } } : {}),
+        ...(islandId ? { islandId } : {}),
       },
       include: {
         image: true,
+        island: {
+          select :{
+            id: true,
+            name: true,
+            code: true,  
+          },
+        },
         missionVersions: {
           take: 1,
           skip: 0,
@@ -41,6 +61,7 @@ export class MissionsService {
             defenseSideType: true,
             version: true,
             status: true,
+
             createdAt: true,
             updatedAt: true
           },
@@ -89,6 +110,7 @@ export class MissionsService {
       where: { id: dto.id },
       include: {
         image: true,
+        island: true,
         missionVersions: {
           orderBy: {
             createdAt: 'desc',
@@ -116,10 +138,12 @@ export class MissionsService {
         name: dto.name,
         description: dto.description,
         authorId: authorId,
-        imageId: fileId
+        imageId: fileId,
+        islandId: dto.islandId,
       },
       include: {
-        image: true
+        image: true,
+        island: true,
       }
     });
   }
@@ -156,6 +180,7 @@ export class MissionsService {
         name: dto.name,
         description: dto.description,
         imageId: newFileId ?? mission.imageId ?? null,
+        islandId: dto.islandId,
       },
     });
   }

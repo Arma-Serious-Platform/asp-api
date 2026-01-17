@@ -159,6 +159,15 @@ model MissionComment {
   updatedAt DateTime @updatedAt
 }
 
+model Island {
+  id        String    @id @default(uuid())
+  name      String
+  code      String?   @unique
+  missions  Mission[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 model Mission {
   id              String           @id @default(uuid())
   name            String
@@ -170,6 +179,8 @@ model Mission {
   imageId         String?
   image           File?            @relation(fields: [imageId], references: [id])
   comments        MissionComment[]
+  islandId        String?
+  island          Island?           @relation(fields: [islandId], references: [id])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }

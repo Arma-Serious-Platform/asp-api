@@ -15,6 +15,11 @@ import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 export class MissionsController {
   constructor(private readonly missionsService: MissionsService) { }
 
+  @Get('islands')
+  findAllIslands() {
+    return this.missionsService.findAllIslands();
+  }
+
   @Get()
   @UseGuards(AuthGuard)
   findAll(@Query() findMissionsDto: FindMissionsDto) {

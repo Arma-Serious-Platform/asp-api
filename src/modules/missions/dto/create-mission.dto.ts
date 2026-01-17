@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsNotEmpty, IsString, IsUUID } from "class-validator";
 
 export class CreateMissionDto {
   @ApiProperty()
@@ -11,4 +11,9 @@ export class CreateMissionDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @ApiProperty()
+  @IsUUID()
+  @IsNotEmpty()
+  islandId: string;
 }
