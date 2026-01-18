@@ -4,7 +4,7 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs';
 import 'dotenv/config';
-import { ISLANDS } from './data';
+import { ISLANDS } from './data/islands';
 
 const prisma = new PrismaClient();
 
@@ -28,7 +28,7 @@ export const seed = async () => {
       return prisma.island.create({
         data: {
           name: island.name,
-          code: island.code,
+          code: island.id,
         },
       });
     }));
