@@ -20,7 +20,7 @@ export class MinioService {
       port: Number(process.env.MINIO_PORT) || 9000,
       useSSL: process.env.MINIO_PORT === '443',
       region: 'us-east-1',
-      accessKey: process.env.MINIO_ACCESS_KEY,
+      accessKey: process.env.MINIO_ROOT_USER,
       secretKey: process.env.MINIO_SECRET_KEY,
     });
   }
@@ -86,7 +86,8 @@ export class MinioService {
         buffer = await this.convertImageToWebp(file);
       }
       const objectName = isWebpConversion ? `${id}.${extension}` : file.originalname as string;
-      const url = `https://${process.env.MINIO_ENDPOINT}/${bucket}/${objectName}`;
+      const isLocal = process.env.MINIO_ENDPOINT === 'localhost';
+      const url = `${isLocal ? 'http' : 'https'}://${process.env.MINIO_ENDPOINT}${isLocal ? ':' + process.env.MINIO_PORT : ''}/${bucket}/${objectName}`;
 
       if (!extension) throw new Error('Unsupported file type');
 
