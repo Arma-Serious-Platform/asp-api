@@ -584,7 +584,6 @@ export class UsersService {
       select: {
         id: true,
         nickname: true,
-        email: true,
         status: true,
         role: true,
         squad: {

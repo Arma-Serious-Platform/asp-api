@@ -41,7 +41,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
   @Get()
-  @UseGuards(AuthGuard)
+  // @UseGuards(AuthGuard)
   find(@Query() dto: GetUsersDto, @Req() req: RequestType) {
     return this.usersService.findAll(dto, req.role);
   }
@@ -53,7 +53,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard)
+  // @UseGuards(AuthGuard)
   findOne(@Param('id') idOrName: string) {
     return this.usersService.findOne(idOrName);
   }

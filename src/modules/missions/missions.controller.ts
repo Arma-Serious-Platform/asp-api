@@ -21,7 +21,6 @@ export class MissionsController {
   }
 
   @Get()
-  @UseGuards(AuthGuard)
   findAll(@Query() findMissionsDto: FindMissionsDto) {
     return this.missionsService.findAll(findMissionsDto);
   }

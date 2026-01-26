@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Roles } from 'src/shared/decorators/roles.decorator';
@@ -20,7 +20,9 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization as string;
 
-    if (!authHeader || !authHeader.includes('Bearer')) return false;
+    if (!authHeader || !authHeader.includes('Bearer')) {
+      throw new UnauthorizedException('Token is missing or invalid');
+    };
 
     const token = authHeader.split(' ')[1];
 
@@ -28,7 +30,9 @@ export class AuthGuard implements CanActivate {
 
     const userId = decoded?.userId as unknown as string | undefined;
 
-    if (!userId) return false;
+    if (!userId) {
+      throw new UnauthorizedException('Token is invalid');
+    };
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -36,7 +40,9 @@ export class AuthGuard implements CanActivate {
       },
     });
 
-    if (!user) return false;
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    };
 
     request.userId = userId;
     request.role = user.role;
