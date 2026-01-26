@@ -46,7 +46,7 @@ export class SquadsController {
   @UseInterceptors(FileInterceptor('logo'))
   @Post()
   create(@FileValidation() logo: File, @Body() dto: CreateSquadDto) {
-    return this.squadsService.create({ ...dto, logo });
+    return this.squadsService.create(dto, logo);
   }
 
   @UseGuards(AuthGuard)
@@ -54,7 +54,7 @@ export class SquadsController {
   @UseInterceptors(FileInterceptor('logo'))
   @Patch(':id')
   update(@FileValidation({ required: false }) logo: File, @Param('id') id: string, @Body() dto: UpdateSquadDto) {
-    return this.squadsService.update(id, { ...dto, logo });
+    return this.squadsService.update(id, { ...dto }, logo);
   }
 
   @UseGuards(AuthGuard)

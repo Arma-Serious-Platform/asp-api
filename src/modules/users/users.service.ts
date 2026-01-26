@@ -123,6 +123,12 @@ export class UsersService {
             id: true,
             name: true,
             tag: true,
+            logo: {
+              select: {
+                id: true,
+                url: true,
+              }
+            },
             members: {
               include: {
                 avatar: true

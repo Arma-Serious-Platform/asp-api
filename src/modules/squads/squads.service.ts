@@ -127,7 +127,7 @@ export class SquadsService {
     });
   }
 
-  async create(dto: CreateSquadDto) {
+  async create(dto: CreateSquadDto, logo?: File) {
     const side = await this.prisma.side.findUnique({
       where: { id: dto.sideId },
     });
@@ -184,10 +184,10 @@ export class SquadsService {
         },
       });
 
-      if (dto.logo) {
+      if (logo) {
         const url = await this.minioService.uploadFile(
           ASP_BUCKET.SQUADS,
-          dto.logo,
+          logo,
         );
 
         await tx.squad.update({
@@ -207,7 +207,7 @@ export class SquadsService {
     });
   }
 
-  async update(id: string, dto: UpdateSquadDto) {
+  async update(id: string, dto: UpdateSquadDto, logo?: File) {
     if (dto.sideId) {
       const side = await this.prisma.side.findUnique({
         where: { id: dto.sideId },
@@ -250,10 +250,10 @@ export class SquadsService {
         },
       });
 
-      if (dto.logo) {
+      if (logo) {
         const url = await this.minioService.uploadFile(
           ASP_BUCKET.SQUADS,
-          dto.logo,
+          logo,
         );
 
         await tx.squad.update({

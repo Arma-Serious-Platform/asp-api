@@ -1,6 +1,6 @@
 import { Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsNumber,
   IsString,
@@ -35,11 +35,12 @@ export class UpdateSquadDto {
 
   @ApiPropertyOptional()
   @Optional()
-  @Type(() => File)
-  logo?: File;
-
-  @ApiPropertyOptional()
-  @Optional()
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    return Number(value);
+  })
   @IsNumber()
   activeCount?: number;
 }

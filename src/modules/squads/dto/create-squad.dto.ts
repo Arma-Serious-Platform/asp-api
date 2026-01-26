@@ -1,12 +1,13 @@
 import { Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDefined,
+  IsInt,
   IsNotEmpty,
-  IsNumber,
   IsString,
   IsUUID,
+  Min,
 } from 'class-validator';
 
 export class CreateSquadDto {
@@ -40,12 +41,10 @@ export class CreateSquadDto {
   sideId: string;
 
   @ApiPropertyOptional()
+  @Transform((value) => Number(value) || undefined)
   @Optional()
-  @Type(() => File)
-  logo: File;
-
-  @ApiPropertyOptional()
-  @Optional()
-  @IsNumber()
-  activeCount: number;
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  activeCount?: number;
 }
