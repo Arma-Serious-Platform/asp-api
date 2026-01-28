@@ -85,16 +85,18 @@ model SquadInvitation {
 }
 
 model Side {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  type      SideType @default(UNASSIGNED)
-  leaderId  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  serverId  String?
-  leader    User?    @relation(fields: [leaderId], references: [id])
-  server    Server?  @relation(fields: [serverId], references: [id])
-  squads    Squad[]
+  id               String   @id @default(uuid())
+  name             String   @unique
+  type             SideType @default(UNASSIGNED)
+  leaderId         String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  serverId         String?
+  leader           User?    @relation(fields: [leaderId], references: [id])
+  server           Server?  @relation(fields: [serverId], references: [id])
+  squads           Squad[]
+  gamesAttackSide  Game[]   @relation("GameAttackSide")
+  gamesDefenseSide Game[]   @relation("GameDefenseSide")
 }
 
 model Server {
@@ -106,13 +108,6 @@ model Server {
   ip        String       @default("127.0.0.1")
   port      Int          @default(2302)
   sides     Side[]
-}
-
-model Vehicle {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model MissionWeaponry {
@@ -174,36 +169,40 @@ model Mission {
   description     String
   authorId        String?
   author          User?            @relation(fields: [authorId], references: [id])
-  missionDays     MissionDay[]     @relation("MissionToMissionDay")
   missionVersions MissionVersion[]
   imageId         String?
   image           File?            @relation(fields: [imageId], references: [id])
   comments        MissionComment[]
   islandId        String?
-  island          Island?           @relation(fields: [islandId], references: [id])
+  island          Island?          @relation(fields: [islandId], references: [id])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  games           Game[]
 }
 
-model MissionDay {
-  id        String    @id @default(uuid())
-  name      String
-  date      DateTime
-  weekendId String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  weekend   Weekend   @relation(fields: [weekendId], references: [id])
-  missions  Mission[] @relation("MissionToMissionDay")
+model Game {
+  id            String   @id @default(uuid())
+  name          String
+  date          DateTime
+  weekendId     String
+  weekend       Weekend  @relation(fields: [weekendId], references: [id])
+  mission       Mission  @relation(fields: [missionId], references: [id])
+  missionId     String
+  attackSideId  String
+  attackSide    Side     @relation("GameAttackSide", fields: [attackSideId], references: [id])
+  defenseSideId String
+  defenseSide   Side     @relation("GameDefenseSide", fields: [defenseSideId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Weekend {
-  id          String       @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String
-  date        DateTime
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  missionDays MissionDay[]
+  games       Game[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 enum ServerStatus {
