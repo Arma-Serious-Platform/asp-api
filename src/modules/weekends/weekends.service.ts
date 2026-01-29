@@ -11,10 +11,11 @@ export class WeekendsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(dto: FindWeekendsDto) {
-    const { search, skip = 0, take = 100 } = dto;
+    const { search, skip = 0, take = 100, published } = dto;
 
     const where: Prisma.WeekendWhereInput = {
       ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
+      ...(published !== undefined && { published }),
     };
 
     const [total, data] = await this.prisma.$transaction([
@@ -46,9 +47,7 @@ export class WeekendsService {
                 },
               },
             },
-            orderBy: {
-              date: 'asc',
-            },
+            orderBy: [{ position: 'asc' }, { date: 'asc' }],
           },
         },
         orderBy: {
@@ -89,9 +88,7 @@ export class WeekendsService {
               },
             },
           },
-          orderBy: {
-            date: 'asc',
-          },
+          orderBy: [{ position: 'asc' }, { date: 'asc' }],
         },
       },
     });
@@ -150,10 +147,13 @@ export class WeekendsService {
       data: {
         name: dto.name,
         description: dto.description,
+        ...(dto.published !== undefined && { published: dto.published }),
+        ...(dto.publishedAt !== undefined && { publishedAt: new Date(dto.publishedAt) }),
         games: {
           create: dto.games.map((game) => ({
             name: game.name,
             date: new Date(game.date),
+            position: game.position,
             missionId: game.missionId,
             attackSideId: game.attackSideId,
             defenseSideId: game.defenseSideId,
@@ -183,9 +183,7 @@ export class WeekendsService {
               },
             },
           },
-          orderBy: {
-            date: 'asc',
-          },
+          orderBy: [{ position: 'asc' }, { date: 'asc' }],
         },
       },
     });
@@ -205,6 +203,8 @@ export class WeekendsService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.published !== undefined && { published: dto.published }),
+        ...(dto.publishedAt !== undefined && { publishedAt: new Date(dto.publishedAt) }),
       },
       include: {
         games: {
@@ -229,9 +229,7 @@ export class WeekendsService {
               },
             },
           },
-          orderBy: {
-            date: 'asc',
-          },
+          orderBy: [{ position: 'asc' }, { date: 'asc' }],
         },
       },
     });
@@ -332,6 +330,10 @@ export class WeekendsService {
       updateData.defenseSide = {
         connect: { id: dto.defenseSideId },
       };
+    }
+
+    if (dto.position !== undefined) {
+      updateData.position = dto.position;
     }
 
     return await this.prisma.game.update({

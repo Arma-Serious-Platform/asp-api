@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, IsNotEmpty } from "class-validator";
+import { IsOptional, IsString, IsInt, Min } from "class-validator";
 
 export class UpdateGameDto {
   @ApiPropertyOptional()
@@ -11,6 +11,12 @@ export class UpdateGameDto {
   @IsString()
   @IsOptional()
   date?: string; // ISO date string
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  position?: number;
 
   @ApiPropertyOptional()
   @IsString()

@@ -38,6 +38,7 @@ async function bootstrap() {
     SwaggerModule.setup('swagger', app, documentFactory, {
       customCss: theme.getBuffer(SwaggerThemeNameEnum.DARK),
       explorer: true,
+      jsonDocumentUrl: '/swagger/json',
     });
   }
 

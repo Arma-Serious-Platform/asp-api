@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsString, IsArray, ValidateNested, ArrayMinSize } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsNotEmpty, IsString, IsArray, ValidateNested, ArrayMinSize, IsBoolean, IsOptional, IsInt, Min, IsDateString } from "class-validator";
 import { Type } from "class-transformer";
 
 export class CreateGameDto {
@@ -12,6 +12,11 @@ export class CreateGameDto {
   @IsString()
   @IsNotEmpty()
   date: string; // ISO date string
+
+  @ApiProperty()
+  @IsInt()
+  @Min(0)
+  position: number;
 
   @ApiProperty()
   @IsString()
@@ -39,6 +44,16 @@ export class CreateWeekendDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  published?: boolean;
+
+  @ApiPropertyOptional()
+  @IsDateString()
+  @IsOptional()
+  publishedAt?: string;
 
   @ApiProperty({ type: [CreateGameDto] })
   @IsArray()
