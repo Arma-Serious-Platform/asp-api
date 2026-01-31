@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, IsInt, Min } from "class-validator";
+import { IsOptional, IsString, IsInt, Min, ValidateIf } from "class-validator";
 
 export class UpdateGameDto {
   @ApiPropertyOptional()
@@ -18,10 +18,15 @@ export class UpdateGameDto {
   @IsOptional()
   position?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Mission id – when changing mission/version, both missionId and missionVersionId must be provided' })
   @IsString()
   @IsOptional()
   missionId?: string;
+
+  @ApiPropertyOptional({ description: 'Mission version id – must belong to the selected mission' })
+  @IsString()
+  @IsOptional()
+  missionVersionId?: string;
 
   @ApiPropertyOptional()
   @IsString()
@@ -32,4 +37,10 @@ export class UpdateGameDto {
   @IsString()
   @IsOptional()
   defenseSideId?: string;
+
+  @ApiPropertyOptional({ description: 'User id of the game admin (optional, null to clear)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  adminId?: string | null;
 }

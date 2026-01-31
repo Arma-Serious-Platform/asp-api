@@ -27,9 +27,15 @@ export class WeekendsService {
         include: {
           games: {
             include: {
-              mission: {
+              missionVersion: {
                 include: {
-                  image: true,
+                  mission: {
+                    select: {
+                      name: true,
+                      description: true,
+                      image: true,
+                    },
+                  },
                 },
               },
               attackSide: {
@@ -68,9 +74,15 @@ export class WeekendsService {
       include: {
         games: {
           include: {
-            mission: {
+            missionVersion: {
               include: {
-                image: true,
+                mission: {
+                  select: {
+                    name: true,
+                    description: true,
+                    image: true,
+                  },
+                },
               },
             },
             attackSide: {
@@ -105,8 +117,8 @@ export class WeekendsService {
       throw new BadRequestException('At least one game is required to create a weekend');
     }
 
-    // Validate that all missions and sides exist
-    const missionIds = [...new Set(dto.games.map((game) => game.missionId))];
+    // Validate mission versions exist and each version belongs to the selected mission
+    const missionVersionIds = [...new Set(dto.games.map((g) => g.missionVersionId))];
     const sideIds = [
       ...new Set([
         ...dto.games.map((game) => game.attackSideId),
@@ -114,10 +126,10 @@ export class WeekendsService {
       ]),
     ];
 
-    const [missions, sides] = await Promise.all([
-      this.prisma.mission.findMany({
-        where: { id: { in: missionIds } },
-        select: { id: true },
+    const [missionVersions, sides] = await Promise.all([
+      this.prisma.missionVersion.findMany({
+        where: { id: { in: missionVersionIds } },
+        select: { id: true, missionId: true },
       }),
       this.prisma.side.findMany({
         where: { id: { in: sideIds } },
@@ -125,28 +137,51 @@ export class WeekendsService {
       }),
     ]);
 
-    const foundMissionIds = new Set(missions.map((m) => m.id));
+    const versionById = new Map(missionVersions.map((v) => [v.id, v]));
     const foundSideIds = new Set(sides.map((s) => s.id));
 
-    const missingMissions = missionIds.filter((id) => !foundMissionIds.has(id));
-    const missingSides = sideIds.filter((id) => !foundSideIds.has(id));
-
-    if (missingMissions.length > 0) {
+    const missingVersionIds = missionVersionIds.filter((id) => !versionById.has(id));
+    if (missingVersionIds.length > 0) {
       throw new BadRequestException(
-        `Missions not found: ${missingMissions.join(', ')}`,
+        `Mission versions not found: ${missingVersionIds.join(', ')}`,
       );
     }
 
+    for (const game of dto.games) {
+      const version = versionById.get(game.missionVersionId);
+      if (version && version.missionId !== game.missionId) {
+        throw new BadRequestException(
+          `Mission version ${game.missionVersionId} does not belong to mission ${game.missionId}`,
+        );
+      }
+    }
+
+    const missingSides = sideIds.filter((id) => !foundSideIds.has(id));
     if (missingSides.length > 0) {
       throw new BadRequestException(
         `Sides not found: ${missingSides.join(', ')}`,
       );
     }
 
+    const adminIds = [...new Set(dto.games.map((g) => g.adminId).filter((id): id is string => id != null))];
+    if (adminIds.length > 0) {
+      const admins = await this.prisma.user.findMany({
+        where: { id: { in: adminIds } },
+        select: { id: true },
+      });
+      const foundAdminIds = new Set(admins.map((u) => u.id));
+      const missingAdminIds = adminIds.filter((id) => !foundAdminIds.has(id));
+      if (missingAdminIds.length > 0) {
+        throw new BadRequestException(
+          `Admin users not found: ${missingAdminIds.join(', ')}`,
+        );
+      }
+    }
+
     return await this.prisma.weekend.create({
       data: {
         name: dto.name,
-        description: dto.description,
+        description: dto.description ?? '',
         ...(dto.published !== undefined && { published: dto.published }),
         ...(dto.publishedAt !== undefined && { publishedAt: new Date(dto.publishedAt) }),
         games: {
@@ -155,17 +190,25 @@ export class WeekendsService {
             date: new Date(game.date),
             position: game.position,
             missionId: game.missionId,
+            missionVersionId: game.missionVersionId,
             attackSideId: game.attackSideId,
             defenseSideId: game.defenseSideId,
+            ...(game.adminId != null && { adminId: game.adminId }),
           })),
         },
       },
       include: {
         games: {
           include: {
-            mission: {
+            missionVersion: {
               include: {
-                image: true,
+                mission: {
+                  select: {
+                    name: true,
+                    description: true,
+                    image: true,
+                  },
+                },
               },
             },
             attackSide: {
@@ -209,9 +252,15 @@ export class WeekendsService {
       include: {
         games: {
           include: {
-            mission: {
+            missionVersion: {
               include: {
-                image: true,
+                mission: {
+                  select: {
+                    name: true,
+                    description: true,
+                    image: true,
+                  },
+                },
               },
             },
             attackSide: {
@@ -273,14 +322,24 @@ export class WeekendsService {
       throw new NotFoundException('Game not found');
     }
 
-    // Validate missions and sides if they are being updated
-    if (dto.missionId) {
-      const mission = await this.prisma.mission.findUnique({
-        where: { id: dto.missionId },
-        select: { id: true },
+    // Validate mission version belongs to mission when updating mission/version
+    if (dto.missionVersionId !== undefined || dto.missionId !== undefined) {
+      if (dto.missionId === undefined || dto.missionVersionId === undefined) {
+        throw new BadRequestException(
+          'When changing mission or version, both missionId and missionVersionId must be provided',
+        );
+      }
+      const missionVersion = await this.prisma.missionVersion.findUnique({
+        where: { id: dto.missionVersionId },
+        select: { id: true, missionId: true },
       });
-      if (!mission) {
-        throw new BadRequestException(`Mission not found: ${dto.missionId}`);
+      if (!missionVersion) {
+        throw new BadRequestException(`Mission version not found: ${dto.missionVersionId}`);
+      }
+      if (missionVersion.missionId !== dto.missionId) {
+        throw new BadRequestException(
+          `Mission version ${dto.missionVersionId} does not belong to mission ${dto.missionId}`,
+        );
       }
     }
 
@@ -314,9 +373,12 @@ export class WeekendsService {
       updateData.date = new Date(dto.date);
     }
 
-    if (dto.missionId !== undefined) {
+    if (dto.missionId !== undefined && dto.missionVersionId !== undefined) {
       updateData.mission = {
         connect: { id: dto.missionId },
+      };
+      updateData.missionVersion = {
+        connect: { id: dto.missionVersionId },
       };
     }
 
@@ -336,13 +398,34 @@ export class WeekendsService {
       updateData.position = dto.position;
     }
 
+    if (dto.adminId !== undefined) {
+      if (dto.adminId === null) {
+        updateData.admin = { disconnect: true };
+      } else {
+        const admin = await this.prisma.user.findUnique({
+          where: { id: dto.adminId },
+          select: { id: true },
+        });
+        if (!admin) {
+          throw new BadRequestException(`Admin user not found: ${dto.adminId}`);
+        }
+        updateData.admin = { connect: { id: dto.adminId } };
+      }
+    }
+
     return await this.prisma.game.update({
       where: { id: gameId },
       data: updateData,
       include: {
-        mission: {
+        missionVersion: {
           include: {
-            image: true,
+            mission: {
+              select: {
+                name: true,
+                description: true,
+                image: true,
+              },
+            },
           },
         },
         attackSide: {

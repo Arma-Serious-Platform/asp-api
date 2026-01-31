@@ -48,6 +48,7 @@ model User {
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
+  games                       Game[]
   telegramUrl                 String?
   discordUrl                  String?
   youtubeUrl                  String?
@@ -136,6 +137,7 @@ model MissionVersion {
   defenseSideName    String
   weaponry           MissionWeaponry[] @relation("MissionVersionWeaponry")
   changesDescription String?
+  games              Game[]
   rating             Int?
   fileId             String
   file               File              @relation(fields: [fileId], references: [id])
@@ -188,6 +190,10 @@ model Game {
   weekend       Weekend  @relation(fields: [weekendId], references: [id])
   mission       Mission  @relation(fields: [missionId], references: [id])
   missionId     String
+  missionVersion MissionVersion @relation(fields: [missionVersionId], references: [id])
+  missionVersionId String
+  adminId       String?
+  admin         User?     @relation(fields: [adminId], references: [id])
   attackSideId  String
   attackSide    Side     @relation("GameAttackSide", fields: [attackSideId], references: [id])
   defenseSideId String

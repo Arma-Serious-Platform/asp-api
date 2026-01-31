@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty, IsString, IsArray, ValidateNested, ArrayMinSize, IsBoolean, IsOptional, IsInt, Min, IsDateString } from "class-validator";
+import { IsNotEmpty, IsString, IsArray, ValidateNested, ArrayMinSize, IsBoolean, IsOptional, IsInt, Min, IsDateString, ValidateIf } from "class-validator";
 import { Type } from "class-transformer";
 
 export class CreateGameDto {
@@ -18,10 +18,15 @@ export class CreateGameDto {
   @Min(0)
   position: number;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Mission id – the mission this game uses' })
   @IsString()
   @IsNotEmpty()
   missionId: string;
+
+  @ApiProperty({ description: 'Mission version id – must belong to the selected mission' })
+  @IsString()
+  @IsNotEmpty()
+  missionVersionId: string;
 
   @ApiProperty()
   @IsString()
@@ -32,6 +37,12 @@ export class CreateGameDto {
   @IsString()
   @IsNotEmpty()
   defenseSideId: string;
+
+  @ApiPropertyOptional({ description: 'User id of the game admin (optional, null by default)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  adminId?: string | null;
 }
 
 export class CreateWeekendDto {
@@ -40,10 +51,10 @@ export class CreateWeekendDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @ApiPropertyOptional()
   @IsBoolean()
