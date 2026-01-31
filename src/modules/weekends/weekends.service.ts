@@ -29,6 +29,12 @@ export class WeekendsService {
             include: {
               missionVersion: {
                 include: {
+                  file: {
+                    select: {
+                      id: true,
+                      url: true,
+                    }
+                  },
                   mission: {
                     select: {
                       name: true,
