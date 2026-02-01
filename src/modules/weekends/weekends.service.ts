@@ -29,11 +29,18 @@ export class WeekendsService {
             include: {
               mission: {
                 include: {
+                  image: {
+                    select: {
+                      id: true,
+                      url: true
+                    }
+                  },
                   author: {
                     select: {
                       id: true,
                       nickname: true,
-                      squad: true
+                      squad: true,
+                      role: true
                     }
                   }
                 }
