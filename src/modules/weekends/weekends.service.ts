@@ -8,7 +8,7 @@ import { Prisma } from "@prisma/client";
 
 @Injectable()
 export class WeekendsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findAll(dto: FindWeekendsDto) {
     const { search, skip = 0, take = 100, published } = dto;
@@ -27,6 +27,17 @@ export class WeekendsService {
         include: {
           games: {
             include: {
+              mission: {
+                include: {
+                  author: {
+                    select: {
+                      id: true,
+                      nickname: true,
+                      squad: true
+                    }
+                  }
+                }
+              },
               missionVersion: {
                 include: {
                   file: {
@@ -34,13 +45,6 @@ export class WeekendsService {
                       id: true,
                       url: true,
                     }
-                  },
-                  mission: {
-                    select: {
-                      name: true,
-                      description: true,
-                      image: true,
-                    },
                   },
                 },
               },
