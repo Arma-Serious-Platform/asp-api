@@ -184,7 +184,6 @@ model Mission {
 
 model Game {
   id            String   @id @default(uuid())
-  name          String
   date          DateTime
   weekendId     String
   weekend       Weekend  @relation(fields: [weekendId], references: [id])
@@ -206,7 +205,7 @@ model Game {
 model Weekend {
   id          String   @id @default(uuid())
   name        String
-  description String
+  description String?
   games       Game[]
   published   Boolean  @default(false)
   publishedAt DateTime?

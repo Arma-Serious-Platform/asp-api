@@ -6,11 +6,6 @@ export class CreateGameDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string;
-
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
   date: string; // ISO date string
 
   @ApiProperty()

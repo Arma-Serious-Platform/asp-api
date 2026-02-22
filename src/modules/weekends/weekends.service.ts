@@ -198,12 +198,11 @@ export class WeekendsService {
     return await this.prisma.weekend.create({
       data: {
         name: dto.name,
-        description: dto.description ?? '',
+        ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.published !== undefined && { published: dto.published }),
         ...(dto.publishedAt !== undefined && { publishedAt: new Date(dto.publishedAt) }),
         games: {
           create: dto.games.map((game) => ({
-            name: game.name,
             date: new Date(game.date),
             position: game.position,
             missionId: game.missionId,
@@ -381,10 +380,6 @@ export class WeekendsService {
     }
 
     const updateData: Prisma.GameUpdateInput = {};
-
-    if (dto.name !== undefined) {
-      updateData.name = dto.name;
-    }
 
     if (dto.date !== undefined) {
       updateData.date = new Date(dto.date);
