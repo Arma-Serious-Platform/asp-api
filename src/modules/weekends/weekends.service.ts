@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { CreateWeekendDto } from "./dto/create-weekend.dto";
+import { CreateWeekendDto, CreateGameDto } from "./dto/create-weekend.dto";
 import { UpdateWeekendDto } from "./dto/update-weekend.dto";
 import { FindWeekendsDto } from "./dto/find-weekends.dto";
 import { UpdateGameDto } from "./dto/update-game.dto";
@@ -47,6 +47,7 @@ export class WeekendsService {
               },
               missionVersion: {
                 include: {
+                  weaponry: true,
                   file: {
                     select: {
                       id: true,
@@ -493,5 +494,109 @@ export class WeekendsService {
     });
 
     return { message: 'Game deleted successfully' };
+  }
+
+  async createGame(weekendId: string, dto: CreateGameDto) {
+    // Verify weekend exists
+    const weekend = await this.prisma.weekend.findUnique({
+      where: { id: weekendId },
+    });
+
+    if (!weekend) {
+      throw new NotFoundException('Weekend not found');
+    }
+
+    // Validate mission version belongs to mission
+    const missionVersion = await this.prisma.missionVersion.findUnique({
+      where: { id: dto.missionVersionId },
+      select: { id: true, missionId: true },
+    });
+
+    if (!missionVersion) {
+      throw new BadRequestException(`Mission version not found: ${dto.missionVersionId}`);
+    }
+
+    if (missionVersion.missionId !== dto.missionId) {
+      throw new BadRequestException(
+        `Mission version ${dto.missionVersionId} does not belong to mission ${dto.missionId}`,
+      );
+    }
+
+    // Validate sides exist
+    const [attackSide, defenseSide] = await Promise.all([
+      this.prisma.side.findUnique({
+        where: { id: dto.attackSideId },
+        select: { id: true },
+      }),
+      this.prisma.side.findUnique({
+        where: { id: dto.defenseSideId },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!attackSide) {
+      throw new BadRequestException(`Attack side not found: ${dto.attackSideId}`);
+    }
+
+    if (!defenseSide) {
+      throw new BadRequestException(`Defense side not found: ${dto.defenseSideId}`);
+    }
+
+    // Validate admin user if provided
+    if (dto.adminId != null) {
+      const admin = await this.prisma.user.findUnique({
+        where: { id: dto.adminId },
+        select: { id: true },
+      });
+      if (!admin) {
+        throw new BadRequestException(`Admin user not found: ${dto.adminId}`);
+      }
+    }
+
+    return await this.prisma.game.create({
+      data: {
+        weekendId,
+        date: new Date(dto.date),
+        position: dto.position,
+        missionId: dto.missionId,
+        missionVersionId: dto.missionVersionId,
+        attackSideId: dto.attackSideId,
+        defenseSideId: dto.defenseSideId,
+        ...(dto.adminId != null && { adminId: dto.adminId }),
+      },
+      include: {
+        missionVersion: {
+          include: {
+            mission: {
+              select: {
+                name: true,
+                description: true,
+                image: true,
+              },
+            },
+          },
+        },
+        attackSide: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+        defenseSide: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+        weekend: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
   }
 }

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from "@nestjs/common";
 import { WeekendsService } from "./weekends.service";
-import { CreateWeekendDto } from "./dto/create-weekend.dto";
+import { CreateWeekendDto, CreateGameDto } from "./dto/create-weekend.dto";
 import { UpdateWeekendDto } from "./dto/update-weekend.dto";
 import { FindWeekendsDto } from "./dto/find-weekends.dto";
 import { UpdateGameDto } from "./dto/update-game.dto";
@@ -40,6 +40,13 @@ export class WeekendsController {
   @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
   delete(@Param('id') id: string) {
     return this.weekendsService.delete(id);
+  }
+
+  @Post(':weekendId/games')
+  @UseGuards(AuthGuard)
+  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  createGame(@Param('weekendId') weekendId: string, @Body() createGameDto: CreateGameDto) {
+    return this.weekendsService.createGame(weekendId, createGameDto);
   }
 
   @Patch(':weekendId/games/:gameId')
