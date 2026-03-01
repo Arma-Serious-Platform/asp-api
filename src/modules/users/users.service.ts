@@ -28,6 +28,7 @@ import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
+import { EmailTemplateService } from 'src/shared/services/email-template.service';
 
 @Injectable()
 export class UsersService {
@@ -49,12 +50,11 @@ export class UsersService {
   }
 
   private sendActivationToken = async (email: string, token: string) => {
+    const activationLink = `${process.env.ACTIVATE_TOKEN_FRONTEND_URL}?token=${token}`;
     await this.mailerService.sendMail({
       to: email,
-      subject: 'Activation token',
-      html: `<p>Please, click on the link below to activate your account</p>
-      <a href="${process.env.ACTIVATE_TOKEN_FRONTEND_URL}?token=${token}">Activate</a>
-      `,
+      subject: 'Activate Your Account',
+      html: EmailTemplateService.createActivationEmail(activationLink),
     });
   };
 
@@ -437,12 +437,11 @@ export class UsersService {
       },
     });
 
+    const resetLink = `${process.env.RESET_PASSWORD_FRONTEND_URL}?token=${token}`;
     await this.mailerService.sendMail({
       to: user.email,
-      subject: 'Reset password token',
-      html: `<p>Please, click on the link below to reset your password</p>
-      <a href="${process.env.RESET_PASSWORD_FRONTEND_URL}?token=${token}">Reset password</a>
-      `,
+      subject: 'Reset Your Password',
+      html: EmailTemplateService.createResetPasswordEmail(resetLink),
     });
 
     return {
