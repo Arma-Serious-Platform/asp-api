@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "MissionType" AS ENUM ('SG', 'mini');
+
+-- CreateEnum
 CREATE TYPE "ServerStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 
 -- CreateEnum
@@ -182,6 +185,7 @@ CREATE TABLE "Mission" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT NOT NULL,
+    "missionType" "MissionType" NOT NULL DEFAULT 'SG',
     "authorId" TEXT,
     "imageId" TEXT,
     "islandId" TEXT,
@@ -194,11 +198,11 @@ CREATE TABLE "Mission" (
 -- CreateTable
 CREATE TABLE "Game" (
     "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
     "weekendId" TEXT NOT NULL,
     "missionId" TEXT NOT NULL,
     "missionVersionId" TEXT NOT NULL,
+    "adminId" TEXT,
     "attackSideId" TEXT NOT NULL,
     "defenseSideId" TEXT NOT NULL,
     "position" INTEGER NOT NULL DEFAULT 0,
@@ -212,7 +216,7 @@ CREATE TABLE "Game" (
 CREATE TABLE "Weekend" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "description" TEXT NOT NULL,
+    "description" TEXT,
     "published" BOOLEAN NOT NULL DEFAULT false,
     "publishedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -310,6 +314,9 @@ ALTER TABLE "Game" ADD CONSTRAINT "Game_missionId_fkey" FOREIGN KEY ("missionId"
 
 -- AddForeignKey
 ALTER TABLE "Game" ADD CONSTRAINT "Game_missionVersionId_fkey" FOREIGN KEY ("missionVersionId") REFERENCES "MissionVersion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Game" ADD CONSTRAINT "Game_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Game" ADD CONSTRAINT "Game_attackSideId_fkey" FOREIGN KEY ("attackSideId") REFERENCES "Side"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
