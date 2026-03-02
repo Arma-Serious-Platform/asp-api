@@ -1,5 +1,6 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsString, IsUUID } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { MissionType } from "@prisma/client";
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from "class-validator";
 
 export class CreateMissionDto {
   @ApiProperty()
@@ -11,6 +12,11 @@ export class CreateMissionDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @ApiPropertyOptional({ enum: MissionType, default: MissionType.SG })
+  @IsEnum(MissionType)
+  @IsOptional()
+  missionType?: MissionType;
 
   @ApiProperty()
   @IsUUID()

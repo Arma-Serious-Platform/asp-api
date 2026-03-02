@@ -165,10 +165,16 @@ model Island {
   updatedAt DateTime  @updatedAt
 }
 
+enum MissionType {
+  SG
+  mini
+}
+
 model Mission {
   id              String           @id @default(uuid())
   name            String
   description     String
+  missionType     MissionType @default(SG)
   authorId        String?
   author          User?            @relation(fields: [authorId], references: [id])
   missionVersions MissionVersion[]

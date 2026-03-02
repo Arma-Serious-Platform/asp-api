@@ -4,7 +4,7 @@ import { CreateMissionDto } from "./dto/create-mission.dto";
 import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
-import { MissionStatus, Prisma, UserRole } from "@prisma/client";
+import { MissionStatus, MissionType, Prisma, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
@@ -28,7 +28,7 @@ export class MissionsService {
   }
 
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, status, islandId } = dto;
+    const { search, authorId, minSlots, maxSlots, status, missionType, islandId } = dto;
 
     // Get mission IDs that match slot criteria using raw SQL
     let missionIdsWithValidSlots: string[] | null = null;
@@ -72,6 +72,7 @@ export class MissionsService {
         ...(authorId ? { authorId } : {}),
         ...(missionIdsWithValidSlots ? { id: { in: missionIdsWithValidSlots } } : {}),
         ...(status ? { missionVersions: { some: { status } } } : {}),
+        ...(missionType ? { missionType } : {}),
         ...(islandId ? { islandId } : {}),
       },
       include: {
@@ -172,6 +173,7 @@ export class MissionsService {
       data: {
         name: dto.name,
         description: dto.description,
+        missionType: dto.missionType ?? MissionType.SG,
         authorId: authorId,
         imageId: fileId,
         islandId: dto.islandId,
@@ -212,10 +214,11 @@ export class MissionsService {
     return await this.prisma.mission.update({
       where: { id: missionId },
       data: {
-        name: dto.name,
-        description: dto.description,
-        imageId: newFileId ?? mission.imageId ?? null,
-        islandId: dto.islandId,
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.missionType !== undefined && { missionType: dto.missionType }),
+        ...(dto.islandId !== undefined && { islandId: dto.islandId }),
+        ...(newFileId !== null && { imageId: newFileId }),
       },
     });
   }
