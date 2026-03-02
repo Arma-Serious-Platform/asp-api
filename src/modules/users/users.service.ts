@@ -53,7 +53,7 @@ export class UsersService {
     const activationLink = `${process.env.ACTIVATE_TOKEN_FRONTEND_URL}?token=${token}`;
     await this.mailerService.sendMail({
       to: email,
-      subject: 'Activate Your Account',
+      subject: 'Активуйте ваш обліковий запис',
       html: EmailTemplateService.createActivationEmail(activationLink),
     });
   };
@@ -440,7 +440,7 @@ export class UsersService {
     const resetLink = `${process.env.RESET_PASSWORD_FRONTEND_URL}?token=${token}`;
     await this.mailerService.sendMail({
       to: user.email,
-      subject: 'Reset Your Password',
+      subject: 'Скинути пароль',
       html: EmailTemplateService.createResetPasswordEmail(resetLink),
     });
 

@@ -16,11 +16,11 @@ export class EmailTemplateService {
   static createEmailTemplate(content: string, title?: string): string {
     return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uk">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title || 'Email'}</title>
+  <title>${title || 'Лист'}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: ${this.THEME.card}; color: ${this.THEME.foreground};">
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -80,18 +80,18 @@ export class EmailTemplateService {
    */
   static createActivationEmail(activationLink: string): string {
     const content = `
-      ${this.createHeading('Activate Your Account')}
-      ${this.createParagraph('Thank you for signing up! Please click the button below to activate your account.')}
-      ${this.createParagraph('This link will expire in 10 minutes.', 'color: ' + this.THEME.muted + '; font-size: 14px;')}
+      ${this.createHeading('Активуйте ваш обліковий запис')}
+      ${this.createParagraph('Дякуємо за реєстрацію! Будь ласка, натисніть кнопку нижче, щоб активувати ваш обліковий запис.')}
+      ${this.createParagraph('Це посилання дійсне протягом 10 хвилин.', 'color: ' + this.THEME.muted + '; font-size: 14px;')}
       <div style="text-align: center; margin: 30px 0;">
-        ${this.createButton(activationLink, 'Activate Account')}
+        ${this.createButton(activationLink, 'Активувати обліковий запис')}
       </div>
-      ${this.createParagraph('If the button doesn\'t work, you can copy and paste this link into your browser:', 'color: ' + this.THEME.muted + '; font-size: 14px; margin-top: 30px;')}
+      ${this.createParagraph('Якщо кнопка не працює, ви можете скопіювати та вставити це посилання у ваш браузер:', 'color: ' + this.THEME.muted + '; font-size: 14px; margin-top: 30px;')}
       <p style="word-break: break-all; color: ${this.THEME.textPrimary}; font-size: 14px; background-color: ${this.THEME.card}; padding: 12px; border-radius: 4px; border: 1px solid ${this.THEME.muted};">
         ${activationLink}
       </p>
     `;
-    return this.createEmailTemplate(content, 'Activate Your Account');
+    return this.createEmailTemplate(content, 'Активуйте ваш обліковий запис');
   }
 
   /**
@@ -99,18 +99,18 @@ export class EmailTemplateService {
    */
   static createResetPasswordEmail(resetLink: string): string {
     const content = `
-      ${this.createHeading('Reset Your Password')}
-      ${this.createParagraph('We received a request to reset your password. Click the button below to create a new password.')}
-      ${this.createParagraph('This link will expire in 10 minutes.', 'color: ' + this.THEME.muted + '; font-size: 14px;')}
-      ${this.createParagraph('If you didn\'t request this, you can safely ignore this email.', 'color: ' + this.THEME.muted + '; font-size: 14px;')}
+      ${this.createHeading('Скинути пароль')}
+      ${this.createParagraph('Ми отримали запит на скидання вашого пароля. Натисніть кнопку нижче, щоб створити новий пароль.')}
+      ${this.createParagraph('Це посилання дійсне протягом 10 хвилин.', 'color: ' + this.THEME.muted + '; font-size: 14px;')}
+      ${this.createParagraph('Якщо ви не запитували це, ви можете безпечно проігнорувати цей лист.', 'color: ' + this.THEME.muted + '; font-size: 14px;')}
       <div style="text-align: center; margin: 30px 0;">
-        ${this.createButton(resetLink, 'Reset Password')}
+        ${this.createButton(resetLink, 'Скинути пароль')}
       </div>
-      ${this.createParagraph('If the button doesn\'t work, you can copy and paste this link into your browser:', 'color: ' + this.THEME.muted + '; font-size: 14px; margin-top: 30px;')}
+      ${this.createParagraph('Якщо кнопка не працює, ви можете скопіювати та вставити це посилання у ваш браузер:', 'color: ' + this.THEME.muted + '; font-size: 14px; margin-top: 30px;')}
       <p style="word-break: break-all; color: ${this.THEME.textPrimary}; font-size: 14px; background-color: ${this.THEME.card}; padding: 12px; border-radius: 4px; border: 1px solid ${this.THEME.muted};">
         ${resetLink}
       </p>
     `;
-    return this.createEmailTemplate(content, 'Reset Your Password');
+    return this.createEmailTemplate(content, 'Скинути пароль');
   }
 }
