@@ -15,8 +15,10 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       - ENABLE_SWAGGER=${ENABLE_SWAGGER}
     depends_on:
-      - db
-      - minio
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_started
     restart: unless-stopped
 
   db:
