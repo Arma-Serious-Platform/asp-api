@@ -43,11 +43,11 @@ services:
       - MINIO_SERVER_URL=${MINIO_SERVER_URL}
     command: server /data --console-address ":9001"
     ports:
-      - 9000:9000
-      - 9001:9001
+      - ${MINIO_PORT}:9000
+      - ${MINIO_UI_PORT}:9001
     expose:
-      - 9000
-      - 9001
+      - ${MINIO_PORT}
+      - ${MINIO_UI_PORT}
     restart: unless-stopped
     volumes:
       - minio-data:/data
