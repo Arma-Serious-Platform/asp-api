@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - ${PORT}:3000
+      - ${PORT}:${PORT}
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - EMAIL_HOST=${EMAIL_HOST}
