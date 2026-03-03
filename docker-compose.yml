@@ -1,5 +1,5 @@
 version: '3.8'
-name: asp
+name: asp-service
 services:
   api:
     build:
@@ -53,8 +53,8 @@ services:
       - ${MINIO_PORT}:9000
       - ${MINIO_UI_PORT}:9001
     expose:
-      - ${MINIO_PORT}
-      - ${MINIO_UI_PORT}
+      - 9000
+      - 9001
     restart: unless-stopped
     volumes:
       - minio-data:/data
