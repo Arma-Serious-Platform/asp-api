@@ -1,5 +1,5 @@
 version: '3.8'
-name: asp-service
+name: asp
 services:
   api:
     build:
