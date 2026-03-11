@@ -9,6 +9,8 @@ import { SquadsModule } from './modules/squads/squads.module';
 import { ServersModule } from './modules/servers/servers.module';
 import { MissionsModule } from './modules/missions/missions.module';
 import { WeekendsModule } from './modules/weekends/weekends.module';
+import { MissionCommentsModule } from './modules/mission-comments/mission-comments.module';
+import { ChatsModule } from './modules/chats/chats.module';
 
 @Module({
   imports: [
@@ -34,7 +36,9 @@ import { WeekendsModule } from './modules/weekends/weekends.module';
     SidesModule,
     SquadsModule,
     MissionsModule,
-    WeekendsModule
+    WeekendsModule,
+    MissionCommentsModule,
+    ChatsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
