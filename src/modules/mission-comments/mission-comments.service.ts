@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef } from "@nestjs/common";
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Inject, forwardRef } from "@nestjs/common";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
 import { CreateMissionCommentDto } from "./dto/create-mission-comment.dto";
 import { UpdateMissionCommentDto } from "./dto/update-mission-comment.dto";
 import { FindMissionCommentsDto } from "./dto/find-mission-comments.dto";
 import { MissionCommentsGateway } from "./mission-comments.gateway";
+import { Prisma } from "@prisma/client";
 
 @Injectable()
 export class MissionCommentsService {
@@ -23,11 +24,26 @@ export class MissionCommentsService {
       throw new NotFoundException('Mission not found');
     }
 
+    let replyId: string | undefined;
+    if (dto.replyId !== undefined) {
+      const replyTo = await this.prisma.missionComment.findUnique({
+        where: { id: dto.replyId as string },
+      });
+      if (!replyTo) {
+        throw new NotFoundException('Reply-to comment not found');
+      }
+      if (replyTo.missionId !== dto.missionId) {
+        throw new BadRequestException('Reply must be to a comment on the same mission');
+      }
+      replyId = dto.replyId as string;
+    }
+
     const comment = await this.prisma.missionComment.create({
       data: {
         missionId: dto.missionId,
         userId,
         message: dto.message,
+        ...(replyId && { replyId }),
       },
       include: {
         user: {
@@ -42,6 +58,20 @@ export class MissionCommentsService {
             },
           },
         },
+        replyTo: {
+          select: {
+            id: true,
+            userId: true,
+            message: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                nickname: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -52,11 +82,14 @@ export class MissionCommentsService {
   }
 
   async findAll(dto: FindMissionCommentsDto) {
-    const { missionId, skip = 0, take = 100 } = dto;
+    const { missionId, replyId, skip = 0, take = 100 } = dto;
 
-    const where: any = {};
+    const where: Prisma.MissionCommentWhereInput = {};
     if (missionId) {
       where.missionId = missionId;
+    }
+    if (replyId !== undefined) {
+      where.replyId = replyId;
     }
 
     const [total, data] = await this.prisma.$transaction([
@@ -74,6 +107,31 @@ export class MissionCommentsService {
                 select: {
                   id: true,
                   url: true,
+                },
+              },
+              squad: {
+                select: {
+                  id: true,
+                  tag: true,
+                  side: {
+                    select: {
+                      type: true
+                    }
+                  }
+                }
+              }
+            },
+          },
+          replyTo: {
+            select: {
+              id: true,
+              userId: true,
+              message: true,
+              createdAt: true,
+              user: {
+                select: {
+                  id: true,
+                  nickname: true,
                 },
               },
             },
@@ -113,6 +171,20 @@ export class MissionCommentsService {
             name: true,
           },
         },
+        replyTo: {
+          select: {
+            id: true,
+            userId: true,
+            message: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                nickname: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -136,11 +208,30 @@ export class MissionCommentsService {
       throw new ForbiddenException('You can only update your own comments');
     }
 
+    const updateData: { message?: Prisma.InputJsonValue; replyId?: string | null } = {};
+    if (dto.message !== undefined) {
+      updateData.message = dto.message as Prisma.InputJsonValue;
+    }
+    if (dto.replyId !== undefined) {
+      if (dto.replyId === null) {
+        updateData.replyId = null;
+      } else {
+        const replyTo = await this.prisma.missionComment.findUnique({
+          where: { id: dto.replyId as string },
+        });
+        if (!replyTo) {
+          throw new NotFoundException('Reply-to comment not found');
+        }
+        if (replyTo.missionId !== comment.missionId) {
+          throw new BadRequestException('Reply must be to a comment on the same mission');
+        }
+        updateData.replyId = dto.replyId as string;
+      }
+    }
+
     const updatedComment = await this.prisma.missionComment.update({
       where: { id },
-      data: {
-        ...(dto.message !== undefined && { message: dto.message }),
-      },
+      data: updateData,
       include: {
         user: {
           select: {
@@ -150,6 +241,20 @@ export class MissionCommentsService {
               select: {
                 id: true,
                 url: true,
+              },
+            },
+          },
+        },
+        replyTo: {
+          select: {
+            id: true,
+            userId: true,
+            message: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                nickname: true,
               },
             },
           },

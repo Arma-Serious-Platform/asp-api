@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -23,7 +24,9 @@ interface AuthenticatedSocket extends Socket {
   namespace: '/mission-comments',
 })
 @Injectable()
-export class MissionCommentsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MissionCommentsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -34,14 +37,17 @@ export class MissionCommentsGateway implements OnGatewayConnection, OnGatewayDis
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
+      const token =
+        client.handshake?.auth?.token as string ||
+        (client.handshake?.headers?.authorization?.split(' ')[1] as string);
 
       if (!token) {
         client.disconnect();
         return;
       }
 
-      const decoded = this.jwtService.decode(token) as { userId?: string };
+      const decoded = this.jwtService.decode(token) as { userId?: string | undefined }
+      ;
       const userId = decoded?.userId;
 
       if (!userId) {
@@ -59,17 +65,21 @@ export class MissionCommentsGateway implements OnGatewayConnection, OnGatewayDis
       }
 
       client.userId = userId;
-      console.log(`User ${userId} connected to mission-comments (socket: ${client.id})`);
+      console.log(
+        `User ${userId} connected to mission-comments (socket: ${client.id})`,
+      );
     } catch (error) {
       console.error('Mission comments connection error:', error);
       client.disconnect();
     }
   }
 
-  async handleDisconnect(client: AuthenticatedSocket) {
+  handleDisconnect(client: AuthenticatedSocket) {
     const userId = client.userId;
     if (userId) {
-      console.log(`User ${userId} disconnected from mission-comments (socket: ${client.id})`);
+      console.log(
+        `User ${userId} disconnected from mission-comments (socket: ${client.id})`,
+      );
     }
   }
 
@@ -124,7 +134,9 @@ export class MissionCommentsGateway implements OnGatewayConnection, OnGatewayDis
 
   // Emit deleted comment to mission room
   emitDeletedComment(missionId: string, commentId: string) {
-    this.server.to(`mission:${missionId}`).emit('deleted_comment', { id: commentId });
+    this.server
+      .to(`mission:${missionId}`)
+      .emit('deleted_comment', { id: commentId });
   }
 
   // Join mission room
