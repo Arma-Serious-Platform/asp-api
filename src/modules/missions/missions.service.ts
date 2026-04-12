@@ -292,17 +292,12 @@ export class MissionsService {
 
     const updateDto: Prisma.MissionVersionUpdateInput = {};
 
+    let previousFileId: string | undefined;
+
     if (file) {
       const newFile = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, file);
-      await this.minioService.deleteFile(missionVersion.fileId);
-
-      updateDto.file = {
-        update: {
-          id: newFile.id,
-          filename: newFile.filename,
-          url: newFile.url,
-        }
-      };
+      previousFileId = missionVersion.fileId;
+      updateDto.file = { connect: { id: newFile.id } };
     }
 
 
@@ -346,10 +341,16 @@ export class MissionsService {
       };
     }
 
-    return await this.prisma.missionVersion.update({
+    const updated = await this.prisma.missionVersion.update({
       where: { id: missionVersionId },
       data: updateDto,
     });
+
+    if (previousFileId) {
+      await this.minioService.deleteFile(previousFileId);
+    }
+
+    return updated;
   }
 
   async changeMissionVersionStatus(dto: ChangeMissionVersionStatusDto, versionId: string, userId: string) {
