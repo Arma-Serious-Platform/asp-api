@@ -298,6 +298,8 @@ export class MissionsService {
       const newFile = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, file);
       previousFileId = missionVersion.fileId;
       updateDto.file = { connect: { id: newFile.id } };
+
+      updateDto.status = MissionStatus.PENDING_APPROVAL;
     }
 
 
