@@ -6,7 +6,7 @@ import { MinioService } from "src/infrastructure/minio/minio.service";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { MissionStatus, MissionType, Prisma, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
@@ -154,6 +154,14 @@ export class MissionsService {
           include: {
             file: true,
             weaponry: true,
+            uniformScreenshots: {
+              include: {
+                file: true,
+              },
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
           }
         }
       },
@@ -223,8 +231,19 @@ export class MissionsService {
     });
   }
 
-  async createMissionVersion(dto: CreateMissionVersionDto, missionId: string) {
+  async createMissionVersion(
+    dto: CreateMissionVersionDto,
+    missionId: string,
+    attackScreenshots: File[] = [],
+    defenseScreenshots: File[] = [],
+  ) {
     const { id: fileId } = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, dto.file);
+    const uploadedAttackScreenshots = await Promise.all(
+      attackScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
+    );
+    const uploadedDefenseScreenshots = await Promise.all(
+      defenseScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
+    );
 
     return await this.prisma.missionVersion.create({
       data: {
@@ -248,14 +267,38 @@ export class MissionsService {
             })),
           }
           : undefined,
+        uniformScreenshots: (uploadedAttackScreenshots.length > 0 || uploadedDefenseScreenshots.length > 0) ? {
+          create: [
+            ...uploadedAttackScreenshots.map((screenshot) => ({
+              fileId: screenshot.id,
+              side: dto.attackSideType,
+            })),
+            ...uploadedDefenseScreenshots.map((screenshot) => ({
+              fileId: screenshot.id,
+              side: dto.defenseSideType,
+            })),
+          ],
+        } : undefined,
       },
       include: {
         weaponry: true,
+        uniformScreenshots: {
+          include: {
+            file: true,
+          },
+        },
       },
     });
   }
 
-  async updateMissionVersion(dto: UpdateMissionVersionDto, missionVersionId: string, userId: string, file?: File) {
+  async updateMissionVersion(
+    dto: UpdateMissionVersionDto,
+    missionVersionId: string,
+    userId: string,
+    file?: File,
+    attackScreenshots: File[] = [],
+    defenseScreenshots: File[] = [],
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -266,12 +309,19 @@ export class MissionsService {
     });
 
     if (!user) {
-      return new NotFoundException('User not found');
+      throw new NotFoundException('User not found');
     }
 
     const missionVersion = await this.prisma.missionVersion.findUnique({
       where: { id: missionVersionId },
       include: {
+        uniformScreenshots: {
+          select: {
+            id: true,
+            fileId: true,
+            side: true,
+          },
+        },
         mission: {
           select: {
             authorId: true
@@ -281,7 +331,7 @@ export class MissionsService {
     });
 
     if (!missionVersion) {
-      return new NotFoundException('Mission version not found');
+      throw new NotFoundException('Mission version not found');
     }
 
     const canChangeAnyMissionVersion = user.isMissionReviewer || (user.role === UserRole.OWNER || user.role === UserRole.TECH_ADMIN);
@@ -293,6 +343,8 @@ export class MissionsService {
     const updateDto: Prisma.MissionVersionUpdateInput = {};
 
     let previousFileId: string | undefined;
+    const uploadedScreenshotFileIdsToRollback: string[] = [];
+    const fileIdsToDeleteAfterUpdate: string[] = [];
 
     if (file) {
       const newFile = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, file);
@@ -303,35 +355,35 @@ export class MissionsService {
     }
 
 
-    if (dto.version) {
+    if (dto.version !== undefined) {
       updateDto.version = dto.version;
     }
 
-    if (dto.attackSideName) {
+    if (dto.attackSideName !== undefined) {
       updateDto.attackSideName = dto.attackSideName;
     }
 
-    if (dto.defenseSideName) {
+    if (dto.defenseSideName !== undefined) {
       updateDto.defenseSideName = dto.defenseSideName;
     }
 
-    if (dto.attackSideSlots) {
+    if (dto.attackSideSlots !== undefined) {
       updateDto.attackSideSlots = dto.attackSideSlots;
     }
 
-    if (dto.defenseSideSlots) {
+    if (dto.defenseSideSlots !== undefined) {
       updateDto.defenseSideSlots = dto.defenseSideSlots;
     }
 
-    if (dto.attackSideType) {
+    if (dto.attackSideType !== undefined) {
       updateDto.attackSideType = dto.attackSideType;
     }
 
-    if (dto.defenseSideType) {
+    if (dto.defenseSideType !== undefined) {
       updateDto.defenseSideType = dto.defenseSideType;
     }
 
-    if (dto.weaponry) {
+    if (dto.weaponry !== undefined) {
       updateDto.weaponry = {
         deleteMany: {},
         create: dto.weaponry.map((weaponry) => ({
@@ -343,16 +395,94 @@ export class MissionsService {
       };
     }
 
-    const updated = await this.prisma.missionVersion.update({
-      where: { id: missionVersionId },
-      data: updateDto,
-    });
+    const removeAttackIdsSet = new Set(dto.removeAttackScreenshotIds ?? []);
+    const removeDefenseIdsSet = new Set(dto.removeDefenseScreenshotIds ?? []);
+    const removeIds = new Set([...removeAttackIdsSet, ...removeDefenseIdsSet]);
 
-    if (previousFileId) {
-      await this.minioService.deleteFile(previousFileId);
+    for (const screenshot of missionVersion.uniformScreenshots) {
+      if (removeAttackIdsSet.has(screenshot.id) && screenshot.side !== missionVersion.attackSideType) {
+        throw new BadRequestException(`Screenshot ${screenshot.id} does not belong to attack side`);
+      }
+
+      if (removeDefenseIdsSet.has(screenshot.id) && screenshot.side !== missionVersion.defenseSideType) {
+        throw new BadRequestException(`Screenshot ${screenshot.id} does not belong to defense side`);
+      }
     }
 
-    return updated;
+    const screenshotsToRemove = missionVersion.uniformScreenshots.filter((screenshot) => removeIds.has(screenshot.id));
+    const removeScreenshotsInput = screenshotsToRemove.length > 0 ? {
+      deleteMany: {
+        id: {
+          in: screenshotsToRemove.map((screenshot) => screenshot.id),
+        },
+      },
+    } : undefined;
+
+    if (removeIds.size > screenshotsToRemove.length) {
+      throw new BadRequestException('Some screenshots to remove were not found on this mission version');
+    }
+
+    const uploadedAttackScreenshots = await Promise.all(
+      attackScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
+    );
+    uploadedScreenshotFileIdsToRollback.push(...uploadedAttackScreenshots.map((screenshot) => screenshot.id));
+
+    const uploadedDefenseScreenshots = await Promise.all(
+      defenseScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
+    );
+    uploadedScreenshotFileIdsToRollback.push(...uploadedDefenseScreenshots.map((screenshot) => screenshot.id));
+
+    const createScreenshotsInput = [
+      ...uploadedAttackScreenshots.map((screenshot) => ({
+        fileId: screenshot.id,
+        side: missionVersion.attackSideType,
+      })),
+      ...uploadedDefenseScreenshots.map((screenshot) => ({
+        fileId: screenshot.id,
+        side: missionVersion.defenseSideType,
+      })),
+    ];
+
+    if (removeScreenshotsInput || createScreenshotsInput.length > 0) {
+      updateDto.uniformScreenshots = {
+        ...(removeScreenshotsInput ?? {}),
+        ...(createScreenshotsInput.length > 0 ? { create: createScreenshotsInput } : {}),
+      };
+      updateDto.status = MissionStatus.PENDING_APPROVAL;
+      fileIdsToDeleteAfterUpdate.push(...screenshotsToRemove.map((screenshot) => screenshot.fileId));
+    }
+
+    try {
+      const updated = await this.prisma.missionVersion.update({
+        where: { id: missionVersionId },
+        data: updateDto,
+        include: {
+          uniformScreenshots: {
+            include: {
+              file: true,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+        },
+      });
+
+      if (previousFileId) {
+        await this.minioService.deleteFile(previousFileId);
+      }
+
+      for (const fileIdToDelete of fileIdsToDeleteAfterUpdate) {
+        await this.minioService.deleteFile(fileIdToDelete);
+      }
+
+      return updated;
+    } catch (error) {
+      for (const uploadedFileId of uploadedScreenshotFileIdsToRollback) {
+        await this.minioService.deleteFile(uploadedFileId);
+      }
+      throw error;
+    }
   }
 
   async changeMissionVersionStatus(dto: ChangeMissionVersionStatusDto, versionId: string, userId: string) {
