@@ -27,8 +27,17 @@ export class ChatsController {
   }
 
   @Post(':id/messages')
-  sendMessage(@Param('id') chatId: string, @Body() dto: Omit<SendMessageDto, 'chatId'>, @Req() req: RequestType) {
-    return this.chatsService.sendMessage({ ...dto, chatId }, req.userId);
+  sendMessage(@Param('id') chatId: string, @Body() dto: Omit<SendMessageDto, 'chatId'> & Record<string, unknown>, @Req() req: RequestType) {
+    const { content, quoteMessageId, ...rawContent } = dto;
+
+    return this.chatsService.sendMessage(
+      {
+        chatId,
+        quoteMessageId,
+        content: content ?? rawContent,
+      },
+      req.userId,
+    );
   }
 
   @Get(':id/messages')
