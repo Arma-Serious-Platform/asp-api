@@ -3,6 +3,7 @@ import { PrismaService } from "src/infrastructure/prisma/prisma.service";
 import { CreateChatDto } from "./dto/create-chat.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FindMessagesDto } from "./dto/find-messages.dto";
+import { UpdateChatDto } from "./dto/update-chat.dto";
 import { ChatType } from "@prisma/client";
 
 @Injectable()
@@ -343,5 +344,52 @@ export class ChatsService {
     });
 
     return { message: 'Left chat successfully' };
+  }
+
+  async update(id: string, dto: UpdateChatDto, userId: string) {
+    const chat = await this.prisma.chat.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: {
+            userId,
+            leftAt: null,
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (chat.users.length === 0) {
+      throw new ForbiddenException('You are not a member of this chat');
+    }
+
+    return await this.prisma.chat.update({
+      where: { id },
+      data: {
+        name: dto.name,
+      },
+      include: {
+        users: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                nickname: true,
+                avatar: {
+                  select: {
+                    id: true,
+                    url: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   }
 }

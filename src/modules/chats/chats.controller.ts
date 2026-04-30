@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, Delete } from "@nestjs/common";
+import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, Delete, Patch } from "@nestjs/common";
 import { ChatsService } from "./chats.service";
 import { CreateChatDto } from "./dto/create-chat.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FindMessagesDto } from "./dto/find-messages.dto";
+import { UpdateChatDto } from "./dto/update-chat.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { RequestType } from "src/utils/types";
 
@@ -48,5 +49,10 @@ export class ChatsController {
   @Delete(':id/leave')
   leaveChat(@Param('id') id: string, @Req() req: RequestType) {
     return this.chatsService.leaveChat(id, req.userId);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateChatDto, @Req() req: RequestType) {
+    return this.chatsService.update(id, dto, req.userId);
   }
 }
