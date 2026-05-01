@@ -59,6 +59,7 @@ model GamePlanSlot {
   slotNumber     String
   name           String?
   weaponry       String?
+  slotCount      Int?     
   assignedSquads Squad[]  @relation("AssignedGamePlanSlots")
   wantedSquads   Squad[]  @relation("WantedGamePlanSlots")
   comment        String?

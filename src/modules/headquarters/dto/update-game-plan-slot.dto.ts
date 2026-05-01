@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import { IsInt, IsOptional, IsString, Min } from "class-validator";
 
 export class UpdateGamePlanSlotDto {
   @ApiPropertyOptional({
@@ -19,6 +20,17 @@ export class UpdateGamePlanSlotDto {
   @IsOptional()
   @IsString()
   weaponry?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 12,
+    description: 'Planned number of players for this slot',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  slotCount?: number | null;
 
   @ApiPropertyOptional({
     nullable: true,

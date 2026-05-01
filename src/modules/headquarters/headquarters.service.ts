@@ -154,6 +154,7 @@ export class HeadquartersService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.weaponry !== undefined && { weaponry: dto.weaponry }),
+        ...(dto.slotCount !== undefined && { slotCount: dto.slotCount }),
         ...(dto.comment !== undefined && { comment: dto.comment }),
         ...(dto.spawnPoint !== undefined && { spawnPoint: dto.spawnPoint }),
       },
