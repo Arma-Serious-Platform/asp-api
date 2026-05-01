@@ -12,6 +12,7 @@ import {
   UploadedFile,
   Query,
   Patch,
+  Res,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { SignUpDto } from './dto/create-user.dto';
@@ -35,6 +36,7 @@ import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
+import { Request, Response } from 'express';
 
 @Controller('users')
 export class UsersController {
@@ -72,6 +74,27 @@ export class UsersController {
   @UseGuards(AuthGuard)
   updateMe(@Body() updateMeDto: UpdateMeDto, @Req() req: RequestType) {
     return this.usersService.updateMe(req.userId, updateMeDto);
+  }
+
+  @Get('/steam-login')
+  steamLogin(
+    @Query('accessToken') accessToken: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const callbackUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}/steam/callback`;
+    const redirectUrl = this.usersService.getSteamLoginRedirectUrl(accessToken, callbackUrl);
+    return res.redirect(redirectUrl);
+  }
+
+  @Get('/steam/callback')
+  async steamCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const query = req.query as Record<string, string | string[] | undefined>;
+    await this.usersService.linkSteamFromCallback(query);
+    return res.redirect(this.usersService.getFrontendSteamLinkedRedirectUrl());
   }
 
   @Post('/signup')
