@@ -25,13 +25,15 @@ export class HeadquartersController {
   constructor(private readonly headquartersService: HeadquartersService) {}
 
   @Get('games/:gameId/plans')
-  findPlansByGame(@Param('gameId') gameId: string) {
-    return this.headquartersService.findPlansByGame(gameId);
+  @UseGuards(AuthGuard)
+  findPlansByGame(@Param('gameId') gameId: string, @Req() req: RequestType) {
+    return this.headquartersService.findPlansByGame(gameId, req.userId);
   }
 
   @Get('plans/:id')
-  findPlanById(@Param('id') id: string) {
-    return this.headquartersService.findPlanById(id);
+  @UseGuards(AuthGuard)
+  findPlanById(@Param('id') id: string, @Req() req: RequestType) {
+    return this.headquartersService.findPlanById(id, req.userId);
   }
 
   @Patch('plans/:id')

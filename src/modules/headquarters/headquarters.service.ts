@@ -78,9 +78,10 @@ export class HeadquartersService {
     }
   }
 
-  async findPlansByGame(gameId: string) {
+  async findPlansByGame(gameId: string, userId: string) {
+    const sideId = await this.getAllowedSideIdForUser(userId);
     return this.prisma.gamePlan.findMany({
-      where: { gameId },
+      where: { gameId, sideId },
       include: this.gamePlanInclude,
       orderBy: {
         createdAt: 'asc',
@@ -88,9 +89,10 @@ export class HeadquartersService {
     });
   }
 
-  async findPlanById(id: string) {
-    const gamePlan = await this.prisma.gamePlan.findUnique({
-      where: { id },
+  async findPlanById(id: string, userId: string) {
+    const sideId = await this.getAllowedSideIdForUser(userId);
+    const gamePlan = await this.prisma.gamePlan.findFirst({
+      where: { id, sideId },
       include: this.gamePlanInclude,
     });
 
@@ -232,7 +234,14 @@ export class HeadquartersService {
   }
 
   async findComments(gamePlanId: string, dto: FindGamePlanCommentsDto) {
-    await this.findPlanById(gamePlanId);
+    const gamePlan = await this.prisma.gamePlan.findUnique({
+      where: { id: gamePlanId },
+      select: { id: true },
+    });
+
+    if (!gamePlan) {
+      throw new NotFoundException('Game plan not found');
+    }
     const { replyId, skip = 0, take = 100 } = dto;
 
     const where: Prisma.GamePlanCommentWhereInput = { gamePlanId };
@@ -375,6 +384,54 @@ export class HeadquartersService {
   } satisfies Prisma.GamePlanSlotInclude;
 
   private readonly gamePlanInclude = {
+    game: {
+      include: {
+        weekend: {
+          select: {
+            id: true,
+            name: true,
+            published: true,
+            publishedAt: true,
+          },
+        },
+        mission: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            image: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+          },
+        },
+        missionVersion: {
+          select: {
+            id: true,
+            version: true,
+            status: true,
+            attackSideType: true,
+            defenseSideType: true,
+          },
+        },
+        attackSide: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+        defenseSide: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    },
     side: {
       select: {
         id: true,
@@ -525,5 +582,40 @@ export class HeadquartersService {
     }
 
     return user;
+  }
+
+  private async getAllowedSideIdForUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        squadId: true,
+        squad: {
+          select: {
+            sideId: true,
+            side: {
+              select: {
+                type: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.squadId || !user.squad?.sideId) {
+      throw new ForbiddenException('You are not a member of a squad');
+    }
+
+    const allowedTypes = new Set<SideType>([SideType.BLUE, SideType.RED]);
+    if (!allowedTypes.has(user.squad.side.type)) {
+      throw new ForbiddenException('Your side is not eligible for headquarters plans');
+    }
+
+    return user.squad.sideId;
   }
 }
