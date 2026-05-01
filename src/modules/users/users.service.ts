@@ -87,13 +87,10 @@ export class UsersService {
 
     const data = this.jwtService.decode<{userId: string }>(accessToken);
 
-    console.log('data', data);
-
     if (!data?.userId) return;
 
     const { userId } = data;
 
-    console.log('userId', userId);
 
     const steamId = await this.extractAndVerifySteamId(query);
 
@@ -142,8 +139,6 @@ export class UsersService {
   private async extractAndVerifySteamId(
     query: Record<string, string | string[] | undefined>
   ) {
-    console.log('query', query);
-
     const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
     if (!claimedId) {
       return null;
