@@ -455,7 +455,7 @@ export class HeadquartersService {
     slots: {
       include: this.slotInclude,
       orderBy: {
-        createdAt: 'asc',
+        slotNumber: 'asc',
       },
     },
   } satisfies Prisma.GamePlanInclude;
