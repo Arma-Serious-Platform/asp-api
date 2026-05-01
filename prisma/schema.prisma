@@ -21,6 +21,52 @@ model File {
   missionVersionScreenshots MissionVersionScreenshot[]
 }
 
+model GamePlan {
+  id              String            @id @default(uuid())
+  gameId          String
+  game            Game              @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  sideId          String
+  side            Side              @relation(fields: [sideId], references: [id], onDelete: Cascade)
+  planUrl         String?
+  gameCommanderId String?
+  gameCommander   User?             @relation("GamePlanCommander", fields: [gameCommanderId], references: [id], onDelete: SetNull)
+  comments        GamePlanComment[]
+  slots           GamePlanSlot[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([gameId, sideId])
+}
+
+model GamePlanComment {
+  id         String            @id @default(uuid())
+  gamePlanId String
+  gamePlan   GamePlan          @relation(fields: [gamePlanId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message    Json
+  replyId    String?
+  replyTo    GamePlanComment?  @relation("GamePlanCommentReplies", fields: [replyId], references: [id])
+  replies    GamePlanComment[] @relation("GamePlanCommentReplies")
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+}
+
+model GamePlanSlot {
+  id             String   @id @default(uuid())
+  gamePlanId     String
+  gamePlan       GamePlan @relation(fields: [gamePlanId], references: [id], onDelete: Cascade)
+  slotNumber     String
+  name           String?
+  weaponry       String?
+  assignedSquads Squad[]  @relation("AssignedGamePlanSlots")
+  wantedSquads   Squad[]  @relation("WantedGamePlanSlots")
+  comment        String?
+  spawnPoint     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model User {
   id                          String            @id @default(uuid())
   avatarId                    String?
@@ -44,6 +90,8 @@ model User {
   missions                    Mission[]
   missionComments             MissionComment[]
   side                        Side?
+  gamePlansAsCommander        GamePlan[]        @relation("GamePlanCommander")
+  gamePlanComments            GamePlanComment[]
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
@@ -75,6 +123,8 @@ model Squad {
   logoId      String?
   logo        File?             @relation(fields: [logoId], references: [id])
   recruiting  Boolean           @default(true)
+  assignedGamePlanSlots GamePlanSlot[] @relation("AssignedGamePlanSlots")
+  wantedGamePlanSlots   GamePlanSlot[] @relation("WantedGamePlanSlots")
 }
 
 model SquadInvitation {
@@ -101,6 +151,7 @@ model Side {
   squads           Squad[]
   gamesAttackSide  Game[]   @relation("GameAttackSide")
   gamesDefenseSide Game[]   @relation("GameDefenseSide")
+  gamePlans        GamePlan[]
 }
 
 model Server {
@@ -226,6 +277,7 @@ model Game {
   position      Int @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  gamePlans     GamePlan[]
 }
 
 model Weekend {

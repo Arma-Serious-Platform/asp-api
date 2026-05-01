@@ -5,10 +5,14 @@ import { UpdateWeekendDto } from "./dto/update-weekend.dto";
 import { FindWeekendsDto } from "./dto/find-weekends.dto";
 import { UpdateGameDto } from "./dto/update-game.dto";
 import { Prisma } from "@prisma/client";
+import { HeadquartersService } from "../headquarters/headquarters.service";
 
 @Injectable()
 export class WeekendsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly headquartersService: HeadquartersService,
+  ) { }
 
   async findAll(dto: FindWeekendsDto) {
     const { search, skip = 0, take = 100, published } = dto;
@@ -210,7 +214,7 @@ export class WeekendsService {
       }
     }
 
-    return await this.prisma.weekend.create({
+    const weekend = await this.prisma.weekend.create({
       data: {
         name: dto.name,
         ...(dto.description !== undefined && { description: dto.description }),
@@ -261,6 +265,10 @@ export class WeekendsService {
         },
       },
     });
+
+    await Promise.all(weekend.games.map((game) => this.headquartersService.ensureGamePlansForGame(game.id)));
+
+    return weekend;
   }
 
   async update(id: string, dto: UpdateWeekendDto) {
@@ -567,7 +575,7 @@ export class WeekendsService {
       }
     }
 
-    return await this.prisma.game.create({
+    const game = await this.prisma.game.create({
       data: {
         weekendId,
         date: new Date(dto.date),
@@ -612,5 +620,9 @@ export class WeekendsService {
         },
       },
     });
+
+    await this.headquartersService.ensureGamePlansForGame(game.id);
+
+    return game;
   }
 }
