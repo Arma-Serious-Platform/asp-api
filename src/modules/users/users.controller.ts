@@ -88,6 +88,7 @@ export class UsersController {
   ) {
     const query = req.query as Record<string, string | string[] | undefined>;
     await this.usersService.linkSteamFromCallback(query);
+    
     return res.redirect(this.usersService.getFrontendSteamLinkedRedirectUrl());
   }
 

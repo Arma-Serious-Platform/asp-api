@@ -77,19 +77,27 @@ export class UsersService {
     return `${UsersService.STEAM_OPENID_ENDPOINT}?${params.toString()}`;
   }
 
-  async linkSteamFromCallback(query: Record<string, string | string[] | undefined>) {
+  async linkSteamFromCallback(
+    query: Record<string, string | string[] | undefined>
+  ) {
     const accessToken = this.getSingleQueryValue(query.accessToken);
     if (!accessToken) {
       return;
     }
 
-    const userId = await this.verifyAndExtractUserId(accessToken);
-    if (!userId) {
-      return;
-    }
+    const data = this.jwtService.decode<{userId: string }>(accessToken);
+
+    console.log('data', data);
+
+    if (!data?.userId) return;
+
+    const { userId } = data;
+
+    console.log('userId', userId);
 
     const steamId = await this.extractAndVerifySteamId(query);
-    if (!steamId || !/^\d{17}$/.test(steamId)) {
+
+    if (!steamId) {
       return;
     }
 
@@ -131,61 +139,28 @@ export class UsersService {
     return Array.isArray(value) ? value[0] : value;
   }
 
-  private async verifyAndExtractUserId(accessToken: string) {
-    try {
-      const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
-        accessToken,
-        { secret: process.env.JWT_SECRET },
-      );
-
-      return userId;
-    } catch {
-      return null;
-    }
-  }
-
-  private async extractAndVerifySteamId(query: Record<string, string | string[] | undefined>) {
-    const steamLoginResponse = new URLSearchParams();
-
-    for (const [key, rawValue] of Object.entries(query)) {
-      const value = this.getSingleQueryValue(rawValue);
-      if (!value) {
-        continue;
-      }
-      steamLoginResponse.append(key, value);
-    }
-
-    steamLoginResponse.set('openid.mode', 'check_authentication');
-
-    let verificationResponseText = '';
-    try {
-      const verificationResponse = await fetch(UsersService.STEAM_OPENID_ENDPOINT, {
-        method: 'POST',
-        body: steamLoginResponse,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
-      verificationResponseText = await verificationResponse.text();
-    } catch {
-      return null;
-    }
-
-    if (!verificationResponseText.includes('is_valid:true')) {
-      return null;
-    }
+  private async extractAndVerifySteamId(
+    query: Record<string, string | string[] | undefined>
+  ) {
+    console.log('query', query);
 
     const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
     if (!claimedId) {
       return null;
     }
 
-    const steamIdMatch = claimedId.match(/^https:\/\/steamcommunity\.com\/openid\/id\/(\d+)$/);
-    if (!steamIdMatch) {
+    const marker = '/id/';
+    const markerIndex = claimedId.indexOf(marker);
+    if (markerIndex === -1) {
       return null;
     }
 
-    return steamIdMatch[1];
+    const steamId = claimedId.slice(markerIndex + marker.length).trim();
+    if (!steamId) {
+      return null;
+    }
+
+    return steamId;
   }
 
   async updateMe(userId: string, updateMeDto: UpdateMeDto) {
