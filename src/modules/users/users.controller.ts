@@ -105,7 +105,7 @@ export class UsersController {
 
   @Post('/change-role')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER'])
+  @Roles(['OWNER', 'TECH_ADMIN'])
   changeUserRole(@Body() changeUserRoleDto: ChangeUserRoleDto) {
     return this.usersService.changeUserRole(changeUserRoleDto);
   }

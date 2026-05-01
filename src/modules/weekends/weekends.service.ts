@@ -54,6 +54,20 @@ export class WeekendsService {
                       url: true,
                     }
                   },
+                  uniformScreenshots: {
+                    select: {
+                      side: true,
+                      file: {
+                        select: {
+                          id: true,
+                          url: true,
+                        },
+                      },
+                    },
+                    orderBy: {
+                      createdAt: 'asc',
+                    },
+                  },
                 },
               },
               attackSide: {

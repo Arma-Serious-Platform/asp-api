@@ -5,10 +5,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { seed } from 'prisma/seed';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   await seed();
   const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
