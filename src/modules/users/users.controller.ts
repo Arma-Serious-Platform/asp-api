@@ -54,12 +54,6 @@ export class UsersController {
     return this.usersService.me(req.userId);
   }
 
-  @Get(':id')
-  // @UseGuards(AuthGuard)
-  findOne(@Param('id') idOrName: string) {
-    return this.usersService.findOne(idOrName);
-  }
-
   @Post('/login')
   login(@Body() loginUserDto: LoginUserDto) {
     return this.usersService.login(loginUserDto);
@@ -82,7 +76,7 @@ export class UsersController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    const callbackUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}/steam/callback`;
+    const callbackUrl = `${req.protocol}://${req.get('host')}/api/users/steam/callback`;
     const redirectUrl = this.usersService.getSteamLoginRedirectUrl(accessToken, callbackUrl);
     return res.redirect(redirectUrl);
   }
@@ -158,6 +152,12 @@ export class UsersController {
   @Roles(['OWNER', 'GAME_ADMIN', 'TECH_ADMIN'])
   unbanUser(@Param() params: UnbanUserDto, @Req() req: RequestType) {
     return this.usersService.unbanUser(params, req.role);
+  }
+
+  @Get(':id')
+  // @UseGuards(AuthGuard)
+  findOne(@Param('id') idOrName: string) {
+    return this.usersService.findOne(idOrName);
   }
 
   @Delete(':id')
