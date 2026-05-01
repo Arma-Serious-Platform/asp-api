@@ -12,6 +12,7 @@ import { AssignSlotSquadDto } from "./dto/assign-slot-squad.dto";
 import { CreateGamePlanCommentDto } from "./dto/create-game-plan-comment.dto";
 import { UpdateGamePlanCommentDto } from "./dto/update-game-plan-comment.dto";
 import { FindGamePlanCommentsDto } from "./dto/find-game-plan-comments.dto";
+import { HeadquartersGateway } from "./headquarters.gateway";
 
 const DEFAULT_CALLSIGNS = [
   'Alpha 1-1', 'Alpha 1-2', 'Alpha 1-3', 'Alpha 1-4', 'Alpha 1-5', 'Alpha 1-6',
@@ -23,7 +24,10 @@ const DEFAULT_CALLSIGNS = [
 
 @Injectable()
 export class HeadquartersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly headquartersGateway: HeadquartersGateway,
+  ) {}
 
   async ensureGamePlansForGame(gameId: string, tx?: Prisma.TransactionClient) {
     const db = tx ?? this.prisma;
@@ -107,24 +111,31 @@ export class HeadquartersService {
     const gamePlan = await this.getGamePlanWithSide(id);
     await this.ensureUserInSameSide(userId, gamePlan.sideId);
 
-    return this.prisma.gamePlan.update({
+    const updatedPlan = await this.prisma.gamePlan.update({
       where: { id },
       data: {
         ...(dto.planUrl !== undefined && { planUrl: dto.planUrl }),
       },
       include: this.gamePlanInclude,
     });
+
+    this.headquartersGateway.emitGamePlanUpdated(id, updatedPlan);
+    return updatedPlan;
   }
 
   async assignCommander(id: string, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(id);
     await this.ensureUserInSameSide(userId, gamePlan.sideId);
 
-    return this.prisma.gamePlan.update({
+    const updatedPlan = await this.prisma.gamePlan.update({
       where: { id },
       data: { gameCommanderId: userId },
       include: this.gamePlanInclude,
     });
+
+    this.headquartersGateway.emitGamePlanUpdated(id, updatedPlan);
+    this.headquartersGateway.emitCommanderChanged(id, updatedPlan);
+    return updatedPlan;
   }
 
   async unassignCommander(id: string, userId: string, role: UserRole) {
@@ -138,18 +149,22 @@ export class HeadquartersService {
       throw new ForbiddenException('Only current commander or super admin can unassign commander');
     }
 
-    return this.prisma.gamePlan.update({
+    const updatedPlan = await this.prisma.gamePlan.update({
       where: { id },
       data: { gameCommanderId: null },
       include: this.gamePlanInclude,
     });
+
+    this.headquartersGateway.emitGamePlanUpdated(id, updatedPlan);
+    this.headquartersGateway.emitCommanderChanged(id, updatedPlan);
+    return updatedPlan;
   }
 
   async updateSlot(slotId: string, dto: UpdateGamePlanSlotDto, userId: string) {
     const slot = await this.getSlotWithPlan(slotId);
     await this.ensureIsCommander(slot.gamePlanId, userId);
 
-    return this.prisma.gamePlanSlot.update({
+    const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
@@ -160,6 +175,9 @@ export class HeadquartersService {
       },
       include: this.slotInclude,
     });
+
+    this.headquartersGateway.emitSlotUpdated(slot.gamePlanId, updatedSlot);
+    return updatedSlot;
   }
 
   async assignSquadToSlot(slotId: string, dto: AssignSlotSquadDto, userId: string) {
@@ -167,7 +185,7 @@ export class HeadquartersService {
     await this.ensureIsCommander(slot.gamePlanId, userId);
     await this.ensureSquadInSameSide(dto.squadId, slot.gamePlan.sideId);
 
-    return this.prisma.gamePlanSlot.update({
+    const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         assignedSquads: {
@@ -176,13 +194,16 @@ export class HeadquartersService {
       },
       include: this.slotInclude,
     });
+
+    this.headquartersGateway.emitSlotUpdated(slot.gamePlanId, updatedSlot);
+    return updatedSlot;
   }
 
   async unassignSquadFromSlot(slotId: string, dto: AssignSlotSquadDto, userId: string) {
     const slot = await this.getSlotWithPlan(slotId);
     await this.ensureIsCommander(slot.gamePlanId, userId);
 
-    return this.prisma.gamePlanSlot.update({
+    const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         assignedSquads: {
@@ -191,6 +212,9 @@ export class HeadquartersService {
       },
       include: this.slotInclude,
     });
+
+    this.headquartersGateway.emitSlotUpdated(slot.gamePlanId, updatedSlot);
+    return updatedSlot;
   }
 
   async assignMySquadAsWanted(slotId: string, userId: string) {
@@ -205,7 +229,7 @@ export class HeadquartersService {
       throw new ForbiddenException('Your squad side does not match game plan side');
     }
 
-    return this.prisma.gamePlanSlot.update({
+    const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         wantedSquads: {
@@ -214,6 +238,9 @@ export class HeadquartersService {
       },
       include: this.slotInclude,
     });
+
+    this.headquartersGateway.emitSlotUpdated(slot.gamePlanId, updatedSlot);
+    return updatedSlot;
   }
 
   async unassignMySquadAsWanted(slotId: string, userId: string) {
@@ -223,7 +250,9 @@ export class HeadquartersService {
       throw new BadRequestException('You are not in a squad');
     }
 
-    return this.prisma.gamePlanSlot.update({
+    const slot = await this.getSlotWithPlan(slotId);
+
+    const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         wantedSquads: {
@@ -232,6 +261,9 @@ export class HeadquartersService {
       },
       include: this.slotInclude,
     });
+
+    this.headquartersGateway.emitSlotUpdated(slot.gamePlanId, updatedSlot);
+    return updatedSlot;
   }
 
   async findComments(gamePlanId: string, dto: FindGamePlanCommentsDto) {
@@ -287,7 +319,7 @@ export class HeadquartersService {
       replyId = dto.replyId;
     }
 
-    return this.prisma.gamePlanComment.create({
+    const comment = await this.prisma.gamePlanComment.create({
       data: {
         gamePlanId,
         userId,
@@ -296,6 +328,9 @@ export class HeadquartersService {
       },
       include: this.commentInclude,
     });
+
+    this.headquartersGateway.emitCommentCreated(gamePlanId, comment);
+    return comment;
   }
 
   async updateComment(commentId: string, dto: UpdateGamePlanCommentDto, userId: string) {
@@ -339,17 +374,20 @@ export class HeadquartersService {
       }
     }
 
-    return this.prisma.gamePlanComment.update({
+    const updatedComment = await this.prisma.gamePlanComment.update({
       where: { id: commentId },
       data: updateData,
       include: this.commentInclude,
     });
+
+    this.headquartersGateway.emitCommentUpdated(comment.gamePlanId, updatedComment);
+    return updatedComment;
   }
 
   async deleteComment(commentId: string, userId: string) {
     const comment = await this.prisma.gamePlanComment.findUnique({
       where: { id: commentId },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, gamePlanId: true },
     });
 
     if (!comment) {
@@ -363,6 +401,8 @@ export class HeadquartersService {
     await this.prisma.gamePlanComment.delete({
       where: { id: commentId },
     });
+
+    this.headquartersGateway.emitCommentDeleted(comment.gamePlanId, commentId);
 
     return { message: 'Comment deleted successfully' };
   }
