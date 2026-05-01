@@ -15,11 +15,6 @@ export class UpdateMeDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  steamId?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
   telegramUrl: string;
   
   @ApiPropertyOptional()

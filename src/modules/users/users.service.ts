@@ -32,6 +32,8 @@ import { EmailTemplateService } from 'src/shared/services/email-template.service
 
 @Injectable()
 export class UsersService {
+  private static readonly STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login';
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -57,6 +59,104 @@ export class UsersService {
       html: EmailTemplateService.createActivationEmail(activationLink),
     });
   };
+
+  getFrontendSteamLinkedRedirectUrl() {
+    return process.env.FRONTEND_STEAM_LINKED_URL ?? '/';
+  }
+
+  getSteamLoginRedirectUrl(accessToken: string, callbackUrl: string) {
+    const params = new URLSearchParams({
+      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.mode': 'checkid_setup',
+      'openid.return_to': `${callbackUrl}?accessToken=${accessToken ?? ''}`,
+      'openid.realm': `${new URL(callbackUrl).origin}/`,
+      'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+      'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+    });
+
+    return `${UsersService.STEAM_OPENID_ENDPOINT}?${params.toString()}`;
+  }
+
+  async linkSteamFromCallback(
+    query: Record<string, string | string[] | undefined>
+  ) {
+    const accessToken = this.getSingleQueryValue(query.accessToken);
+    if (!accessToken) {
+      return;
+    }
+
+    const data = this.jwtService.decode<{userId: string }>(accessToken);
+
+    if (!data?.userId) return;
+
+    const { userId } = data;
+
+
+    const steamId = await this.extractAndVerifySteamId(query);
+
+    if (!steamId) {
+      return;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        steamId: true,
+      },
+    });
+
+    if (!user || user.steamId) {
+      return;
+    }
+
+    const steamIdAlreadyLinked = await this.prisma.user.findFirst({
+      where: {
+        steamId,
+        id: {
+          not: userId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (steamIdAlreadyLinked) {
+      return;
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { steamId },
+    });
+  }
+
+  private getSingleQueryValue(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] : value;
+  }
+
+  private async extractAndVerifySteamId(
+    query: Record<string, string | string[] | undefined>
+  ) {
+    const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
+    if (!claimedId) {
+      return null;
+    }
+
+    const marker = '/id/';
+    const markerIndex = claimedId.indexOf(marker);
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    const steamId = claimedId.slice(markerIndex + marker.length).trim();
+    if (!steamId) {
+      return null;
+    }
+
+    return steamId;
+  }
 
   async updateMe(userId: string, updateMeDto: UpdateMeDto) {
     const user = await this.prisma.user.findFirst({
