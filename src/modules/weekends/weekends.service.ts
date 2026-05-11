@@ -43,7 +43,11 @@ export class WeekendsService {
                     select: {
                       id: true,
                       nickname: true,
-                      squad: true,
+                      squad: {
+                        include: {
+                          side: true,
+                        },
+                      },
                       role: true
                     }
                   }

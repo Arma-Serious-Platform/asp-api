@@ -4,9 +4,10 @@ import { MissionsService } from "./missions.service";
 import { MissionsController } from "./missions.controller";
 import { MinioModule } from "src/infrastructure/minio/minio.module";
 import { JwtModule } from "@nestjs/jwt";
+import { PboParserModule } from "src/infrastructure/pbo-parser/pbo-parser.module";
 
 @Module({
-  imports: [PrismaModule, MinioModule, JwtModule],
+  imports: [PrismaModule, MinioModule, JwtModule, PboParserModule],
   providers: [MissionsService],
   controllers: [MissionsController],
 })

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { Prisma, SideType, UserRole } from "@prisma/client";
+import { MissionGameSide, Prisma, SideType, UserRole } from "@prisma/client";
 import { UpdateGamePlanDto } from "./dto/update-game-plan.dto";
 import { UpdateGamePlanSlotDto } from "./dto/update-game-plan-slot.dto";
 import { AssignSlotSquadDto } from "./dto/assign-slot-squad.dto";
@@ -22,6 +22,16 @@ const DEFAULT_CALLSIGNS = [
   'Alpha 5-1', 'Alpha 5-2', 'Alpha 5-3', 'Alpha 5-4', 'Alpha 5-5', 'Alpha 5-6',
 ];
 
+type ParsedMissionUnit = {
+  name?: string;
+};
+
+type ParsedMissionSlot = {
+  callsign?: string;
+  count?: number;
+  units?: ParsedMissionUnit[];
+};
+
 @Injectable()
 export class HeadquartersService {
   constructor(
@@ -34,7 +44,17 @@ export class HeadquartersService {
 
     const game = await db.game.findUnique({
       where: { id: gameId },
-      select: { id: true },
+      select: {
+        id: true,
+        attackSideId: true,
+        defenseSideId: true,
+        missionVersion: {
+          select: {
+            missionAttackSlots: true,
+            missionDefenceSlots: true,
+          },
+        },
+      },
     });
 
     if (!game) {
@@ -73,13 +93,62 @@ export class HeadquartersService {
         select: { id: true },
       });
 
+      const missionSlotsForSide = this.getMissionSlotsForGameSide(game, side.id);
+      const hasMissionSlots = missionSlotsForSide.length > 0;
+
       await db.gamePlanSlot.createMany({
-        data: DEFAULT_CALLSIGNS.map((slotNumber) => ({
-          gamePlanId: gamePlan.id,
-          slotNumber,
-        })),
+        data: hasMissionSlots
+          ? missionSlotsForSide.map((slot) => ({
+              gamePlanId: gamePlan.id,
+              slotNumber: slot.callsign ?? 'Unknown',
+              ...(slot.units?.[0]?.name ? { name: slot.units[0].name } : {}),
+              ...(slot.count !== undefined ? { slotCount: slot.count } : {}),
+            }))
+          : DEFAULT_CALLSIGNS.map((slotNumber) => ({
+              gamePlanId: gamePlan.id,
+              slotNumber,
+            })),
       });
     }
+  }
+
+  private getMissionSlotsForGameSide(
+    game: {
+      attackSideId: string;
+      defenseSideId: string;
+      missionVersion: {
+        missionAttackSlots: Prisma.JsonValue | null;
+        missionDefenceSlots: Prisma.JsonValue | null;
+      };
+    },
+    sideId: string,
+  ): ParsedMissionSlot[] {
+    if (sideId === game.attackSideId) {
+      return this.extractSlotsArrayBySide(game.missionVersion.missionAttackSlots);
+    }
+
+    if (sideId === game.defenseSideId) {
+      return this.extractSlotsArrayBySide(game.missionVersion.missionDefenceSlots);
+    }
+
+    return [];
+  }
+
+  private extractSlotsArrayBySide(slotsJson: Prisma.JsonValue | null): ParsedMissionSlot[] {
+    if (!slotsJson || typeof slotsJson !== 'object' || Array.isArray(slotsJson)) {
+      return [];
+    }
+
+    for (const side of [MissionGameSide.BLUE, MissionGameSide.RED, MissionGameSide.GREEN]) {
+      const slots = (slotsJson as Record<string, unknown>)[side];
+      if (!Array.isArray(slots)) {
+        continue;
+      }
+
+      return slots.filter((slot): slot is ParsedMissionSlot => typeof slot === 'object' && slot !== null);
+    }
+
+    return [];
   }
 
   async findPlansByGame(gameId: string, userId: string) {

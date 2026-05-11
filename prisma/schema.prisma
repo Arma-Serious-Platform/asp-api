@@ -188,6 +188,8 @@ model MissionVersion {
   defenseSideType    MissionGameSide
   attackSideSlots    Int
   defenseSideSlots   Int
+  missionAttackSlots Json?
+  missionDefenceSlots Json?
   attackSideName     String
   defenseSideName    String
   weaponry           MissionWeaponry[] @relation("MissionVersionWeaponry")

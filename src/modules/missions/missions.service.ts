@@ -10,10 +10,24 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
+import { PboParserService } from "src/infrastructure/pbo-parser/pbo-parser.service";
 
 @Injectable()
 export class MissionsService {
-  constructor(private readonly prisma: PrismaService, private readonly minioService: MinioService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly minioService: MinioService,
+    private readonly pboParserService: PboParserService,
+  ) { }
+
+  private buildMissionSideSlots(
+    slotsBySide: Partial<Record<"BLUE" | "RED" | "GREEN", unknown[]>>,
+    sideType: "BLUE" | "RED" | "GREEN",
+  ): Prisma.InputJsonValue {
+    return {
+      [sideType]: slotsBySide[sideType] ?? [],
+    } as Prisma.InputJsonObject;
+  }
 
   async findAllIslands() {
     return await this.prisma.island.findMany({
@@ -93,6 +107,8 @@ export class MissionsService {
             defenseSideName: true,
             attackSideSlots: true,
             defenseSideSlots: true,
+            missionAttackSlots: true,
+            missionDefenceSlots: true,
             attackSideType: true,
             defenseSideType: true,
             version: true,
@@ -237,6 +253,14 @@ export class MissionsService {
     attackScreenshots: File[] = [],
     defenseScreenshots: File[] = [],
   ) {
+    if (!dto.file) {
+      throw new BadRequestException("Mission file is required");
+    }
+
+    const slotsBySide = await this.pboParserService.parseMissionSlots(dto.file);
+    const missionAttackSlots = this.buildMissionSideSlots(slotsBySide, dto.attackSideType);
+    const missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, dto.defenseSideType);
+
     const { id: fileId } = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, dto.file);
     const uploadedAttackScreenshots = await Promise.all(
       attackScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
@@ -254,6 +278,8 @@ export class MissionsService {
         defenseSideType: dto.defenseSideType,
         attackSideSlots: dto.attackSideSlots,
         defenseSideSlots: dto.defenseSideSlots,
+        missionAttackSlots,
+        missionDefenceSlots,
         attackSideName: dto.attackSideName,
         defenseSideName: dto.defenseSideName,
         status: MissionStatus.PENDING_APPROVAL,
@@ -347,6 +373,10 @@ export class MissionsService {
     const fileIdsToDeleteAfterUpdate: string[] = [];
 
     if (file) {
+      const slotsBySide = await this.pboParserService.parseMissionSlots(file);
+      updateDto.missionAttackSlots = this.buildMissionSideSlots(slotsBySide, dto.attackSideType ?? missionVersion.attackSideType);
+      updateDto.missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, dto.defenseSideType ?? missionVersion.defenseSideType);
+
       const newFile = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, file);
       previousFileId = missionVersion.fileId;
       updateDto.file = { connect: { id: newFile.id } };

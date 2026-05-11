@@ -75,6 +75,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - ${PBO_PARSER_PORT?}:3000
+    environment:
+      - CLEAR_TIMEOUT_MS=${PBO_CLEAR_TIMEOUT_MS:-60000}
     networks:
       - asp-network
     restart: unless-stopped
