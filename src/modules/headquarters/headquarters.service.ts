@@ -14,6 +14,34 @@ import { UpdateGamePlanCommentDto } from "./dto/update-game-plan-comment.dto";
 import { FindGamePlanCommentsDto } from "./dto/find-game-plan-comments.dto";
 import { HeadquartersGateway } from "./headquarters.gateway";
 
+/** PBO slot unit names often look like: `1. Role@Callsign | gear | gear`. */
+function parseSlotUnitDisplayName(raw: string): {
+  name: string;
+  weaponry?: string;
+} {
+  let s = raw.trim();
+  if (!s) {
+    return { name: raw };
+  }
+
+  s = s.replace(/^\d+\.\s*/, "");
+  s = s.replace(/\s*"@[^"]*"\s*/g, " ");
+  s = s.replace(/\s*@[^|]+\s*/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+
+  const parts = s.split("|").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) {
+    return { name: raw.trim() };
+  }
+  if (parts.length === 1) {
+    return { name: parts[0]! };
+  }
+  return {
+    name: parts[0]!,
+    weaponry: parts.slice(1).join(", "),
+  };
+}
+
 const DEFAULT_CALLSIGNS = [
   'Alpha 1-1', 'Alpha 1-2', 'Alpha 1-3', 'Alpha 1-4', 'Alpha 1-5', 'Alpha 1-6',
   'Alpha 2-1', 'Alpha 2-2', 'Alpha 2-3', 'Alpha 2-4', 'Alpha 2-5', 'Alpha 2-6',
@@ -93,23 +121,102 @@ export class HeadquartersService {
         select: { id: true },
       });
 
-      const missionSlotsForSide = this.getMissionSlotsForGameSide(game, side.id);
-      const hasMissionSlots = missionSlotsForSide.length > 0;
+      const rows = this.buildGamePlanSlotRows(game, side.id, gamePlan.id);
+      await db.gamePlanSlot.createMany({ data: rows });
+    }
+  }
 
-      await db.gamePlanSlot.createMany({
-        data: hasMissionSlots
-          ? missionSlotsForSide.map((slot) => ({
-              gamePlanId: gamePlan.id,
-              slotNumber: slot.callsign ?? 'Unknown',
-              ...(slot.units?.[0]?.name ? { name: slot.units[0].name } : {}),
-              ...(slot.count !== undefined ? { slotCount: slot.count } : {}),
-            }))
-          : DEFAULT_CALLSIGNS.map((slotNumber) => ({
-              gamePlanId: gamePlan.id,
-              slotNumber,
-            })),
+  /**
+   * Rebuilds all HQ slot rows from the mission version JSON for every game that uses this version.
+   * Clears squad–slot links (implicit M2M); squads are not deleted.
+   */
+  async resetGamePlanSlotsForMissionVersion(missionVersionId: string) {
+    const games = await this.prisma.game.findMany({
+      where: { missionVersionId },
+      select: {
+        id: true,
+        attackSideId: true,
+        defenseSideId: true,
+        missionVersion: {
+          select: {
+            missionAttackSlots: true,
+            missionDefenceSlots: true,
+          },
+        },
+      },
+    });
+
+    const affectedPlanIds: string[] = [];
+
+    for (const game of games) {
+      const plans = await this.prisma.gamePlan.findMany({
+        where: {
+          gameId: game.id,
+          side: { type: { in: [SideType.BLUE, SideType.RED] } },
+        },
+        select: { id: true, sideId: true },
+      });
+
+      for (const plan of plans) {
+        const rows = this.buildGamePlanSlotRows(game, plan.sideId, plan.id);
+        await this.prisma.$transaction([
+          this.prisma.gamePlanSlot.deleteMany({ where: { gamePlanId: plan.id } }),
+          this.prisma.gamePlanSlot.createMany({ data: rows }),
+        ]);
+        affectedPlanIds.push(plan.id);
+      }
+    }
+
+    for (const planId of new Set(affectedPlanIds)) {
+      const updated = await this.prisma.gamePlan.findUnique({
+        where: { id: planId },
+        include: this.gamePlanInclude,
+      });
+      if (updated) {
+        this.headquartersGateway.emitGamePlanUpdated(planId, updated);
+      }
+    }
+  }
+
+  private buildGamePlanSlotRows(
+    game: {
+      attackSideId: string;
+      defenseSideId: string;
+      missionVersion: {
+        missionAttackSlots: Prisma.JsonValue | null;
+        missionDefenceSlots: Prisma.JsonValue | null;
+      };
+    },
+    sideId: string,
+    gamePlanId: string,
+  ): Prisma.GamePlanSlotCreateManyInput[] {
+    const missionSlotsForSide = this.getMissionSlotsForGameSide(game, sideId);
+    const hasMissionSlots = missionSlotsForSide.length > 0;
+
+    if (hasMissionSlots) {
+      return missionSlotsForSide.map((slot) => {
+        const rawUnitName = slot.units?.[0]?.name;
+        const parsed = rawUnitName
+          ? parseSlotUnitDisplayName(rawUnitName)
+          : null;
+        return {
+          gamePlanId,
+          slotNumber: slot.callsign ?? 'Unknown',
+          ...(parsed
+            ? {
+                name: parsed.name,
+                ...(parsed.weaponry ? { weaponry: parsed.weaponry } : {}),
+              }
+            : {}),
+          ...(slot.count !== undefined ? { slotCount: slot.count } : {}),
+        };
       });
     }
+
+    return DEFAULT_CALLSIGNS.map((slotNumber) => ({
+      gamePlanId,
+      slotNumber,
+    }));
   }
 
   private getMissionSlotsForGameSide(

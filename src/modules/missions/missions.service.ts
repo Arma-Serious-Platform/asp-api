@@ -11,6 +11,7 @@ import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
 import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
 import { PboParserService } from "src/infrastructure/pbo-parser/pbo-parser.service";
+import { HeadquartersService } from "src/modules/headquarters/headquarters.service";
 
 @Injectable()
 export class MissionsService {
@@ -18,6 +19,7 @@ export class MissionsService {
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
     private readonly pboParserService: PboParserService,
+    private readonly headquartersService: HeadquartersService,
   ) { }
 
   private buildMissionSideSlots(
@@ -504,6 +506,10 @@ export class MissionsService {
 
       for (const fileIdToDelete of fileIdsToDeleteAfterUpdate) {
         await this.minioService.deleteFile(fileIdToDelete);
+      }
+
+      if (file) {
+        await this.headquartersService.resetGamePlanSlotsForMissionVersion(missionVersionId);
       }
 
       return updated;
