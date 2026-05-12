@@ -11,6 +11,7 @@ import { MissionsModule } from './modules/missions/missions.module';
 import { WeekendsModule } from './modules/weekends/weekends.module';
 import { MissionCommentsModule } from './modules/mission-comments/mission-comments.module';
 import { ChatsModule } from './modules/chats/chats.module';
+import { HeadquartersModule } from './modules/headquarters/headquarters.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ChatsModule } from './modules/chats/chats.module';
     SquadsModule,
     MissionsModule,
     WeekendsModule,
+    HeadquartersModule,
     MissionCommentsModule,
     ChatsModule,
   ],

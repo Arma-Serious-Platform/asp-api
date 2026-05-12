@@ -67,6 +67,20 @@ services:
     volumes:
       - minio-data:/data
 
+  pbo-parser:
+    platform: linux/amd64
+    container_name: asp-pbo-parser
+    build:
+      context: https://github.com/Arma-Serious-Platform/pbo-parser.git#main
+      dockerfile: Dockerfile
+    ports:
+      - ${PBO_PARSER_PORT?}:3000
+    environment:
+      - CLEAR_TIMEOUT_MS=${PBO_CLEAR_TIMEOUT_MS:-60000}
+    networks:
+      - asp-network
+    restart: unless-stopped
+
 networks:
   asp-network:
     driver: bridge
