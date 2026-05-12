@@ -72,8 +72,9 @@ services:
     container_name: asp-pbo-parser
     image: agentos/pbo-parser:main
     ports:
-      - ${PBO_PARSER_PORT?}:3000
+      - ${PBO_PARSER_PORT?}:${PBO_PARSER_PORT?}
     environment:
+      - PORT=${PBO_PARSER_PORT}
       - CLEAR_TIMEOUT_MS=${PBO_CLEAR_TIMEOUT_MS:-60000}
     networks:
       - asp-network
