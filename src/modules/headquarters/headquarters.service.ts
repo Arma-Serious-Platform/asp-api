@@ -574,10 +574,25 @@ export class HeadquartersService {
       select: {
         id: true,
         nickname: true,
+        role: true,
         avatar: {
           select: {
             id: true,
             url: true,
+          },
+        },
+        squad: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
           },
         },
       },
@@ -592,6 +607,21 @@ export class HeadquartersService {
           select: {
             id: true,
             nickname: true,
+            role: true,
+            squad: {
+              select: {
+                id: true,
+                name: true,
+                tag: true,
+                side: {
+                  select: {
+                    id: true,
+                    name: true,
+                    type: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
