@@ -70,9 +70,7 @@ services:
   pbo-parser:
     platform: linux/amd64
     container_name: asp-pbo-parser
-    build:
-      context: https://github.com/Arma-Serious-Platform/pbo-parser.git#main
-      dockerfile: Dockerfile
+    image: agentos/pbo-parser:main
     ports:
       - ${PBO_PARSER_PORT?}:3000
     environment:
