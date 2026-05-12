@@ -36,6 +36,12 @@ export class SquadsController {
     return this.squadsService.findAll(dto);
   }
 
+  @UseGuards(AuthGuard)
+  @Get('invitations')
+  getInvitations(@Req() req: RequestType) {
+    return this.squadsService.getMyInvitations(req.userId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.squadsService.findOne(id);
@@ -68,12 +74,6 @@ export class SquadsController {
   @Post('/invite/:userId')
   inviteToSquad(@Param() dto: InviteToSquadDto, @Req() req: RequestType) {
     return this.squadsService.inviteToSquad(dto, req.userId);
-  }
-
-  @UseGuards(AuthGuard)
-  @Get('/invitations')
-  getInvitations(@Req() req: RequestType) {
-    return this.squadsService.getMyInvitations(req.userId);
   }
 
   @UseGuards(AuthGuard)

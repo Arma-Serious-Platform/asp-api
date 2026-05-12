@@ -13,6 +13,13 @@ import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { UpdateSquadDto } from './dto/update-squad.dto';
 import { KickFromSquadDto } from './dto/kick-from-squad.dto';
 
+/** Prisma squad ids are UUIDs; only then include `id` in lookup to avoid invalid UUID queries. */
+const UUID_PARAM_RE = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+function isUuidParam(value: string): boolean {
+  return UUID_PARAM_RE.test(value);
+}
+
 @Injectable()
 export class SquadsService {
   constructor(
@@ -38,6 +45,7 @@ export class SquadsService {
           select: {
             id: true,
             nickname: true,
+            role: true,
             avatarUrl: true,
           },
         },
@@ -88,9 +96,22 @@ export class SquadsService {
     };
   }
 
-  async findOne(id: string) {
-    return this.prisma.squad.findUnique({
-      where: { id },
+  async findOne(identifier: string) {
+    const key = identifier.trim();
+    if (!key) {
+      throw new NotFoundException('Squad not found');
+    }
+
+    const orConditions: Prisma.SquadWhereInput[] = [
+      { tag: key },
+      { name: key },
+    ];
+    if (isUuidParam(key)) {
+      orConditions.unshift({ id: key });
+    }
+
+    const squad = await this.prisma.squad.findFirst({
+      where: { OR: orConditions },
       omit: {
         sideId: true,
         leaderId: true,
@@ -112,6 +133,7 @@ export class SquadsService {
           select: {
             id: true,
             nickname: true,
+            role: true,
             avatarUrl: true,
           },
         },
@@ -125,6 +147,12 @@ export class SquadsService {
         },
       },
     });
+
+    if (!squad) {
+      throw new NotFoundException('Squad not found');
+    }
+
+    return squad;
   }
 
   async create(dto: CreateSquadDto, logo?: File) {
