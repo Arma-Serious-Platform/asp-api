@@ -47,6 +47,12 @@ export class SquadsService {
             nickname: true,
             role: true,
             avatarUrl: true,
+            avatar: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
           },
         },
         logo: {
@@ -124,6 +130,12 @@ export class SquadsService {
             role: true,
             avatarUrl: true,
             status: true,
+            avatar: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
           },
           orderBy: {
             nickname: 'asc',
@@ -135,6 +147,18 @@ export class SquadsService {
             nickname: true,
             role: true,
             avatarUrl: true,
+            avatar: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+          },
+        },
+        logo: {
+          select: {
+            id: true,
+            url: true,
           },
         },
         side: {
