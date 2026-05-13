@@ -69,6 +69,7 @@ services:
 
   pbo-parser:
     container_name: asp-pbo-parser
+    platform: linux/amd64
     image: agentos/pbo-parser:main
     ports:
       - ${PBO_PARSER_PORT?}:${PBO_PARSER_PORT?}
