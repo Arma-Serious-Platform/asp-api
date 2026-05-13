@@ -9,6 +9,28 @@ import { HeadquartersService } from "../headquarters/headquarters.service";
 
 @Injectable()
 export class WeekendsService {
+  /** Game admin user + squad name and side (squad null if user has no squad). */
+  private readonly gameAdminSelect = {
+    id: true,
+    nickname: true,
+    role: true,
+    avatarUrl: true,
+    squad: {
+      select: {
+        id: true,
+        name: true,
+        tag: true,
+        side: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.UserSelect;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly headquartersService: HeadquartersService,
@@ -92,6 +114,9 @@ export class WeekendsService {
                   type: true,
                 },
               },
+              admin: {
+                select: this.gameAdminSelect,
+              },
             },
             orderBy: [{ position: 'asc' }, { date: 'asc' }],
           },
@@ -138,6 +163,9 @@ export class WeekendsService {
                 name: true,
                 type: true,
               },
+            },
+            admin: {
+              select: this.gameAdminSelect,
             },
           },
           orderBy: [{ position: 'asc' }, { date: 'asc' }],
@@ -264,6 +292,9 @@ export class WeekendsService {
                 type: true,
               },
             },
+            admin: {
+              select: this.gameAdminSelect,
+            },
           },
           orderBy: [{ position: 'asc' }, { date: 'asc' }],
         },
@@ -319,6 +350,9 @@ export class WeekendsService {
                 name: true,
                 type: true,
               },
+            },
+            admin: {
+              select: this.gameAdminSelect,
             },
           },
           orderBy: [{ position: 'asc' }, { date: 'asc' }],
@@ -481,6 +515,9 @@ export class WeekendsService {
             type: true,
           },
         },
+        admin: {
+          select: this.gameAdminSelect,
+        },
         weekend: {
           select: {
             id: true,
@@ -615,6 +652,9 @@ export class WeekendsService {
             name: true,
             type: true,
           },
+        },
+        admin: {
+          select: this.gameAdminSelect,
         },
         weekend: {
           select: {
