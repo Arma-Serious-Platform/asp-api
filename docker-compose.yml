@@ -68,7 +68,6 @@ services:
       - minio-data:/data
 
   pbo-parser:
-    platform: linux/amd64
     container_name: asp-pbo-parser
     image: agentos/pbo-parser:main
     ports:
