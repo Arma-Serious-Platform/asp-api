@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileFieldsInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import { FindMissionsDto } from "./dto/find-missions.dto";
 import { MissionsService } from "./missions.service";
 import { AuthGuard } from "src/shared/guards/auth.guard";
+import { Roles } from "src/shared/decorators/roles.decorator";
 import { CreateMissionDto } from "./dto/create-mission.dto";
 import { RequestType } from "src/utils/types";
 import { FileValidation } from "src/shared/decorators/file.dectorator";
@@ -54,6 +55,13 @@ export class MissionsController {
   @UseInterceptors(FileInterceptor('image'))
   update(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) image: File, @Param('id') id: string, @Body() dto: UpdateMissionDto, @Req() req: RequestType) {
     return this.missionsService.updateMission(dto, id, req.userId, image);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  @Roles(['OWNER', 'TECH_ADMIN'])
+  remove(@Param('id') id: string, @Req() req: RequestType) {
+    return this.missionsService.deleteMission(id, req.userId);
   }
 
   @Post(':id/versions')

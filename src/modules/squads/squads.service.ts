@@ -686,7 +686,7 @@ export class SquadsService {
       throw new BadRequestException('Invitation is not pending');
     }
 
-    if (invitation.squad.leader.id !== userId) {
+    if (!invitation.squad.leader || invitation.squad.leader.id !== userId) {
       throw new BadRequestException('You are not the leader of this squad');
     }
 

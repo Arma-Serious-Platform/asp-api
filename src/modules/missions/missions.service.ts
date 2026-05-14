@@ -249,6 +249,90 @@ export class MissionsService {
     });
   }
 
+  async deleteMission(missionId: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role !== UserRole.OWNER && user.role !== UserRole.TECH_ADMIN) {
+      throw new ForbiddenException(
+        'Only owner or tech admin can delete a mission',
+      );
+    }
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: {
+        id: true,
+        imageId: true,
+        missionVersions: {
+          select: {
+            id: true,
+            fileId: true,
+            uniformScreenshots: { select: { fileId: true } },
+          },
+        },
+      },
+    });
+
+    if (!mission) {
+      throw new NotFoundException('Mission not found');
+    }
+
+    const versionIds = mission.missionVersions.map((v) => v.id);
+    const fileIdsToDelete = new Set<string>();
+    if (mission.imageId) {
+      fileIdsToDelete.add(mission.imageId);
+    }
+    for (const v of mission.missionVersions) {
+      fileIdsToDelete.add(v.fileId);
+      for (const s of v.uniformScreenshots) {
+        fileIdsToDelete.add(s.fileId);
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.game.deleteMany({ where: { missionId } });
+
+      while ((await tx.missionComment.count({ where: { missionId } })) > 0) {
+        const { count } = await tx.missionComment.deleteMany({
+          where: {
+            missionId,
+            replies: { none: {} },
+          },
+        });
+        if (count === 0) {
+          throw new BadRequestException(
+            'Unable to delete mission comments (unexpected structure)',
+          );
+        }
+      }
+
+      if (versionIds.length > 0) {
+        await tx.missionWeaponry.deleteMany({
+          where: { missionVersionId: { in: versionIds } },
+        });
+        await tx.missionVersionScreenshot.deleteMany({
+          where: { missionVersionId: { in: versionIds } },
+        });
+        await tx.missionVersion.deleteMany({ where: { missionId } });
+      }
+
+      await tx.mission.delete({ where: { id: missionId } });
+    });
+
+    for (const fileId of fileIdsToDelete) {
+      await this.minioService.deleteFile(fileId);
+    }
+
+    return { id: missionId };
+  }
+
   async createMissionVersion(
     dto: CreateMissionVersionDto,
     missionId: string,
