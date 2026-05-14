@@ -233,7 +233,7 @@ model MissionComment {
 model Island {
   id        String    @id @default(uuid())
   name      String
-  code      String?   @unique
+  code      String    @unique
   missions  Mission[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

@@ -12,6 +12,7 @@ import { WeekendsModule } from './modules/weekends/weekends.module';
 import { MissionCommentsModule } from './modules/mission-comments/mission-comments.module';
 import { ChatsModule } from './modules/chats/chats.module';
 import { HeadquartersModule } from './modules/headquarters/headquarters.module';
+import { IslandsModule } from './modules/islands/islands.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { HeadquartersModule } from './modules/headquarters/headquarters.module';
     HeadquartersModule,
     MissionCommentsModule,
     ChatsModule,
+    IslandsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
