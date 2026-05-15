@@ -3,6 +3,7 @@ import { FindMissionsDto } from "./dto/find-missions.dto";
 import { CreateMissionDto } from "./dto/create-mission.dto";
 import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
+import { resolveMissionVersionBucket } from "src/infrastructure/minio/mission-version-bucket";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { MissionStatus, MissionType, Prisma, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
@@ -343,11 +344,23 @@ export class MissionsService {
       throw new BadRequestException("Mission file is required");
     }
 
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: { missionType: true },
+    });
+    if (!mission) {
+      throw new NotFoundException('Mission not found');
+    }
+
     const slotsBySide = await this.pboParserService.parseMissionSlots(dto.file);
     const missionAttackSlots = this.buildMissionSideSlots(slotsBySide, dto.attackSideType);
     const missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, dto.defenseSideType);
 
-    const { id: fileId } = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, dto.file);
+    const versionBucket = resolveMissionVersionBucket(
+      MissionStatus.PENDING_APPROVAL,
+      mission.missionType,
+    );
+    const { id: fileId } = await this.minioService.uploadFile(versionBucket, dto.file);
     const uploadedAttackScreenshots = await Promise.all(
       attackScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
     );
@@ -436,7 +449,8 @@ export class MissionsService {
         },
         mission: {
           select: {
-            authorId: true
+            authorId: true,
+            missionType: true,
           }
         }
       }
@@ -463,7 +477,11 @@ export class MissionsService {
       updateDto.missionAttackSlots = this.buildMissionSideSlots(slotsBySide, dto.attackSideType ?? missionVersion.attackSideType);
       updateDto.missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, dto.defenseSideType ?? missionVersion.defenseSideType);
 
-      const newFile = await this.minioService.uploadFile(ASP_BUCKET.MISSIONS, file);
+      const versionBucket = resolveMissionVersionBucket(
+        MissionStatus.PENDING_APPROVAL,
+        missionVersion.mission.missionType,
+      );
+      const newFile = await this.minioService.uploadFile(versionBucket, file);
       previousFileId = missionVersion.fileId;
       updateDto.file = { connect: { id: newFile.id } };
 
@@ -623,9 +641,31 @@ export class MissionsService {
       throw new ForbiddenException('You are not authorized to change mission version status');
     }
 
+    const version = await this.prisma.missionVersion.findUnique({
+      where: { id: versionId },
+      select: {
+        id: true,
+        fileId: true,
+        mission: { select: { missionType: true } },
+      },
+    });
+
+    if (!version) {
+      throw new NotFoundException('Mission version not found');
+    }
+
+    const targetBucket = resolveMissionVersionBucket(
+      dto.status,
+      version.mission.missionType,
+    );
+    await this.minioService.moveFileToBucket(version.fileId, targetBucket);
+
     return await this.prisma.missionVersion.update({
       where: { id: versionId },
       data: { status: dto.status },
+      include: {
+        file: true,
+      },
     });
   }
 }

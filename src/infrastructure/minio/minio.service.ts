@@ -31,6 +31,15 @@ export class MinioService {
     return buffer;
   }
 
+  private buildPublicUrl(bucket: ASP_BUCKET, objectName: string): string {
+    const isLocal = process.env.MINIO_ENDPOINT === 'localhost';
+    const host = process.env.MINIO_ENDPOINT || 'localhost';
+    const port = process.env.MINIO_PORT || '9000';
+    const proto = isLocal ? 'http' : 'https';
+    const portPart = isLocal ? `:${port}` : '';
+    return `${proto}://${host}${portPart}/${bucket}/${objectName}`;
+  }
+
   private async ensureBucket(bucket: ASP_BUCKET) {
     try {
       const exists = await this.minioClient
@@ -86,8 +95,7 @@ export class MinioService {
         buffer = await this.convertImageToWebp(file);
       }
       const objectName = isWebpConversion ? `${id}.${extension}` : file.originalname as string;
-      const isLocal = process.env.MINIO_ENDPOINT === 'localhost';
-      const url = `${isLocal ? 'http' : 'https'}://${process.env.MINIO_ENDPOINT}${isLocal ? ':' + process.env.MINIO_PORT : ''}/${bucket}/${objectName}`;
+      const url = this.buildPublicUrl(bucket, objectName);
 
       if (!extension) throw new Error('Unsupported file type');
 
@@ -112,6 +120,53 @@ export class MinioService {
       this.logger.error('Failed to create file record', error);
       throw new Error('Failed to create file record');
     }
+  }
+
+  /**
+   * Copies the object to another bucket (same object key), removes the old object,
+   * and updates the File row (including `url`, which changes when the bucket changes).
+   */
+  async moveFileToBucket(fileId: string, targetBucket: ASP_BUCKET) {
+    const file = await this.prisma.file.findUnique({ where: { id: fileId } });
+
+    if (!file) {
+      throw new Error('File not found');
+    }
+
+    if (file.bucket === targetBucket) {
+      return file;
+    }
+
+    await this.ensureBucket(targetBucket);
+
+    const sourceObject = `/${file.bucket}/${file.filename}`;
+    const objectExists = await this.minioClient
+      .statObject(file.bucket, file.filename)
+      .then(() => true)
+      .catch(() => false);
+
+    if (objectExists) {
+      await this.minioClient.copyObject(
+        targetBucket,
+        file.filename,
+        sourceObject,
+      );
+      await this.minioClient.removeObject(file.bucket, file.filename);
+    }
+
+    return this.prisma.file.update({
+      where: { id: fileId },
+      data: {
+        bucket: targetBucket,
+        url: this.buildPublicUrl(targetBucket, file.filename),
+      },
+      select: {
+        id: true,
+        url: true,
+        filename: true,
+        bucket: true,
+      },
+    });
   }
 
   async deleteFile(fileId: string) {
