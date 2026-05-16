@@ -342,6 +342,10 @@ export class SquadsService {
         data: { squadId: null },
       });
 
+      await tx.squadInvitation.deleteMany({
+        where: { squadId: id },
+      });
+
       await tx.squad.delete({
         where: { id },
       });
