@@ -261,7 +261,11 @@ export class HeadquartersService {
   async findPlansByGame(gameId: string, userId: string) {
     const sideId = await this.getAllowedSideIdForUser(userId);
     return this.prisma.gamePlan.findMany({
-      where: { gameId, sideId },
+      where: {
+        gameId,
+        sideId,
+        ...this.publishedWeekendPlanWhere,
+      },
       include: this.gamePlanInclude,
       orderBy: {
         createdAt: 'asc',
@@ -272,7 +276,11 @@ export class HeadquartersService {
   async findPlanById(id: string, userId: string) {
     const sideId = await this.getAllowedSideIdForUser(userId);
     const gamePlan = await this.prisma.gamePlan.findFirst({
-      where: { id, sideId },
+      where: {
+        id,
+        sideId,
+        ...this.publishedWeekendPlanWhere,
+      },
       include: this.gamePlanInclude,
     });
 
@@ -830,6 +838,14 @@ export class HeadquartersService {
 
     return user;
   }
+
+  private readonly publishedWeekendPlanWhere = {
+    game: {
+      weekend: {
+        published: true,
+      },
+    },
+  } satisfies Prisma.GamePlanWhereInput;
 
   private async getAllowedSideIdForUser(userId: string) {
     const user = await this.prisma.user.findUnique({
