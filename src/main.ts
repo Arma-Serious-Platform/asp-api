@@ -1,15 +1,18 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { seed } from 'prisma/seed';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { HttpErrorLoggingFilter } from './shared/filters/http-error-logging.filter';
 
 async function bootstrap() {
   await seed();
   const app = await NestFactory.create(AppModule);
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new HttpErrorLoggingFilter(httpAdapter));
   app.useWebSocketAdapter(new IoAdapter(app));
   app.setGlobalPrefix('api');
   app.useGlobalPipes(

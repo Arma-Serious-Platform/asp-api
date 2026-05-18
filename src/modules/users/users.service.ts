@@ -640,6 +640,13 @@ export class UsersService {
       };
     }
 
+    if (dto.hasSquad !== undefined) {
+      options.where = {
+        ...options.where,
+        squadId: dto.hasSquad ? { not: null } : null,
+      };
+    }
+
     options.skip = skip;
     options.take = take;
     options.include = {
