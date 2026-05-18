@@ -393,11 +393,20 @@ export class WeekendsService {
   async updateGame(gameId: string, dto: UpdateGameDto) {
     const game = await this.prisma.game.findUnique({
       where: { id: gameId },
+      select: {
+        id: true,
+        attackSideId: true,
+        defenseSideId: true,
+      },
     });
 
     if (!game) {
       throw new NotFoundException('Game not found');
     }
+
+    const sidesChanged =
+      (dto.attackSideId !== undefined && dto.attackSideId !== game.attackSideId) ||
+      (dto.defenseSideId !== undefined && dto.defenseSideId !== game.defenseSideId);
 
     // Validate mission version belongs to mission when updating mission/version
     if (dto.missionVersionId !== undefined || dto.missionId !== undefined) {
@@ -486,7 +495,7 @@ export class WeekendsService {
       }
     }
 
-    return await this.prisma.game.update({
+    const updatedGame = await this.prisma.game.update({
       where: { id: gameId },
       data: updateData,
       include: {
@@ -526,6 +535,12 @@ export class WeekendsService {
         },
       },
     });
+
+    if (sidesChanged) {
+      await this.headquartersService.resetGamePlansForGame(gameId);
+    }
+
+    return updatedGame;
   }
 
   async deleteGame(gameId: string) {

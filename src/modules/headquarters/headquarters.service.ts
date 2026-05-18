@@ -127,12 +127,47 @@ export class HeadquartersService {
   }
 
   /**
+   * Rebuilds HQ slots from the current game sides/mission and clears commander + plan URL.
+   * Use when attack/defense sides change on a game.
+   */
+  async resetGamePlansForGame(gameId: string) {
+    const affectedPlanIds = await this.rebuildGamePlanSlotsForGame(gameId);
+
+    if (affectedPlanIds.length > 0) {
+      await this.prisma.gamePlan.updateMany({
+        where: { id: { in: affectedPlanIds } },
+        data: {
+          gameCommanderId: null,
+          planUrl: null,
+        },
+      });
+    }
+
+    await this.emitGamePlanUpdates(affectedPlanIds);
+  }
+
+  /**
    * Rebuilds all HQ slot rows from the mission version JSON for every game that uses this version.
    * Clears squad–slot links (implicit M2M); squads are not deleted.
    */
   async resetGamePlanSlotsForMissionVersion(missionVersionId: string) {
     const games = await this.prisma.game.findMany({
       where: { missionVersionId },
+      select: { id: true },
+    });
+
+    const affectedPlanIds: string[] = [];
+    for (const game of games) {
+      const planIds = await this.rebuildGamePlanSlotsForGame(game.id);
+      affectedPlanIds.push(...planIds);
+    }
+
+    await this.emitGamePlanUpdates(affectedPlanIds);
+  }
+
+  private async rebuildGamePlanSlotsForGame(gameId: string): Promise<string[]> {
+    const game = await this.prisma.game.findUnique({
+      where: { id: gameId },
       select: {
         id: true,
         attackSideId: true,
@@ -146,28 +181,36 @@ export class HeadquartersService {
       },
     });
 
-    const affectedPlanIds: string[] = [];
-
-    for (const game of games) {
-      const plans = await this.prisma.gamePlan.findMany({
-        where: {
-          gameId: game.id,
-          side: { type: { in: [SideType.BLUE, SideType.RED] } },
-        },
-        select: { id: true, sideId: true },
-      });
-
-      for (const plan of plans) {
-        const rows = this.buildGamePlanSlotRows(game, plan.sideId, plan.id);
-        await this.prisma.$transaction([
-          this.prisma.gamePlanSlot.deleteMany({ where: { gamePlanId: plan.id } }),
-          this.prisma.gamePlanSlot.createMany({ data: rows }),
-        ]);
-        affectedPlanIds.push(plan.id);
-      }
+    if (!game) {
+      throw new NotFoundException('Game not found');
     }
 
-    for (const planId of new Set(affectedPlanIds)) {
+    await this.ensureGamePlansForGame(gameId);
+
+    const plans = await this.prisma.gamePlan.findMany({
+      where: {
+        gameId: game.id,
+        side: { type: { in: [SideType.BLUE, SideType.RED] } },
+      },
+      select: { id: true, sideId: true },
+    });
+
+    const affectedPlanIds: string[] = [];
+
+    for (const plan of plans) {
+      const rows = this.buildGamePlanSlotRows(game, plan.sideId, plan.id);
+      await this.prisma.$transaction([
+        this.prisma.gamePlanSlot.deleteMany({ where: { gamePlanId: plan.id } }),
+        this.prisma.gamePlanSlot.createMany({ data: rows }),
+      ]);
+      affectedPlanIds.push(plan.id);
+    }
+
+    return affectedPlanIds;
+  }
+
+  private async emitGamePlanUpdates(planIds: string[]) {
+    for (const planId of new Set(planIds)) {
       const updated = await this.prisma.gamePlan.findUnique({
         where: { id: planId },
         include: this.gamePlanInclude,
