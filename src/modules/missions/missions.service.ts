@@ -84,6 +84,9 @@ export class MissionsService {
     }
 
     const options: Prisma.MissionFindManyArgs = {
+      orderBy: {
+        createdAt: 'desc',
+      },
       where: {
         name: { contains: search, mode: 'insensitive' },
         ...(authorId ? { authorId } : {}),
@@ -148,10 +151,7 @@ export class MissionsService {
 
     const [total, data] = await this.prisma.$transaction([
       this.prisma.mission.count({ where: options.where }),
-      this.prisma.mission.findMany({
-        where: options.where,
-        include: options.include,
-      }),
+      this.prisma.mission.findMany(options),
     ]);
 
     return {
