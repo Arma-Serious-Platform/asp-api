@@ -215,6 +215,30 @@ export class UsersService {
     });
   }
 
+  async disconnectSteam(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, steamId: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.steamId) {
+      return this.prisma.user.findUnique({
+        where: { id: userId },
+        omit: { password: true },
+      });
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { steamId: null },
+      omit: { password: true },
+    });
+  }
+
   async me(userId: string) {
     const user = await this.prisma.user.findFirst({
       where: {

@@ -77,6 +77,12 @@ export class UsersController {
     return this.usersService.changeNickname(req.userId, dto);
   }
 
+  @Delete('me/steamId')
+  @UseGuards(AuthGuard)
+  disconnectSteam(@Req() req: RequestType) {
+    return this.usersService.disconnectSteam(req.userId);
+  }
+
   @Get('/steam-login')
   steamLogin(
     @Query('accessToken') accessToken: string,
