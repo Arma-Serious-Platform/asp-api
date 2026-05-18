@@ -36,6 +36,7 @@ import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
+import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { Request, Response } from 'express';
 
 @Controller('users')
@@ -68,6 +69,12 @@ export class UsersController {
   @UseGuards(AuthGuard)
   updateMe(@Body() updateMeDto: UpdateMeDto, @Req() req: RequestType) {
     return this.usersService.updateMe(req.userId, updateMeDto);
+  }
+
+  @Patch('me/change-nickname')
+  @UseGuards(AuthGuard)
+  changeNickname(@Body() dto: ChangeNicknameDto, @Req() req: RequestType) {
+    return this.usersService.changeNickname(req.userId, dto);
   }
 
   @Get('/steam-login')

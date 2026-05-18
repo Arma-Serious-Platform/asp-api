@@ -28,6 +28,7 @@ import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
+import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { EmailTemplateService } from 'src/shared/services/email-template.service';
 
 @Injectable()
@@ -170,6 +171,47 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id: userId },
       data: updateMeDto,
+    });
+  }
+
+  async changeNickname(userId: string, dto: ChangeNicknameDto) {
+    const nickname = dto.nickname.trim();
+
+    if (!nickname) {
+      throw new BadRequestException('Nickname is required');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, nickname: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.nickname === nickname) {
+      return this.prisma.user.findUnique({
+        where: { id: userId },
+        omit: { password: true },
+      });
+    }
+
+    const nicknameTaken = await this.prisma.user.findFirst({
+      where: {
+        nickname,
+        NOT: { id: userId },
+      },
+    });
+
+    if (nicknameTaken) {
+      throw new BadRequestException('Nickname is already taken');
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { nickname },
+      omit: { password: true },
     });
   }
 
