@@ -34,42 +34,42 @@ export class SidesController {
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Post()
   create(@Body() dto: CreateSideDto) {
     return this.sidesService.create(dto);
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateSideDto) {
     return this.sidesService.update(id, dto);
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.sidesService.delete(id);
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Post(':id/assign-squad/:squadId')
   assignSquad(@Param() params: AssignSquadDto) {
     return this.sidesService.assignSquad(params);
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Post(':sideId/assign-leader/:leaderId')
   assignLeader(@Param() params: AssignLeaderDto) {
     return this.sidesService.assignLeader(params);
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Post(':id/unassign-squad/:squadId')
   unassignSquad(@Param() params: UnassignSquadDto) {
     return this.sidesService.unassignSquad(params);

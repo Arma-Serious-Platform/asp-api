@@ -13,6 +13,7 @@ import { MissionCommentsModule } from './modules/mission-comments/mission-commen
 import { ChatsModule } from './modules/chats/chats.module';
 import { HeadquartersModule } from './modules/headquarters/headquarters.module';
 import { IslandsModule } from './modules/islands/islands.module';
+import { RulesModule } from './modules/rules/rules.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { IslandsModule } from './modules/islands/islands.module';
     MissionCommentsModule,
     ChatsModule,
     IslandsModule,
+    RulesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

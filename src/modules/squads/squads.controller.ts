@@ -48,7 +48,7 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @UseInterceptors(FileInterceptor('logo'))
   @Post()
   create(@FileValidation() logo: File, @Body() dto: CreateSquadDto) {
@@ -56,7 +56,7 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @UseInterceptors(FileInterceptor('logo'))
   @Patch(':id')
   update(@FileValidation({ required: false }) logo: File, @Param('id') id: string, @Body() dto: UpdateSquadDto) {
@@ -64,7 +64,7 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Delete(':id')
   delete(@Param() dto: DeleteSquadDto) {
     return this.squadsService.delete(dto.id);
