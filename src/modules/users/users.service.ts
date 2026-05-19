@@ -963,6 +963,13 @@ export class UsersService {
       };
     }
 
+    if (dto.hasMission !== undefined) {
+      options.where = {
+        ...options.where,
+        missions: dto.hasMission ? { some: {} } : { none: {} },
+      };
+    }
+
     options.skip = skip;
     options.take = take;
     options.include = {
