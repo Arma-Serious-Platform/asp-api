@@ -41,4 +41,21 @@ export class GetUsersDto extends PaginationDto {
   })
   @IsBoolean()
   hasSquad?: boolean;
+
+  @ApiPropertyOptional({ description: 'Filter users who have authored at least one mission' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (value === true || value === 'true') {
+      return true;
+    }
+    if (value === false || value === 'false') {
+      return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  hasMission?: boolean;
 }
