@@ -161,7 +161,7 @@ export class UsersController {
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
   changeUserNickname(@Param('userId') userId: string, @Body() dto: ChangeNicknameDto, @Req() req: RequestType) {
-    return this.usersService.changeUserNickname(userId, dto, req.role);
+    return this.usersService.changeNickname(userId, dto, req.role);
   }
 
   @Post(':userId/warnings')

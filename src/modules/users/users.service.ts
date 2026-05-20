@@ -203,26 +203,7 @@ export class UsersService {
     });
   }
 
-  async changeNickname(userId: string, dto: ChangeNicknameDto) {
-    return this.updateUserNickname(userId, dto);
-  }
-
-  async changeUserNickname(userId: string, dto: ChangeNicknameDto, actorRole: UserRole) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    this.ensureCanModerateTarget(user.role, actorRole);
-
-    return this.updateUserNickname(userId, dto);
-  }
-
-  private async updateUserNickname(userId: string, dto: ChangeNicknameDto) {
+  async changeNickname(userId: string, dto: ChangeNicknameDto, actorRole?: UserRole) {
     const nickname = dto.nickname.trim();
 
     if (!nickname) {
@@ -231,11 +212,15 @@ export class UsersService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, nickname: true },
+      select: { id: true, nickname: true, role: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    if (actorRole) {
+      this.ensureCanModerateTarget(user.role, actorRole);
     }
 
     if (user.nickname === nickname) {
