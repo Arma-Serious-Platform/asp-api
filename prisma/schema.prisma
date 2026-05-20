@@ -76,6 +76,7 @@ model User {
   nickname                    String            @unique
   password                    String
   steamId                     String?           @unique
+  lastIp                      String?
   abilities                   SoldierAbility[]
   squadId                     String?
   activationToken             String?
@@ -93,6 +94,11 @@ model User {
   side                        Side?
   gamePlansAsCommander        GamePlan[]        @relation("GamePlanCommander")
   gamePlanComments            GamePlanComment[]
+  warnings                    UserWarning[]     @relation("UserWarnings")
+  issuedWarnings              UserWarning[]     @relation("IssuedUserWarnings")
+  removedWarnings             UserWarning[]     @relation("RemovedUserWarnings")
+  punishments                 UserPunishment[]  @relation("UserPunishments")
+  issuedPunishments           UserPunishment[]  @relation("IssuedUserPunishments")
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
@@ -105,6 +111,54 @@ model User {
   messages                    Message[] @relation("UserMessages")
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
+}
+
+model UserWarning {
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation("UserWarnings", fields: [userId], references: [id], onDelete: Cascade)
+  adminId           String?
+  admin             User?            @relation("IssuedUserWarnings", fields: [adminId], references: [id], onDelete: SetNull)
+  removedById       String?
+  removedBy         User?            @relation("RemovedUserWarnings", fields: [removedById], references: [id], onDelete: SetNull)
+  reason            String
+  removeReason      String?
+  removedAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  punishmentEntries UserPunishment[]
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([removedById])
+  @@index([removedAt])
+}
+
+model UserPunishment {
+  id            String             @id @default(uuid())
+  userId        String
+  user          User               @relation("UserPunishments", fields: [userId], references: [id], onDelete: Cascade)
+  adminId       String?
+  admin         User?              @relation("IssuedUserPunishments", fields: [adminId], references: [id], onDelete: SetNull)
+  warningId     String?
+  warning       UserWarning?       @relation(fields: [warningId], references: [id], onDelete: SetNull)
+  type          UserPunishmentType
+  reason        String?
+  bannedUntil   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([warningId])
+  @@index([type])
+}
+
+model SiteSetting {
+  key       String   @id
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Squad {
@@ -364,10 +418,20 @@ enum UserStatus {
 
 enum UserRole {
   OWNER
+  SERVER_ADMIN
   TECH_ADMIN
+  UVK
   GAME_ADMIN
   MINI_ADMIN
   USER
+}
+
+enum UserPunishmentType {
+  WARNING
+  WARNING_REMOVED
+  TEMP_BAN
+  PERMANENT_BAN
+  UNBAN
 }
 
 enum SoldierAbility {

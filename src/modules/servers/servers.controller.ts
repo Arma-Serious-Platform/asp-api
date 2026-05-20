@@ -22,21 +22,21 @@ export class ServersController {
 
   @Post()
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN'])
   create(@Body() createServerDto: CreateServerDto) {
     return this.serversService.create(createServerDto);
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN'])
   update(@Param('id') id: string, @Body() editServerDto: EditServerDto) {
     return this.serversService.update(id, editServerDto);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN'])
   delete(@Param('id') id: string) {
     return this.serversService.delete(id);
   }

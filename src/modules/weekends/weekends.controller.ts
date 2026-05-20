@@ -23,42 +23,42 @@ export class WeekendsController {
 
   @Post()
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   create(@Body() createWeekendDto: CreateWeekendDto) {
     return this.weekendsService.create(createWeekendDto);
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   update(@Param('id') id: string, @Body() updateWeekendDto: UpdateWeekendDto) {
     return this.weekendsService.update(id, updateWeekendDto);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   delete(@Param('id') id: string) {
     return this.weekendsService.delete(id);
   }
 
   @Post(':weekendId/games')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   createGame(@Param('weekendId') weekendId: string, @Body() createGameDto: CreateGameDto) {
     return this.weekendsService.createGame(weekendId, createGameDto);
   }
 
   @Patch(':weekendId/games/:gameId')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   updateGame(@Param('gameId') gameId: string, @Body() updateGameDto: UpdateGameDto) {
     return this.weekendsService.updateGame(gameId, updateGameDto);
   }
 
   @Delete(':weekendId/games/:gameId')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN', 'GAME_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   deleteGame(@Param('gameId') gameId: string) {
     return this.weekendsService.deleteGame(gameId);
   }

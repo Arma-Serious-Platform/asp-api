@@ -59,7 +59,7 @@ export class MissionsController {
 
   @Delete(':id')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER', 'TECH_ADMIN'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   remove(@Param('id') id: string, @Req() req: RequestType) {
     return this.missionsService.deleteMission(id, req.userId);
   }

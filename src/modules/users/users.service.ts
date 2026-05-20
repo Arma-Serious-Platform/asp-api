@@ -20,7 +20,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Prisma, User, UserRole } from '@prisma/client';
+import { Prisma, User, UserPunishmentType, UserRole } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
@@ -30,10 +30,22 @@ import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { EmailTemplateService } from 'src/shared/services/email-template.service';
+import { CreateUserWarningDto } from './dto/create-user-warning.dto';
+import { OptionalPunishmentReasonDto, PunishmentReasonDto } from './dto/punishment-reason.dto';
 
 @Injectable()
 export class UsersService {
   private static readonly STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login';
+
+  private static readonly ROLE_RANK: Record<UserRole, number> = {
+    [UserRole.USER]: 0,
+    [UserRole.MINI_ADMIN]: 1,
+    [UserRole.GAME_ADMIN]: 2,
+    [UserRole.TECH_ADMIN]: 3,
+    [UserRole.UVK]: 4,
+    [UserRole.SERVER_ADMIN]: 5,
+    [UserRole.OWNER]: 6,
+  };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,6 +72,23 @@ export class UsersService {
       html: EmailTemplateService.createActivationEmail(activationLink),
     });
   };
+
+  private canSeeSensitiveUsersData(role: UserRole) {
+    return role === UserRole.OWNER || role === UserRole.SERVER_ADMIN;
+  }
+
+  private ensureCanModerateTarget(targetRole: UserRole, actorRole: UserRole) {
+    if (targetRole === UserRole.OWNER) {
+      throw new BadRequestException('You cannot moderate user with OWNER role');
+    }
+
+    if (
+      actorRole !== UserRole.OWNER &&
+      UsersService.ROLE_RANK[actorRole] <= UsersService.ROLE_RANK[targetRole]
+    ) {
+      throw new BadRequestException('You cannot moderate user with your level of access');
+    }
+  }
 
   getFrontendSteamLinkedRedirectUrl() {
     return process.env.FRONTEND_STEAM_LINKED_URL ?? '/';
@@ -174,7 +203,7 @@ export class UsersService {
     });
   }
 
-  async changeNickname(userId: string, dto: ChangeNicknameDto) {
+  async changeNickname(userId: string, dto: ChangeNicknameDto, actorRole?: UserRole) {
     const nickname = dto.nickname.trim();
 
     if (!nickname) {
@@ -183,11 +212,15 @@ export class UsersService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, nickname: true },
+      select: { id: true, nickname: true, role: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    if (actorRole) {
+      this.ensureCanModerateTarget(user.role, actorRole);
     }
 
     if (user.nickname === nickname) {
@@ -433,6 +466,190 @@ export class UsersService {
     };
   }
 
+  async createWarning(userId: string, dto: CreateUserWarningDto, adminId: string, actorRole: UserRole) {
+    const reason = dto.reason.trim();
+
+    if (!reason) {
+      throw new BadRequestException('Warning reason is required');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.ensureCanModerateTarget(user.role, actorRole);
+
+    return this.prisma.$transaction(async tx => {
+      const warning = await tx.userWarning.create({
+        data: {
+          userId,
+          adminId,
+          reason,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              nickname: true,
+            },
+          },
+          admin: {
+            select: {
+              id: true,
+              nickname: true,
+            },
+          },
+        },
+      });
+
+      await tx.userPunishment.create({
+        data: {
+          userId,
+          adminId,
+          warningId: warning.id,
+          type: UserPunishmentType.WARNING,
+          reason,
+        },
+      });
+
+      return warning;
+    });
+  }
+
+  async findWarnings(userId: string, actorRole: UserRole) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.ensureCanModerateTarget(user.role, actorRole);
+
+    return this.prisma.userWarning.findMany({
+      where: { userId, removedAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            nickname: true,
+          },
+        },
+        removedBy: {
+          select: {
+            id: true,
+            nickname: true,
+          },
+        },
+      },
+    });
+  }
+
+  async removeWarning(warningId: string, dto: OptionalPunishmentReasonDto, adminId: string, actorRole: UserRole) {
+    const warning = await this.prisma.userWarning.findUnique({
+      where: { id: warningId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!warning) {
+      throw new NotFoundException('Warning not found');
+    }
+
+    if (warning.removedAt) {
+      throw new BadRequestException('Warning is already removed');
+    }
+
+    this.ensureCanModerateTarget(warning.user.role, actorRole);
+
+    const reason = dto.reason?.trim() || null;
+
+    return this.prisma.$transaction(async tx => {
+      const removedWarning = await tx.userWarning.update({
+        where: { id: warningId },
+        data: {
+          removedAt: new Date(),
+          removedById: adminId,
+          removeReason: reason,
+        },
+        include: {
+          admin: {
+            select: {
+              id: true,
+              nickname: true,
+            },
+          },
+          removedBy: {
+            select: {
+              id: true,
+              nickname: true,
+            },
+          },
+        },
+      });
+
+      await tx.userPunishment.create({
+        data: {
+          userId: warning.userId,
+          adminId,
+          warningId,
+          type: UserPunishmentType.WARNING_REMOVED,
+          reason,
+        },
+      });
+
+      return removedWarning;
+    });
+  }
+
+  async findPunishmentHistory(userId: string, actorRole: UserRole) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.ensureCanModerateTarget(user.role, actorRole);
+
+    return this.prisma.userPunishment.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            nickname: true,
+          },
+        },
+        warning: {
+          select: {
+            id: true,
+            reason: true,
+            removedAt: true,
+            removeReason: true,
+          },
+        },
+      },
+    });
+  }
+
   private async generateTokens(user: { id: string }) {
     const token = await this.jwtService.signAsync(
       {
@@ -460,7 +677,7 @@ export class UsersService {
     };
   }
 
-  async login(loginUserDto: LoginUserDto) {
+  async login(loginUserDto: LoginUserDto, lastIp?: string) {
     const { emailOrNickname, password } = loginUserDto;
 
     const user = await this.prisma.user.findFirst({
@@ -531,6 +748,13 @@ export class UsersService {
       }
     }
 
+    if (lastIp && user.lastIp !== lastIp) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastIp },
+      });
+    }
+
     const data = await this.generateTokens(user);
 
     const { password: _, ...userWithoutPassword } = user;
@@ -538,6 +762,7 @@ export class UsersService {
     return {
       user: {
         ...userWithoutPassword,
+        lastIp: lastIp ?? user.lastIp,
       },
       ...data,
     };
@@ -680,15 +905,25 @@ export class UsersService {
 
   async findAll(dto: GetUsersDto, userRole: UserRole) {
     const { search, take = 50, skip = 0 } = dto;
+    const canSeeSensitiveUsersData = this.canSeeSensitiveUsersData(userRole);
 
     const options: Prisma.UserFindManyArgs = {};
 
     if (search) {
+      const searchConditions: Prisma.UserWhereInput[] = [
+        { nickname: { contains: dto.search, mode: 'insensitive' } },
+      ];
+
+      if (canSeeSensitiveUsersData) {
+        searchConditions.push(
+          { email: { contains: dto.search, mode: 'insensitive' } },
+          { steamId: { contains: dto.search, mode: 'insensitive' } },
+          { lastIp: { contains: dto.search, mode: 'insensitive' } },
+        );
+      }
+
       options.where = {
-        OR: [
-          [UserRole.OWNER, UserRole.TECH_ADMIN].some(role => role === userRole) ? { email: { contains: dto.search, mode: 'insensitive' } } : {},
-          { nickname: { contains: dto.search, mode: 'insensitive' } },
-        ],
+        OR: searchConditions,
       };
     }
 
@@ -737,16 +972,28 @@ export class UsersService {
           side: true
         },
       },
+      warnings: {
+        where: {
+          removedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      },
     };
     options.omit = {
       squadId: true,
-      email: true,
       activationToken: true,
       resetPasswordToken: true,
       password: true,
       abilities: true,
       resetPasswordTokenExpiresAt: true,
       activationTokenExpiresAt: true,
+      ...(canSeeSensitiveUsersData ? {} : {
+        email: true,
+        steamId: true,
+        lastIp: true,
+      }),
     };
     options.orderBy = {
       createdAt: 'desc',
@@ -757,8 +1004,16 @@ export class UsersService {
       this.prisma.user.count({ where: options.where }),
     ]);
 
+    const usersWithWarnings = data as Array<(typeof data)[number] & { warnings: { id: string }[] }>;
+    const dataWithActiveWarningsCount = usersWithWarnings.map(({ warnings, ...user }) => ({
+      ...user,
+      _count: {
+        warnings: warnings.length,
+      },
+    }));
+
     return {
-      data,
+      data: dataWithActiveWarningsCount,
       total,
     };
   }
@@ -789,7 +1044,6 @@ export class UsersService {
         youtubeUrl: true,
         twitchUrl: true,
         telegramUrl: true,
-        steamId: true,
       },
     });
   }
@@ -800,7 +1054,7 @@ export class UsersService {
     });
   }
 
-  async banUser(dto: BanUserDto, role: UserRole) {
+  async banUser(dto: BanUserDto, body: PunishmentReasonDto, adminId: string, role: UserRole) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
     });
@@ -809,27 +1063,52 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.role === role) {
-      throw new BadRequestException(
-        'You cannot ban user with your level of access',
-      );
-    }
+    this.ensureCanModerateTarget(user.role, role);
 
     if (user.status === 'BANNED') {
       throw new BadRequestException('User is already banned');
     }
 
-    if (user.role === 'OWNER') {
-      throw new BadRequestException('You cannot ban user with OWNER role');
+    const bannedUntil = new Date(dto.bannedUntil);
+
+    if (Number.isNaN(bannedUntil.getTime())) {
+      throw new BadRequestException('Invalid ban date');
     }
 
-    return this.prisma.user.update({
-      where: { id: dto.userId },
-      data: { status: 'BANNED' },
+    if (bannedUntil <= new Date()) {
+      throw new BadRequestException('Ban date must be in the future');
+    }
+
+    const reason = body.reason.trim();
+
+    if (!reason) {
+      throw new BadRequestException('Ban reason is required');
+    }
+
+    return this.prisma.$transaction(async tx => {
+      const updatedUser = await tx.user.update({
+        where: { id: dto.userId },
+        data: {
+          status: 'BANNED',
+          bannedUntil,
+        },
+      });
+
+      await tx.userPunishment.create({
+        data: {
+          userId: dto.userId,
+          adminId,
+          type: UserPunishmentType.TEMP_BAN,
+          reason,
+          bannedUntil,
+        },
+      });
+
+      return updatedUser;
     });
   }
 
-  async unbanUser(dto: UnbanUserDto, role: UserRole) {
+  async permanentlyBanUser(dto: UnbanUserDto, body: PunishmentReasonDto, adminId: string, role: UserRole) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
     });
@@ -838,15 +1117,69 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.role === role) {
-      throw new BadRequestException(
-        'You cannot unban user with your level of access',
-      );
+    this.ensureCanModerateTarget(user.role, role);
+
+    if (user.status === 'BANNED') {
+      throw new BadRequestException('User is already banned');
     }
 
-    return this.prisma.user.update({
+    const reason = body.reason.trim();
+
+    if (!reason) {
+      throw new BadRequestException('Ban reason is required');
+    }
+
+    return this.prisma.$transaction(async tx => {
+      const updatedUser = await tx.user.update({
+        where: { id: dto.userId },
+        data: {
+          status: 'BANNED',
+          bannedUntil: null,
+        },
+      });
+
+      await tx.userPunishment.create({
+        data: {
+          userId: dto.userId,
+          adminId,
+          type: UserPunishmentType.PERMANENT_BAN,
+          reason,
+        },
+      });
+
+      return updatedUser;
+    });
+  }
+
+  async unbanUser(dto: UnbanUserDto, body: OptionalPunishmentReasonDto, adminId: string, role: UserRole) {
+    const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
-      data: { status: 'ACTIVE' },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.ensureCanModerateTarget(user.role, role);
+
+    const reason = body.reason?.trim() || null;
+
+    return this.prisma.$transaction(async tx => {
+      const updatedUser = await tx.user.update({
+        where: { id: dto.userId },
+        data: { status: 'ACTIVE', bannedUntil: null },
+      });
+
+      await tx.userPunishment.create({
+        data: {
+          userId: dto.userId,
+          adminId,
+          type: UserPunishmentType.UNBAN,
+          reason,
+        },
+      });
+
+      return updatedUser;
     });
   }
 
