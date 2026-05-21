@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { MissionType } from "@prisma/client";
-import { IsEnum, IsOptional, IsString, IsUUID } from "class-validator";
+import { Transform } from "class-transformer";
+import { IsArray, IsEnum, IsOptional, IsString, IsUUID } from "class-validator";
+import { normalizeStringArray } from "src/utils/normalize-string-array";
 
 export class UpdateMissionDto {
   @ApiPropertyOptional()
@@ -22,4 +24,11 @@ export class UpdateMissionDto {
   @IsUUID()
   @IsOptional()
   islandId?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @Transform(normalizeStringArray)
+  @IsArray()
+  @IsUUID('4', { each: true })
+  coauthorIds?: string[];
 }

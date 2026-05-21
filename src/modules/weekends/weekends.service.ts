@@ -31,6 +31,26 @@ export class WeekendsService {
     },
   } satisfies Prisma.UserSelect;
 
+  private readonly missionAuthorSelect = {
+    id: true,
+    nickname: true,
+    role: true,
+    squad: {
+      select: {
+        id: true,
+        name: true,
+        tag: true,
+        side: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.UserSelect;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly headquartersService: HeadquartersService,
@@ -62,17 +82,11 @@ export class WeekendsService {
                     }
                   },
                   author: {
-                    select: {
-                      id: true,
-                      nickname: true,
-                      squad: {
-                        include: {
-                          side: true,
-                        },
-                      },
-                      role: true
-                    }
-                  }
+                    select: this.missionAuthorSelect,
+                  },
+                  coauthors: {
+                    select: this.missionAuthorSelect,
+                  },
                 }
               },
               missionVersion: {
@@ -146,6 +160,12 @@ export class WeekendsService {
                     name: true,
                     description: true,
                     image: true,
+                    author: {
+                      select: this.missionAuthorSelect,
+                    },
+                    coauthors: {
+                      select: this.missionAuthorSelect,
+                    },
                   },
                 },
               },
@@ -274,6 +294,12 @@ export class WeekendsService {
                     name: true,
                     description: true,
                     image: true,
+                    author: {
+                      select: this.missionAuthorSelect,
+                    },
+                    coauthors: {
+                      select: this.missionAuthorSelect,
+                    },
                   },
                 },
               },
@@ -333,6 +359,12 @@ export class WeekendsService {
                     name: true,
                     description: true,
                     image: true,
+                    author: {
+                      select: this.missionAuthorSelect,
+                    },
+                    coauthors: {
+                      select: this.missionAuthorSelect,
+                    },
                   },
                 },
               },
@@ -506,6 +538,12 @@ export class WeekendsService {
                 name: true,
                 description: true,
                 image: true,
+                author: {
+                  select: this.missionAuthorSelect,
+                },
+                coauthors: {
+                  select: this.missionAuthorSelect,
+                },
               },
             },
           },
@@ -650,6 +688,12 @@ export class WeekendsService {
                 name: true,
                 description: true,
                 image: true,
+                author: {
+                  select: this.missionAuthorSelect,
+                },
+                coauthors: {
+                  select: this.missionAuthorSelect,
+                },
               },
             },
           },

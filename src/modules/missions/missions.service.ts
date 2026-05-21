@@ -16,6 +16,26 @@ import { HeadquartersService } from "src/modules/headquarters/headquarters.servi
 
 @Injectable()
 export class MissionsService {
+  private readonly missionAuthorSelect = {
+    id: true,
+    nickname: true,
+    avatar: true,
+    squad: {
+      select: {
+        id: true,
+        name: true,
+        tag: true,
+        side: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.UserSelect;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
@@ -30,6 +50,42 @@ export class MissionsService {
     return {
       [sideType]: slotsBySide[sideType] ?? [],
     } as Prisma.InputJsonObject;
+  }
+
+  private normalizeCoauthorIds(coauthorIds: string[] | undefined, authorId: string) {
+    if (coauthorIds === undefined) {
+      return undefined;
+    }
+
+    return [...new Set(coauthorIds)].filter((coauthorId) => coauthorId !== authorId);
+  }
+
+  private async ensureCoauthorsExist(coauthorIds: string[]) {
+    if (coauthorIds.length === 0) {
+      return;
+    }
+
+    const existingCoauthors = await this.prisma.user.findMany({
+      where: {
+        id: { in: coauthorIds },
+      },
+      select: {
+        id: true,
+      },
+    });
+    const existingCoauthorIds = new Set(existingCoauthors.map((coauthor) => coauthor.id));
+    const missingCoauthorIds = coauthorIds.filter((coauthorId) => !existingCoauthorIds.has(coauthorId));
+
+    if (missingCoauthorIds.length > 0) {
+      throw new BadRequestException(`Coauthors not found: ${missingCoauthorIds.join(', ')}`);
+    }
+  }
+
+  private canEditMission(
+    mission: { authorId: string | null; coauthors: { id: string }[] },
+    userId: string,
+  ) {
+    return mission.authorId === userId || mission.coauthors.some((coauthor) => coauthor.id === userId);
   }
 
   async findAllIslands() {
@@ -89,7 +145,7 @@ export class MissionsService {
       },
       where: {
         name: { contains: search, mode: 'insensitive' },
-        ...(authorId ? { authorId } : {}),
+        ...(authorId ? { OR: [{ authorId }, { coauthors: { some: { id: authorId } } }] } : {}),
         ...(missionIdsWithValidSlots ? { id: { in: missionIdsWithValidSlots } } : {}),
         ...(status ? { missionVersions: { some: { status } } } : {}),
         ...(missionType ? { missionType } : {}),
@@ -128,23 +184,10 @@ export class MissionsService {
           },
         },
         author: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: true,
-            squad: {
-              select: {
-                id: true,
-                tag: true,
-                side: {
-                  select: {
-                    id: true,
-                    type: true
-                  }
-                }
-              }
-            }
-          },
+          select: this.missionAuthorSelect,
+        },
+        coauthors: {
+          select: this.missionAuthorSelect,
         },
       },
     }
@@ -166,6 +209,12 @@ export class MissionsService {
       include: {
         image: true,
         island: true,
+        author: {
+          select: this.missionAuthorSelect,
+        },
+        coauthors: {
+          select: this.missionAuthorSelect,
+        },
         missionVersions: {
           orderBy: {
             createdAt: 'desc',
@@ -188,6 +237,9 @@ export class MissionsService {
   }
 
   async createMission(dto: CreateMissionDto, authorId: string, image?: File) {
+    const coauthorIds = this.normalizeCoauthorIds(dto.coauthorIds, authorId) ?? [];
+    await this.ensureCoauthorsExist(coauthorIds);
+
     let fileId: string | null = null;
 
     if (image) {
@@ -204,10 +256,21 @@ export class MissionsService {
         authorId: authorId,
         imageId: fileId,
         islandId: dto.islandId,
+        ...(coauthorIds.length > 0 && {
+          coauthors: {
+            connect: coauthorIds.map((id) => ({ id })),
+          },
+        }),
       },
       include: {
         image: true,
         island: true,
+        author: {
+          select: this.missionAuthorSelect,
+        },
+        coauthors: {
+          select: this.missionAuthorSelect,
+        },
       }
     });
   }
@@ -219,6 +282,11 @@ export class MissionsService {
         id: true,
         imageId: true,
         authorId: true,
+        coauthors: {
+          select: {
+            id: true,
+          },
+        },
       }
     });
 
@@ -226,8 +294,17 @@ export class MissionsService {
       throw new NotFoundException('Mission not found');
     }
 
-    if (mission.authorId !== authorId) {
+    if (!this.canEditMission(mission, authorId)) {
       throw new ForbiddenException('You are not the author of this mission');
+    }
+
+    const coauthorIds = this.normalizeCoauthorIds(dto.coauthorIds, authorId);
+    if (coauthorIds !== undefined) {
+      if (mission.authorId !== authorId) {
+        throw new ForbiddenException('Only the mission author can change coauthors');
+      }
+
+      await this.ensureCoauthorsExist(coauthorIds);
     }
 
     let newFileId: string | null = null;
@@ -246,6 +323,21 @@ export class MissionsService {
         ...(dto.missionType !== undefined && { missionType: dto.missionType }),
         ...(dto.islandId !== undefined && { islandId: dto.islandId }),
         ...(newFileId !== null && { imageId: newFileId }),
+        ...(coauthorIds !== undefined && {
+          coauthors: {
+            set: coauthorIds.map((id) => ({ id })),
+          },
+        }),
+      },
+      include: {
+        image: true,
+        island: true,
+        author: {
+          select: this.missionAuthorSelect,
+        },
+        coauthors: {
+          select: this.missionAuthorSelect,
+        },
       },
     });
   }
@@ -337,6 +429,7 @@ export class MissionsService {
   async createMissionVersion(
     dto: CreateMissionVersionDto,
     missionId: string,
+    userId: string,
     attackScreenshots: File[] = [],
     defenseScreenshots: File[] = [],
   ) {
@@ -346,10 +439,22 @@ export class MissionsService {
 
     const mission = await this.prisma.mission.findUnique({
       where: { id: missionId },
-      select: { missionType: true },
+      select: {
+        authorId: true,
+        missionType: true,
+        coauthors: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
     if (!mission) {
       throw new NotFoundException('Mission not found');
+    }
+
+    if (!this.canEditMission(mission, userId)) {
+      throw new ForbiddenException('You are not the author of this mission');
     }
 
     const slotsBySide = await this.pboParserService.parseMissionSlots(dto.file);
@@ -451,6 +556,11 @@ export class MissionsService {
           select: {
             authorId: true,
             missionType: true,
+            coauthors: {
+              select: {
+                id: true,
+              },
+            },
           }
         }
       }
@@ -464,7 +574,7 @@ export class MissionsService {
       user.isMissionReviewer ||
       ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role);
 
-    if (missionVersion.mission.authorId !== userId && !canChangeAnyMissionVersion) {
+    if (!this.canEditMission(missionVersion.mission, userId) && !canChangeAnyMissionVersion) {
       throw new ForbiddenException('You are not the author of this mission');
     }
 

@@ -3,36 +3,7 @@ import { MissionGameSide } from "@prisma/client";
 import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
 import { Transform, Type } from "class-transformer";
-
-const normalizeStringArray = ({ value }: { value: unknown }) => {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  if (Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return [];
-    }
-
-    if (trimmed.startsWith("[")) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        return Array.isArray(parsed) ? parsed : [trimmed];
-      } catch {
-        return [trimmed];
-      }
-    }
-
-    return trimmed.split(",").map((item) => item.trim()).filter(Boolean);
-  }
-
-  return [String(value)];
-};
+import { normalizeStringArray } from "src/utils/normalize-string-array";
 
 export class UpdateMissionVersionDto {
   @ApiPropertyOptional()

@@ -77,6 +77,7 @@ export class MissionsController {
     @UploadedFiles() files: { file?: File[], attackScreenshots?: File[], defenseScreenshots?: File[] },
     @Body() createMissionVersionDto: CreateMissionVersionDto,
     @Param('id') id: string,
+    @Req() req: RequestType,
   ) {
     this.validateFiles(files?.file ?? [], { required: true });
     this.validateFiles(files?.attackScreenshots ?? []);
@@ -85,6 +86,7 @@ export class MissionsController {
     return this.missionsService.createMissionVersion(
       { ...createMissionVersionDto, file: files.file?.[0] },
       id,
+      req.userId,
       files.attackScreenshots ?? [],
       files.defenseScreenshots ?? [],
     );
