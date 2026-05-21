@@ -13,14 +13,14 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { JwtService } from '@nestjs/jwt';
 import { GetMeDto } from './dto/get-me-dto';
 import { MailerService } from '@nestjs-modules/mailer';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Prisma, User, UserPunishmentType, UserRole } from '@prisma/client';
+import { Prisma, User, UserPunishmentType, UserRole, UserStatus } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
@@ -77,6 +77,20 @@ export class UsersService {
     return role === UserRole.OWNER || role === UserRole.SERVER_ADMIN;
   }
 
+  private generateGuidFromSteamId64(steamId64: string) {
+    let steamId = BigInt(steamId64);
+    const bytes = Buffer.alloc(8);
+
+    for (let i = 0; i < 8; i++) {
+      bytes[i] = Number(steamId & 0xffn);
+      steamId >>= 8n;
+    }
+
+    return createHash('md5')
+      .update(Buffer.concat([Buffer.from('BE'), bytes]))
+      .digest('hex');
+  }
+
   private ensureCanModerateTarget(targetRole: UserRole, actorRole: UserRole) {
     if (targetRole === UserRole.OWNER) {
       throw new BadRequestException('You cannot moderate user with OWNER role');
@@ -122,7 +136,7 @@ export class UsersService {
     const { userId } = data;
 
 
-    const steamId = await this.extractAndVerifySteamId(query);
+    const steamId = this.extractAndVerifySteamId(query);
 
     if (!steamId) {
       return;
@@ -166,7 +180,7 @@ export class UsersService {
     return Array.isArray(value) ? value[0] : value;
   }
 
-  private async extractAndVerifySteamId(
+  private extractAndVerifySteamId(
     query: Record<string, string | string[] | undefined>
   ) {
     const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
@@ -1016,6 +1030,43 @@ export class UsersService {
       data: dataWithActiveWarningsCount,
       total,
     };
+  }
+
+  async findWhitelist() {
+    const users = await this.prisma.user.findMany({
+      where: {
+        steamId: {
+          not: null,
+        },
+        status: UserStatus.ACTIVE
+      },
+      select: {
+        nickname: true,
+        steamId: true,
+        squad: {
+          select: {
+            tag: true,
+          },
+        },
+      },
+      orderBy: {
+        nickname: 'asc',
+      },
+    });
+
+    return users.flatMap((user) => {
+      if (!user.steamId) {
+        return [];
+      }
+
+      return {
+        nickname: user.squad?.tag
+          ? `[${user.squad.tag}] ${user.nickname}`
+          : user.nickname,
+        steamId: user.steamId,
+        GUID: this.generateGuidFromSteamId64(user.steamId),
+      };
+    });
   }
 
   findOne(idOrName: string) {

@@ -47,6 +47,13 @@ export class UsersController {
     return this.usersService.findAll(dto, req.role);
   }
 
+  @Get('/whitelist')
+  // @UseGuards(AuthGuard)
+  // @Roles(['OWNER', 'SERVER_ADMIN'])
+  findWhitelist() {
+    return this.usersService.findWhitelist();
+  }
+
   private getRequestIp(req: Request) {
     const forwardedFor = req.headers['x-forwarded-for'];
 
