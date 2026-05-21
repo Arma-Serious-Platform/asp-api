@@ -36,6 +36,7 @@ import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { CreateUserWarningDto } from './dto/create-user-warning.dto';
 import { OptionalPunishmentReasonDto, PunishmentReasonDto } from './dto/punishment-reason.dto';
 import { Request, Response } from 'express';
+import { StaticBearerTokenGuard } from 'src/shared/guards/static-bearer-token.guard';
 
 @Controller('users')
 export class UsersController {
@@ -48,8 +49,7 @@ export class UsersController {
   }
 
   @Get('/whitelist')
-  // @UseGuards(AuthGuard)
-  // @Roles(['OWNER', 'SERVER_ADMIN'])
+  @UseGuards(StaticBearerTokenGuard)
   findWhitelist() {
     return this.usersService.findWhitelist();
   }
