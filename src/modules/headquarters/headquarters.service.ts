@@ -368,7 +368,7 @@ export class HeadquartersService {
   async unassignCommander(id: string, userId: string, role: UserRole) {
     const gamePlan = await this.getGamePlanWithSide(id);
 
-    const superAdminRoles = new Set<UserRole>([UserRole.OWNER, UserRole.TECH_ADMIN]);
+    const superAdminRoles = new Set<UserRole>([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
     const isSuperAdmin = superAdminRoles.has(role);
     const isCurrentCommander = gamePlan.gameCommanderId === userId;
 

@@ -260,9 +260,9 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.role !== UserRole.OWNER && user.role !== UserRole.TECH_ADMIN) {
+    if (!([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role)) {
       throw new ForbiddenException(
-        'Only owner or tech admin can delete a mission',
+        'Only owner, server admin or UVK can delete a mission',
       );
     }
 
@@ -460,7 +460,9 @@ export class MissionsService {
       throw new NotFoundException('Mission version not found');
     }
 
-    const canChangeAnyMissionVersion = user.isMissionReviewer || (user.role === UserRole.OWNER || user.role === UserRole.TECH_ADMIN);
+    const canChangeAnyMissionVersion =
+      user.isMissionReviewer ||
+      ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role);
 
     if (missionVersion.mission.authorId !== userId && !canChangeAnyMissionVersion) {
       throw new ForbiddenException('You are not the author of this mission');
@@ -637,7 +639,7 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.isMissionReviewer && (user.role !== UserRole.OWNER && user.role !== UserRole.TECH_ADMIN)) {
+    if (!user.isMissionReviewer && !([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role)) {
       throw new ForbiddenException('You are not authorized to change mission version status');
     }
 
