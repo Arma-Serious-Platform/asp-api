@@ -20,7 +20,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Prisma, User, UserPunishmentType, UserRole, UserStatus } from '@prisma/client';
+import { Prisma, SquadInviteStatus, User, UserPunishmentType, UserRole, UserStatus } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
@@ -290,10 +290,42 @@ export class UsersService {
         id: userId,
       },
 
-      include: {
+      select: {
+        id: true,
+        avatarId: true,
+        email: true,
+        nickname: true,
+        steamId: true,
+        status: true,
+        role: true,
+        isMissionReviewer: true,
+        avatarUrl: true,
+        bannedUntil: true,
+        isEmailVerified: true,
+        telegramUrl: true,
+        discordUrl: true,
+        youtubeUrl: true,
+        twitchUrl: true,
+        createdAt: true,
+        updatedAt: true,
         _count: {
           select: {
-            missions: true
+            missions: {
+              where: {
+                OR: [
+                  {
+                    authorId: userId,
+                  },
+                  {
+                    coauthors: {
+                      some: {
+                        id: userId,
+                      }
+                    }
+                  }
+                ]
+              }
+            },
           }
         },
         avatar: {
@@ -309,6 +341,9 @@ export class UsersService {
           },
         },
         squadInvites: {
+          where: {
+            status: SquadInviteStatus.PENDING,
+          },
           select: {
             id: true,
             status: true,
@@ -382,17 +417,6 @@ export class UsersService {
             }
           },
         },
-      },
-
-      omit: {
-        password: true,
-        squadId: true,
-        abilities: true,
-        activationToken: true,
-        resetPasswordToken: true,
-        resetPasswordTokenExpiresAt: true,
-        activationTokenExpiresAt: true,
-        lastIp: true
       },
     });
 
