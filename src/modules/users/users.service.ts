@@ -211,10 +211,12 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { id: userId },
       data: updateMeDto,
     });
+
+    return this.me(userId);
   }
 
   async changeNickname(userId: string, dto: ChangeNicknameDto, actorRole?: UserRole) {
@@ -238,10 +240,7 @@ export class UsersService {
     }
 
     if (user.nickname === nickname) {
-      return this.prisma.user.findUnique({
-        where: { id: userId },
-        omit: { password: true },
-      });
+      return this.me(userId);
     }
 
     const nicknameTaken = await this.prisma.user.findFirst({
@@ -255,11 +254,12 @@ export class UsersService {
       throw new BadRequestException('Nickname is already taken');
     }
 
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { id: userId },
       data: { nickname },
-      omit: { password: true },
     });
+
+    return this.me(userId);
   }
 
   async disconnectSteam(userId: string) {
@@ -273,17 +273,15 @@ export class UsersService {
     }
 
     if (!user.steamId) {
-      return this.prisma.user.findUnique({
-        where: { id: userId },
-        omit: { password: true },
-      });
+      return this.me(userId);
     }
 
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { id: userId },
       data: { steamId: null },
-      omit: { password: true },
     });
+
+    return this.me(userId);
   }
 
   async me(userId: string) {
@@ -795,13 +793,10 @@ export class UsersService {
 
     const data = await this.generateTokens(user);
 
-    const { password: _, ...userWithoutPassword } = user;
+    const me = await this.me(user.id);
 
     return {
-      user: {
-        ...userWithoutPassword,
-        lastIp: lastIp ?? user.lastIp,
-      },
+      user: me,
       ...data,
     };
   }
@@ -1124,10 +1119,18 @@ export class UsersService {
     });
   }
 
-  delete(id: string) {
-    return this.prisma.user.delete({
+  async delete(id: string) {
+    const user = await this.me(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.delete({
       where: { id },
     });
+
+    return user;
   }
 
   async banUser(dto: BanUserDto, body: PunishmentReasonDto, adminId: string, role: UserRole) {
@@ -1161,8 +1164,8 @@ export class UsersService {
       throw new BadRequestException('Ban reason is required');
     }
 
-    return this.prisma.$transaction(async tx => {
-      const updatedUser = await tx.user.update({
+    await this.prisma.$transaction(async tx => {
+      await tx.user.update({
         where: { id: dto.userId },
         data: {
           status: 'BANNED',
@@ -1179,9 +1182,9 @@ export class UsersService {
           bannedUntil,
         },
       });
-
-      return updatedUser;
     });
+
+    return this.me(dto.userId);
   }
 
   async permanentlyBanUser(dto: UnbanUserDto, body: PunishmentReasonDto, adminId: string, role: UserRole) {
@@ -1205,8 +1208,8 @@ export class UsersService {
       throw new BadRequestException('Ban reason is required');
     }
 
-    return this.prisma.$transaction(async tx => {
-      const updatedUser = await tx.user.update({
+    await this.prisma.$transaction(async tx => {
+      await tx.user.update({
         where: { id: dto.userId },
         data: {
           status: 'BANNED',
@@ -1222,9 +1225,9 @@ export class UsersService {
           reason,
         },
       });
-
-      return updatedUser;
     });
+
+    return this.me(dto.userId);
   }
 
   async unbanUser(dto: UnbanUserDto, body: OptionalPunishmentReasonDto, adminId: string, role: UserRole) {
@@ -1240,8 +1243,8 @@ export class UsersService {
 
     const reason = body.reason?.trim() || null;
 
-    return this.prisma.$transaction(async tx => {
-      const updatedUser = await tx.user.update({
+    await this.prisma.$transaction(async tx => {
+      await tx.user.update({
         where: { id: dto.userId },
         data: { status: 'ACTIVE', bannedUntil: null },
       });
@@ -1254,9 +1257,9 @@ export class UsersService {
           reason,
         },
       });
-
-      return updatedUser;
     });
+
+    return this.me(dto.userId);
   }
 
   async changeAvatar(avatar: Multer.File, userId: string) {
@@ -1277,19 +1280,11 @@ export class UsersService {
       avatar,
     );
 
-    return this.prisma.user.update({
-      include: {
-        avatar: {
-          select: {
-            id: true,
-            url: true,
-            filename: true,
-            bucket: true,
-          },
-        },
-      },
+    await this.prisma.user.update({
       where: { id: userId },
       data: { avatarId: avatarUrl.id },
     });
+
+    return this.me(userId);
   }
 }
