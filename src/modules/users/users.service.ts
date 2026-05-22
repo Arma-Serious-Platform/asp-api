@@ -1038,11 +1038,11 @@ export class UsersService {
         steamId: {
           not: null,
         },
-        status: UserStatus.ACTIVE
       },
       select: {
         nickname: true,
         steamId: true,
+        status: true,
         squad: {
           select: {
             tag: true,
@@ -1065,6 +1065,7 @@ export class UsersService {
           : user.nickname,
         steamId: user.steamId,
         GUID: this.generateGuidFromSteamId64(user.steamId),
+        banned: user.status === UserStatus.BANNED,
       };
     });
   }
