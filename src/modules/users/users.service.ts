@@ -343,9 +343,32 @@ export class UsersService {
               }
             },
             members: {
-              include: {
-                avatar: true
-              }
+              select: {
+                id: true,
+                nickname: true,
+                role: true,
+                avatarUrl: true,
+                squad: {
+                  select: {
+                    id: true,
+                    tag: true,
+                    side: {
+                      select :{
+                        id: true,
+                        name: true,
+                        type: true,
+                      }
+                    }
+                  }
+                },
+                status: true,
+                avatar: {
+                  select: {
+                    id: true,
+                    url: true,
+                  },
+                },
+              },
             },
             leader: {
               select: {
@@ -371,6 +394,7 @@ export class UsersService {
         resetPasswordToken: true,
         resetPasswordTokenExpiresAt: true,
         activationTokenExpiresAt: true,
+        lastIp: true
       },
     });
 
