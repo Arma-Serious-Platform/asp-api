@@ -102,6 +102,7 @@ model User {
   issuedPunishments           UserPunishment[]  @relation("IssuedUserPunishments")
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
+  squadJoinRequests           SquadJoinRequest[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
   games                       Game[]
   telegramUrl                 String?
@@ -175,6 +176,7 @@ model Squad {
   leader      User              @relation("SquadLeader", fields: [leaderId], references: [id])
   side        Side              @relation(fields: [sideId], references: [id])
   invites     SquadInvitation[]
+  joinRequests SquadJoinRequest[]
   members     User[]            @relation("SquadMembers")
   logoId      String?
   logo        File?             @relation(fields: [logoId], references: [id])
@@ -184,6 +186,17 @@ model Squad {
 }
 
 model SquadInvitation {
+  id        String            @id @default(uuid())
+  userId    String
+  squadId   String
+  status    SquadInviteStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  squad     Squad             @relation(fields: [squadId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+}
+
+model SquadJoinRequest {
   id        String            @id @default(uuid())
   userId    String
   squadId   String
