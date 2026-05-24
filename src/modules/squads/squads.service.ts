@@ -411,12 +411,15 @@ export class SquadsService {
         data: { leaderId: newLeader.id },
       });
 
-      await tx.user.updateMany({
-        where: {
-          id: {
-            in: [leaderId, newLeader.id],
-          },
+      await tx.user.update({
+        where: { id: leaderId },
+        data: {
+          squadRole: SquadRole.SUBLEADER,
         },
+      });
+
+      await tx.user.update({
+        where: { id: newLeader.id },
         data: {
           squadRole: SquadRole.MEMBER,
         },
