@@ -30,6 +30,8 @@ import { UpdateMySquadDto } from './dto/update-my-squad.dto';
 import { TransferSquadLeadershipDto } from './dto/transfer-squad-leadership.dto';
 import { RequestToJoinSquadDto } from './dto/request-to-join-squad.dto';
 import { AcceptJoinRequestDto } from './dto/accept-join-request.dto';
+import { UpdateSquadMemberRoleDto } from './dto/update-squad-member-role.dto';
+import { InviteToSquadBodyDto } from './dto/invite-to-squad-body.dto';
 
 @Controller('squads')
 export class SquadsController {
@@ -50,6 +52,12 @@ export class SquadsController {
   @Get('join-requests')
   getJoinRequests(@Req() req: RequestType) {
     return this.squadsService.getMySquadJoinRequests(req.userId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('join-requests/my')
+  getMyJoinRequests(@Req() req: RequestType) {
+    return this.squadsService.getMyJoinRequests(req.userId);
   }
 
   @Get(':id')
@@ -87,6 +95,12 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
+  @Patch('/members/:userId/role')
+  updateMemberRole(@Param('userId') userId: string, @Body() dto: UpdateSquadMemberRoleDto, @Req() req: RequestType) {
+    return this.squadsService.updateMemberRole(req.userId, userId, dto.role);
+  }
+
+  @UseGuards(AuthGuard)
   @Post('/join-requests/:squadId')
   requestToJoinSquad(@Param() dto: RequestToJoinSquadDto, @Req() req: RequestType) {
     return this.squadsService.requestToJoinSquad(dto.squadId, req.userId);
@@ -107,8 +121,8 @@ export class SquadsController {
 
   @UseGuards(AuthGuard)
   @Post('/invite/:userId')
-  inviteToSquad(@Param() dto: InviteToSquadDto, @Req() req: RequestType) {
-    return this.squadsService.inviteToSquad(dto, req.userId);
+  inviteToSquad(@Param() params: InviteToSquadDto, @Body() dto: InviteToSquadBodyDto, @Req() req: RequestType) {
+    return this.squadsService.inviteToSquad({ ...dto, userId: params.userId }, req.userId);
   }
 
   @UseGuards(AuthGuard)

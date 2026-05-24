@@ -6,7 +6,7 @@ import {
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { CreateSquadDto } from './dto/create-squad.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
-import { Prisma, SquadInviteStatus } from '@prisma/client';
+import { Prisma, SquadInviteStatus, SquadRole } from '@prisma/client';
 import { FindSquadsDto } from './dto/find-squads.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
@@ -47,6 +47,7 @@ export class SquadsService {
             id: true,
             nickname: true,
             role: true,
+            squadRole: true,
             avatarUrl: true,
             avatar: {
               select: {
@@ -129,6 +130,7 @@ export class SquadsService {
             id: true,
             nickname: true,
             role: true,
+            squadRole: true,
             avatarUrl: true,
             status: true,
             avatar: {
@@ -147,6 +149,7 @@ export class SquadsService {
             id: true,
             nickname: true,
             role: true,
+            squadRole: true,
             avatarUrl: true,
             avatar: {
               select: {
@@ -253,6 +256,7 @@ export class SquadsService {
         where: { id: dto.leaderId },
         data: {
           squadId: squad.id,
+          squadRole: SquadRole.MEMBER,
         },
       });
 
@@ -321,6 +325,7 @@ export class SquadsService {
           where: { id: dto.leaderId },
           data: {
             squadId: squad.id,
+            squadRole: SquadRole.MEMBER,
           },
         });
       }
@@ -400,9 +405,62 @@ export class SquadsService {
       throw new BadRequestException('New leader must be a member of your squad');
     }
 
-    return this.prisma.squad.update({
-      where: { id: squad.id },
-      data: { leaderId: newLeader.id },
+    return this.prisma.$transaction(async (tx) => {
+      const updatedSquad = await tx.squad.update({
+        where: { id: squad.id },
+        data: { leaderId: newLeader.id },
+      });
+
+      await tx.user.updateMany({
+        where: {
+          id: {
+            in: [leaderId, newLeader.id],
+          },
+        },
+        data: {
+          squadRole: SquadRole.MEMBER,
+        },
+      });
+
+      return updatedSquad;
+    });
+  }
+
+  async updateMemberRole(actorId: string, memberId: string, role: SquadRole) {
+    const squad = await this.getSquadManagedByUser(actorId);
+
+    const member = await this.prisma.user.findUnique({
+      where: { id: memberId },
+      select: {
+        id: true,
+        squadId: true,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (member.squadId !== squad.id) {
+      throw new BadRequestException('User is not in your squad');
+    }
+
+    if (member.id === squad.leaderId) {
+      throw new BadRequestException('Cannot change squad role of the current leader');
+    }
+
+    if (!squad.isActorLeader && role === SquadRole.SUBLEADER) {
+      throw new BadRequestException('Only squad leader can assign subleader role');
+    }
+
+    return this.prisma.user.update({
+      where: { id: member.id },
+      data: { squadRole: role },
+      select: {
+        id: true,
+        nickname: true,
+        squadRole: true,
+      },
     });
   }
 
@@ -464,9 +522,68 @@ export class SquadsService {
     });
   }
 
+  async getMyJoinRequests(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        squadId: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.squadId) {
+      throw new BadRequestException('You are already in a squad');
+    }
+
+    return this.prisma.squadJoinRequest.findMany({
+      where: {
+        userId,
+        status: SquadInviteStatus.PENDING,
+      },
+      select: {
+        id: true,
+        status: true,
+        squadId: true,
+        createdAt: true,
+        updatedAt: true,
+        squad: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+            recruiting: true,
+            logo: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+            description: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
   async getMySquadJoinRequests(leaderId: string) {
+    const managedSquad = await this.getSquadManagedByUser(leaderId);
+
     const squad = await this.prisma.squad.findUnique({
-      where: { leaderId },
+      where: { id: managedSquad.id },
       select: {
         id: true,
         joinRequests: {
@@ -501,7 +618,7 @@ export class SquadsService {
     });
 
     if (!squad) {
-      throw new BadRequestException('You are not a leader of any squad');
+      throw new NotFoundException('Squad not found');
     }
 
     return squad.joinRequests;
@@ -534,8 +651,10 @@ export class SquadsService {
       throw new NotFoundException('Join request not found');
     }
 
-    if (request.squad.leaderId !== leaderId) {
-      throw new BadRequestException('You are not the leader of this squad');
+    const managedSquad = await this.getSquadManagedByUser(leaderId);
+
+    if (request.squadId !== managedSquad.id) {
+      throw new BadRequestException('You are not allowed to manage this request');
     }
 
     if (request.status !== SquadInviteStatus.PENDING) {
@@ -549,7 +668,10 @@ export class SquadsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: request.userId },
-        data: { squadId: request.squadId },
+        data: {
+          squadId: request.squadId,
+          squadRole: SquadRole.RECRUIT,
+        },
       });
 
       const acceptedRequest = await tx.squadJoinRequest.update({
@@ -582,7 +704,10 @@ export class SquadsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.user.updateMany({
         where: { squadId: id },
-        data: { squadId: null },
+        data: {
+          squadId: null,
+          squadRole: SquadRole.MEMBER,
+        },
       });
 
       await tx.squadInvitation.deleteMany({
@@ -600,29 +725,7 @@ export class SquadsService {
   }
 
   async inviteToSquad(dto: InviteToSquadDto, leaderId: string) {
-    const squad = await this.prisma.squad.findUnique({
-      where: { leaderId },
-    });
-
-    if (!squad) {
-      throw new NotFoundException('Squad not found');
-    }
-
-    const leader = await this.prisma.user.findUnique({
-      where: { id: leaderId },
-      select: {
-        id: true,
-        leadingSquad: {
-          select: {
-            id: true,
-          },
-        },
-      },
-    });
-
-    if (leader?.leadingSquad?.id !== squad.id) {
-      throw new BadRequestException('You are not the leader of this squad');
-    }
+    const squad = await this.getSquadManagedByUser(leaderId);
 
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
@@ -666,6 +769,7 @@ export class SquadsService {
     return this.prisma.squadInvitation.create({
       data: {
         status: SquadInviteStatus.PENDING,
+        squadRole: dto.squadRole ?? SquadRole.MEMBER,
         user: {
           connect: { id: dto.userId },
         },
@@ -708,7 +812,10 @@ export class SquadsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: dto.userId },
-        data: { squadId: null },
+        data: {
+          squadId: null,
+          squadRole: SquadRole.MEMBER,
+        },
       });
 
       return await tx.squadInvitation.deleteMany({
@@ -764,11 +871,19 @@ export class SquadsService {
         where: { id: user.squadId },
         data: { leaderId: newLeaderId },
       });
+
+      await this.prisma.user.update({
+        where: { id: newLeaderId },
+        data: { squadRole: SquadRole.MEMBER },
+      });
     }
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { squadId: null },
+      data: {
+        squadId: null,
+        squadRole: SquadRole.MEMBER,
+      },
     });
   }
 
@@ -812,7 +927,10 @@ export class SquadsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },
-        data: { squadId: invitation.squadId },
+        data: {
+          squadId: invitation.squadId,
+          squadRole: invitation.squadRole,
+        },
       });
 
       return await tx.squadInvitation.update({
@@ -828,7 +946,13 @@ export class SquadsService {
         userId,
         status: SquadInviteStatus.PENDING,
       },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        squadRole: true,
+        squadId: true,
+        createdAt: true,
+        updatedAt: true,
         squad: {
           select: {
             id: true,
@@ -866,6 +990,7 @@ export class SquadsService {
               select: {
                 id: true,
                 status: true,
+                squadRole: true,
                 user: {
                   select: {
                     id: true,
@@ -944,5 +1069,43 @@ export class SquadsService {
     return this.prisma.squadInvitation.delete({
       where: { id: invitationId },
     });
+  }
+
+  private async getSquadManagedByUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        squadRole: true,
+        squadId: true,
+        squad: {
+          select: {
+            id: true,
+            leaderId: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.squadId || !user.squad) {
+      throw new BadRequestException('You are not in a squad');
+    }
+
+    const isLeader = user.squad.leaderId === user.id;
+    const isSubleader = user.squadRole === SquadRole.SUBLEADER;
+
+    if (!isLeader && !isSubleader) {
+      throw new BadRequestException('You are not allowed to manage this squad');
+    }
+
+    return {
+      ...user.squad,
+      isActorLeader: isLeader,
+      actorSquadRole: user.squadRole,
+    };
   }
 }

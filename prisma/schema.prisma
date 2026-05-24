@@ -83,6 +83,7 @@ model User {
   activationTokenExpiresAt    DateTime?
   status                      UserStatus        @default(ACTIVE)
   role                        UserRole          @default(USER)
+  squadRole                   SquadRole         @default(MEMBER)
   isMissionReviewer           Boolean           @default(false)
   resetPasswordToken          String?
   resetPasswordTokenExpiresAt DateTime?
@@ -190,6 +191,7 @@ model SquadInvitation {
   userId    String
   squadId   String
   status    SquadInviteStatus @default(PENDING)
+  squadRole SquadRole         @default(MEMBER)
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
   squad     Squad             @relation(fields: [squadId], references: [id])
@@ -472,4 +474,11 @@ enum MissionGameSide {
   BLUE
   RED
   GREEN
+}
+
+enum SquadRole {
+  MEMBER
+  HQ
+  SUBLEADER
+  RECRUIT
 }
