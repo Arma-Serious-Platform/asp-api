@@ -88,6 +88,10 @@ export class MissionsService {
     return mission.authorId === userId || mission.coauthors.some((coauthor) => coauthor.id === userId);
   }
 
+  private canManageAnyMission(role: UserRole) {
+    return ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(role);
+  }
+
   async findAllIslands() {
     return await this.prisma.island.findMany({
       select: {
@@ -276,6 +280,15 @@ export class MissionsService {
   }
 
   async updateMission(dto: UpdateMissionDto, missionId: string, authorId: string, image?: File) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authorId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
     const mission = await this.prisma.mission.findUnique({
       where: { id: missionId },
       select: {
@@ -294,13 +307,15 @@ export class MissionsService {
       throw new NotFoundException('Mission not found');
     }
 
-    if (!this.canEditMission(mission, authorId)) {
+    const canManageAnyMission = this.canManageAnyMission(user.role);
+
+    if (!this.canEditMission(mission, authorId) && !canManageAnyMission) {
       throw new ForbiddenException('You are not the author of this mission');
     }
 
-    const coauthorIds = this.normalizeCoauthorIds(dto.coauthorIds, authorId);
+    const coauthorIds = this.normalizeCoauthorIds(dto.coauthorIds, mission.authorId ?? authorId);
     if (coauthorIds !== undefined) {
-      if (mission.authorId !== authorId) {
+      if (mission.authorId !== authorId && !canManageAnyMission) {
         throw new ForbiddenException('Only the mission author can change coauthors');
       }
 
@@ -352,7 +367,7 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (!([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role)) {
+    if (!this.canManageAnyMission(user.role)) {
       throw new ForbiddenException(
         'Only owner, server admin or UVK can delete a mission',
       );
@@ -578,7 +593,7 @@ export class MissionsService {
 
     const canChangeAnyMissionVersion =
       user.isMissionReviewer ||
-      ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role);
+      this.canManageAnyMission(user.role);
 
     if (!this.canEditMission(missionVersion.mission, userId) && !canChangeAnyMissionVersion) {
       throw new ForbiddenException('You are not the author of this mission');
@@ -651,19 +666,12 @@ export class MissionsService {
       };
     }
 
+    const effectiveAttackSideType = dto.attackSideType ?? missionVersion.attackSideType;
+    const effectiveDefenseSideType = dto.defenseSideType ?? missionVersion.defenseSideType;
+
     const removeAttackIdsSet = new Set(dto.removeAttackScreenshotIds ?? []);
     const removeDefenseIdsSet = new Set(dto.removeDefenseScreenshotIds ?? []);
     const removeIds = new Set([...removeAttackIdsSet, ...removeDefenseIdsSet]);
-
-    for (const screenshot of missionVersion.uniformScreenshots) {
-      if (removeAttackIdsSet.has(screenshot.id) && screenshot.side !== missionVersion.attackSideType) {
-        throw new BadRequestException(`Screenshot ${screenshot.id} does not belong to attack side`);
-      }
-
-      if (removeDefenseIdsSet.has(screenshot.id) && screenshot.side !== missionVersion.defenseSideType) {
-        throw new BadRequestException(`Screenshot ${screenshot.id} does not belong to defense side`);
-      }
-    }
 
     const screenshotsToRemove = missionVersion.uniformScreenshots.filter((screenshot) => removeIds.has(screenshot.id));
     const removeScreenshotsInput = screenshotsToRemove.length > 0 ? {
@@ -691,11 +699,11 @@ export class MissionsService {
     const createScreenshotsInput = [
       ...uploadedAttackScreenshots.map((screenshot) => ({
         fileId: screenshot.id,
-        side: missionVersion.attackSideType,
+        side: effectiveAttackSideType,
       })),
       ...uploadedDefenseScreenshots.map((screenshot) => ({
         fileId: screenshot.id,
-        side: missionVersion.defenseSideType,
+        side: effectiveDefenseSideType,
       })),
     ];
 
@@ -749,6 +757,71 @@ export class MissionsService {
     }
   }
 
+  async deleteMissionVersion(missionId: string, missionVersionId: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!this.canManageAnyMission(user.role)) {
+      throw new ForbiddenException('Only owner, server admin or UVK can delete a mission version');
+    }
+
+    const missionVersion = await this.prisma.missionVersion.findUnique({
+      where: { id: missionVersionId },
+      select: {
+        id: true,
+        missionId: true,
+        fileId: true,
+        uniformScreenshots: {
+          select: {
+            fileId: true,
+          },
+        },
+      },
+    });
+
+    if (!missionVersion || missionVersion.missionId !== missionId) {
+      throw new NotFoundException('Mission version not found');
+    }
+
+    const fileIdsToDelete = new Set<string>([missionVersion.fileId]);
+    for (const screenshot of missionVersion.uniformScreenshots) {
+      fileIdsToDelete.add(screenshot.fileId);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.game.deleteMany({
+        where: { missionVersionId },
+      });
+
+      await tx.missionWeaponry.deleteMany({
+        where: { missionVersionId },
+      });
+
+      await tx.missionVersionScreenshot.deleteMany({
+        where: { missionVersionId },
+      });
+
+      await tx.missionVersion.delete({
+        where: { id: missionVersionId },
+      });
+    });
+
+    for (const fileId of fileIdsToDelete) {
+      await this.minioService.deleteFile(fileId);
+    }
+
+    return { id: missionVersionId };
+  }
+
   async changeMissionVersionStatus(dto: ChangeMissionVersionStatusDto, versionId: string, userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -763,7 +836,7 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.isMissionReviewer && !([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(user.role)) {
+    if (!user.isMissionReviewer && !this.canManageAnyMission(user.role)) {
       throw new ForbiddenException('You are not authorized to change mission version status');
     }
 

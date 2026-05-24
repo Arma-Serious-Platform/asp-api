@@ -121,6 +121,17 @@ export class MissionsController {
     );
   }
 
+  @Delete(':id/versions/:versionId')
+  @UseGuards(AuthGuard)
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
+  deleteVersion(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Req() req: RequestType,
+  ) {
+    return this.missionsService.deleteMissionVersion(id, versionId, req.userId);
+  }
+
   @Post(':id/versions/:versionId/change-status')
   @UseGuards(AuthGuard)
   changeStatus(@Param('versionId') versionId: string, @Body() dto: ChangeMissionVersionStatusDto, @Req() req: RequestType) {
