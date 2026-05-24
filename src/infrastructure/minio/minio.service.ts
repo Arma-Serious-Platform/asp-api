@@ -40,6 +40,18 @@ export class MinioService {
     return `${proto}://${host}${portPart}/${bucket}/${objectName}`;
   }
 
+  private buildObjectName(file: Multer.File, id: string, extension: string, isWebpConversion: boolean): string {
+    if (isWebpConversion) {
+      return `${id}.${extension}`;
+    }
+
+    const safeOriginalName = (file.originalname as string)
+      .replace(/[/\\]/g, '_')
+      .replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    return `${id}-${safeOriginalName}`;
+  }
+
   private async ensureBucket(bucket: ASP_BUCKET) {
     try {
       const exists = await this.minioClient
@@ -94,10 +106,11 @@ export class MinioService {
       if (isWebpConversion) {
         buffer = await this.convertImageToWebp(file);
       }
-      const objectName = isWebpConversion ? `${id}.${extension}` : file.originalname as string;
-      const url = this.buildPublicUrl(bucket, objectName);
 
       if (!extension) throw new Error('Unsupported file type');
+
+      const objectName = this.buildObjectName(file, id, extension, isWebpConversion);
+      const url = this.buildPublicUrl(bucket, objectName);
 
       await this.minioClient.putObject(bucket, objectName, buffer);
 
@@ -177,13 +190,15 @@ export class MinioService {
         return true;
       }
 
-      const exists = await this.minioClient.statObject(
-        file.bucket,
-        file.filename,
-      );
+      const exists = await this.minioClient
+        .statObject(file.bucket, file.filename)
+        .then(() => true)
+        .catch(() => false);
 
       if (exists) {
         await this.minioClient.removeObject(file.bucket, file.filename);
+      } else {
+        this.logger.warn(`File object missing in MinIO, deleting DB row only: ${file.bucket}/${file.filename}`);
       }
 
       await this.prisma.file.delete({ where: { id: fileId } });
