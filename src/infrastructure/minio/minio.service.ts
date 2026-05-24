@@ -49,7 +49,7 @@ export class MinioService {
       .replace(/[/\\]/g, '_')
       .replace(/[^a-zA-Z0-9._-]/g, '_');
 
-    return `${id}-${safeOriginalName}`;
+    return `${id}/${safeOriginalName}`;
   }
 
   private async ensureBucket(bucket: ASP_BUCKET) {
