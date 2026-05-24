@@ -545,6 +545,12 @@ export class MissionsService {
     const missionVersion = await this.prisma.missionVersion.findUnique({
       where: { id: missionVersionId },
       include: {
+        file: {
+          select: {
+            bucket: true,
+            filename: true,
+          },
+        },
         uniformScreenshots: {
           select: {
             id: true,
@@ -581,6 +587,7 @@ export class MissionsService {
     const updateDto: Prisma.MissionVersionUpdateInput = {};
 
     let previousFileId: string | undefined;
+    let shouldDeletePreviousFileObject = true;
     const uploadedScreenshotFileIdsToRollback: string[] = [];
     const fileIdsToDeleteAfterUpdate: string[] = [];
 
@@ -595,6 +602,9 @@ export class MissionsService {
       );
       const newFile = await this.minioService.uploadFile(versionBucket, file);
       previousFileId = missionVersion.fileId;
+      shouldDeletePreviousFileObject =
+        missionVersion.file.bucket !== newFile.bucket ||
+        missionVersion.file.filename !== newFile.filename;
       updateDto.file = { connect: { id: newFile.id } };
 
       updateDto.status = MissionStatus.PENDING_APPROVAL;
@@ -715,7 +725,11 @@ export class MissionsService {
       });
 
       if (previousFileId) {
-        await this.minioService.deleteFile(previousFileId);
+        if (shouldDeletePreviousFileObject) {
+          await this.minioService.deleteFile(previousFileId);
+        } else {
+          await this.minioService.deleteFileRecord(previousFileId);
+        }
       }
 
       for (const fileIdToDelete of fileIdsToDeleteAfterUpdate) {

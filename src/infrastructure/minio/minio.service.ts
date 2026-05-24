@@ -49,7 +49,7 @@ export class MinioService {
       .replace(/[/\\]/g, '_')
       .replace(/[^a-zA-Z0-9._-]/g, '_');
 
-    return `${id}/${safeOriginalName}`;
+    return safeOriginalName;
   }
 
   private async ensureBucket(bucket: ASP_BUCKET) {
@@ -119,6 +119,7 @@ export class MinioService {
           id: true,
           url: true,
           filename: true,
+          bucket: true,
         },
         data: {
           id,
@@ -208,5 +209,10 @@ export class MinioService {
       this.logger.error('Failed to delete file', error);
       throw new Error('Failed to delete file');
     }
+  }
+
+  async deleteFileRecord(fileId: string) {
+    await this.prisma.file.delete({ where: { id: fileId } }).catch(() => null);
+    return true;
   }
 }

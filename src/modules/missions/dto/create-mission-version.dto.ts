@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { MissionGameSide } from "@prisma/client";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { IsArray, IsDefined, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
+import { normalizeObjectArray } from "src/utils/normalize-object-array";
 
 export class CreateMissionVersionDto {
   @ApiProperty()
@@ -53,6 +54,7 @@ export class CreateMissionVersionDto {
 
   @ApiPropertyOptional({ type: [CreateMissionWeaponryDto] })
   @IsOptional()
+  @Transform(normalizeObjectArray)
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateMissionWeaponryDto)

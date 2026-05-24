@@ -4,6 +4,7 @@ import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from 
 import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
 import { Transform, Type } from "class-transformer";
 import { normalizeStringArray } from "src/utils/normalize-string-array";
+import { normalizeObjectArray } from "src/utils/normalize-object-array";
 
 export class UpdateMissionVersionDto {
   @ApiPropertyOptional()
@@ -45,6 +46,7 @@ export class UpdateMissionVersionDto {
 
   @ApiPropertyOptional({ type: [CreateMissionWeaponryDto] })
   @IsOptional()
+  @Transform(normalizeObjectArray)
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateMissionWeaponryDto)
