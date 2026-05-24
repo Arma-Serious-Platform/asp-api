@@ -11,7 +11,7 @@ import { Injectable } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { SideType } from "@prisma/client";
+import { SideType, SquadRole } from "@prisma/client";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -89,8 +89,10 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
         where: { id: client.userId },
         select: {
           id: true,
+          squadRole: true,
           squad: {
             select: {
+              leaderId: true,
               sideId: true,
               side: {
                 select: {
@@ -121,6 +123,15 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
 
     if (!gamePlan) {
       return { error: 'Game plan not found' };
+    }
+
+    const hasSquadPlanAccess =
+      user.squad.leaderId === user.id ||
+      user.squadRole === SquadRole.SUBLEADER ||
+      user.squadRole === SquadRole.HQ;
+
+    if (!hasSquadPlanAccess) {
+      return { error: 'Your squad role does not allow headquarters plan access' };
     }
 
     if (gamePlan.sideId !== user.squad.sideId) {

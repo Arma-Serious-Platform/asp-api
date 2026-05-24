@@ -26,6 +26,12 @@ import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { UpdateSquadDto } from './dto/update-squad.dto';
 import { KickFromSquadDto } from './dto/kick-from-squad.dto';
 import { LeaveSquadDto } from './dto/leave-squad.dto';
+import { UpdateMySquadDto } from './dto/update-my-squad.dto';
+import { TransferSquadLeadershipDto } from './dto/transfer-squad-leadership.dto';
+import { RequestToJoinSquadDto } from './dto/request-to-join-squad.dto';
+import { AcceptJoinRequestDto } from './dto/accept-join-request.dto';
+import { UpdateSquadMemberRoleDto } from './dto/update-squad-member-role.dto';
+import { InviteToSquadBodyDto } from './dto/invite-to-squad-body.dto';
 
 @Controller('squads')
 export class SquadsController {
@@ -42,6 +48,18 @@ export class SquadsController {
     return this.squadsService.getMyInvitations(req.userId);
   }
 
+  @UseGuards(AuthGuard)
+  @Get('join-requests')
+  getJoinRequests(@Req() req: RequestType) {
+    return this.squadsService.getMySquadJoinRequests(req.userId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('join-requests/my')
+  getMyJoinRequests(@Req() req: RequestType) {
+    return this.squadsService.getMyJoinRequests(req.userId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.squadsService.findOne(id);
@@ -56,11 +74,42 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('logo'))
+  @Patch('me')
+  updateMySquad(@FileValidation({ required: false }) logo: File, @Body() dto: UpdateMySquadDto, @Req() req: RequestType) {
+    return this.squadsService.updateMySquad(req.userId, { ...dto }, logo);
+  }
+
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @UseInterceptors(FileInterceptor('logo'))
   @Patch(':id')
   update(@FileValidation({ required: false }) logo: File, @Param('id') id: string, @Body() dto: UpdateSquadDto) {
-    return this.squadsService.update(id, { ...dto }, logo);
+    return this.squadsService.updateByAdmin(id, { ...dto }, logo);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/leader/:userId')
+  transferLeadership(@Param() dto: TransferSquadLeadershipDto, @Req() req: RequestType) {
+    return this.squadsService.transferLeadership(req.userId, dto.userId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Patch('/members/:userId/role')
+  updateMemberRole(@Param('userId') userId: string, @Body() dto: UpdateSquadMemberRoleDto, @Req() req: RequestType) {
+    return this.squadsService.updateMemberRole(req.userId, userId, dto.role);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/join-requests/:squadId')
+  requestToJoinSquad(@Param() dto: RequestToJoinSquadDto, @Req() req: RequestType) {
+    return this.squadsService.requestToJoinSquad(dto.squadId, req.userId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/join-requests/accept/:requestId')
+  acceptJoinRequest(@Param() dto: AcceptJoinRequestDto, @Req() req: RequestType) {
+    return this.squadsService.acceptJoinRequest(dto.requestId, req.userId);
   }
 
   @UseGuards(AuthGuard)
@@ -72,8 +121,8 @@ export class SquadsController {
 
   @UseGuards(AuthGuard)
   @Post('/invite/:userId')
-  inviteToSquad(@Param() dto: InviteToSquadDto, @Req() req: RequestType) {
-    return this.squadsService.inviteToSquad(dto, req.userId);
+  inviteToSquad(@Param() params: InviteToSquadDto, @Body() dto: InviteToSquadBodyDto, @Req() req: RequestType) {
+    return this.squadsService.inviteToSquad({ ...dto, userId: params.userId }, req.userId);
   }
 
   @UseGuards(AuthGuard)

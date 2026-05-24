@@ -97,8 +97,9 @@ export class HeadquartersController {
   }
 
   @Get('plans/:gamePlanId/comments')
-  findComments(@Param('gamePlanId') gamePlanId: string, @Query() dto: FindGamePlanCommentsDto) {
-    return this.headquartersService.findComments(gamePlanId, dto);
+  @UseGuards(AuthGuard)
+  findComments(@Param('gamePlanId') gamePlanId: string, @Query() dto: FindGamePlanCommentsDto, @Req() req: RequestType) {
+    return this.headquartersService.findComments(gamePlanId, dto, req.userId);
   }
 
   @Post('plans/:gamePlanId/comments')

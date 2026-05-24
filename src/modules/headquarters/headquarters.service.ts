@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { MissionGameSide, Prisma, SideType, UserRole } from "@prisma/client";
+import { MissionGameSide, Prisma, SideType, SquadRole, UserRole } from "@prisma/client";
 import { UpdateGamePlanDto } from "./dto/update-game-plan.dto";
 import { UpdateGamePlanSlotDto } from "./dto/update-game-plan-slot.dto";
 import { AssignSlotSquadDto } from "./dto/assign-slot-squad.dto";
@@ -336,7 +336,7 @@ export class HeadquartersService {
 
   async updatePlan(id: string, dto: UpdateGamePlanDto, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(id);
-    await this.ensureUserInSameSide(userId, gamePlan.sideId);
+    await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
 
     const updatedPlan = await this.prisma.gamePlan.update({
       where: { id },
@@ -352,7 +352,7 @@ export class HeadquartersService {
 
   async assignCommander(id: string, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(id);
-    await this.ensureUserInSameSide(userId, gamePlan.sideId);
+    await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
 
     const updatedPlan = await this.prisma.gamePlan.update({
       where: { id },
@@ -371,6 +371,10 @@ export class HeadquartersService {
     const superAdminRoles = new Set<UserRole>([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
     const isSuperAdmin = superAdminRoles.has(role);
     const isCurrentCommander = gamePlan.gameCommanderId === userId;
+
+    if (!isSuperAdmin) {
+      await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+    }
 
     if (!isCurrentCommander && !isSuperAdmin) {
       throw new ForbiddenException('Only current commander or super admin can unassign commander');
@@ -446,21 +450,18 @@ export class HeadquartersService {
 
   async assignMySquadAsWanted(slotId: string, userId: string) {
     const slot = await this.getSlotWithPlan(slotId);
-    const me = await this.getUserWithSquadSide(userId);
+    const me = await this.ensureUserCanAccessHeadquartersForSide(userId, slot.gamePlan.sideId);
+    const squadId = me.squadId;
 
-    if (!me.squadId || !me.squad?.sideId) {
+    if (!squadId) {
       throw new BadRequestException('You are not in a squad');
-    }
-
-    if (me.squad.sideId !== slot.gamePlan.sideId) {
-      throw new ForbiddenException('Your squad side does not match game plan side');
     }
 
     const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         wantedSquads: {
-          connect: { id: me.squadId },
+          connect: { id: squadId },
         },
       },
       include: this.slotInclude,
@@ -471,19 +472,19 @@ export class HeadquartersService {
   }
 
   async unassignMySquadAsWanted(slotId: string, userId: string) {
-    const me = await this.getUserWithSquadSide(userId);
+    const slot = await this.getSlotWithPlan(slotId);
+    const me = await this.ensureUserCanAccessHeadquartersForSide(userId, slot.gamePlan.sideId);
+    const squadId = me.squadId;
 
-    if (!me.squadId) {
+    if (!squadId) {
       throw new BadRequestException('You are not in a squad');
     }
-
-    const slot = await this.getSlotWithPlan(slotId);
 
     const updatedSlot = await this.prisma.gamePlanSlot.update({
       where: { id: slotId },
       data: {
         wantedSquads: {
-          disconnect: { id: me.squadId },
+          disconnect: { id: squadId },
         },
       },
       include: this.slotInclude,
@@ -493,15 +494,9 @@ export class HeadquartersService {
     return updatedSlot;
   }
 
-  async findComments(gamePlanId: string, dto: FindGamePlanCommentsDto) {
-    const gamePlan = await this.prisma.gamePlan.findUnique({
-      where: { id: gamePlanId },
-      select: { id: true },
-    });
-
-    if (!gamePlan) {
-      throw new NotFoundException('Game plan not found');
-    }
+  async findComments(gamePlanId: string, dto: FindGamePlanCommentsDto, userId: string) {
+    const gamePlan = await this.getGamePlanWithSide(gamePlanId);
+    await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
     const { replyId, skip = 0, take = 100 } = dto;
 
     const where: Prisma.GamePlanCommentWhereInput = { gamePlanId };
@@ -530,7 +525,7 @@ export class HeadquartersService {
 
   async createComment(gamePlanId: string, dto: CreateGamePlanCommentDto, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(gamePlanId);
-    await this.ensureUserInSameSide(userId, gamePlan.sideId);
+    await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
 
     let replyId: string | undefined;
     if (dto.replyId !== undefined) {
@@ -826,20 +821,10 @@ export class HeadquartersService {
 
   private async ensureIsCommander(gamePlanId: string, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(gamePlanId);
+    await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+
     if (gamePlan.gameCommanderId !== userId) {
       throw new ForbiddenException('Only game commander can perform this action');
-    }
-  }
-
-  private async ensureUserInSameSide(userId: string, sideId: string) {
-    const user = await this.getUserWithSquadSide(userId);
-
-    if (!user.squadId || !user.squad?.sideId) {
-      throw new BadRequestException('You are not in a squad');
-    }
-
-    if (user.squad.sideId !== sideId) {
-      throw new ForbiddenException('Your squad side does not match game plan side');
     }
   }
 
@@ -861,43 +846,16 @@ export class HeadquartersService {
     }
   }
 
-  private async getUserWithSquadSide(userId: string) {
+  private async getUserWithHeadquartersSquad(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
+        squadRole: true,
         squadId: true,
         squad: {
           select: {
-            sideId: true,
-          },
-        },
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    return user;
-  }
-
-  private readonly publishedWeekendPlanWhere = {
-    game: {
-      weekend: {
-        published: true,
-      },
-    },
-  } satisfies Prisma.GamePlanWhereInput;
-
-  private async getAllowedSideIdForUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        squadId: true,
-        squad: {
-          select: {
+            leaderId: true,
             sideId: true,
             side: {
               select: {
@@ -913,14 +871,53 @@ export class HeadquartersService {
       throw new NotFoundException('User not found');
     }
 
+    return user;
+  }
+
+  private async ensureUserCanAccessHeadquartersForSide(userId: string, sideId: string) {
+    const user = await this.getUserWithHeadquartersSquad(userId);
+
     if (!user.squadId || !user.squad?.sideId) {
-      throw new ForbiddenException('You are not a member of a squad');
+      throw new BadRequestException('You are not in a squad');
     }
 
     const allowedTypes = new Set<SideType>([SideType.BLUE, SideType.RED]);
     if (!allowedTypes.has(user.squad.side.type)) {
       throw new ForbiddenException('Your side is not eligible for headquarters plans');
     }
+
+    if (user.squad.sideId !== sideId) {
+      throw new ForbiddenException('Your squad side does not match game plan side');
+    }
+
+    const hasSquadPlanAccess =
+      user.squad.leaderId === user.id ||
+      user.squadRole === SquadRole.SUBLEADER ||
+      user.squadRole === SquadRole.HQ;
+
+    if (!hasSquadPlanAccess) {
+      throw new ForbiddenException('Your squad role does not allow headquarters plan access');
+    }
+
+    return user;
+  }
+
+  private readonly publishedWeekendPlanWhere = {
+    game: {
+      weekend: {
+        published: true,
+      },
+    },
+  } satisfies Prisma.GamePlanWhereInput;
+
+  private async getAllowedSideIdForUser(userId: string) {
+    const user = await this.getUserWithHeadquartersSquad(userId);
+
+    if (!user.squadId || !user.squad?.sideId) {
+      throw new ForbiddenException('You are not a member of a squad');
+    }
+
+    await this.ensureUserCanAccessHeadquartersForSide(userId, user.squad.sideId);
 
     return user.squad.sideId;
   }

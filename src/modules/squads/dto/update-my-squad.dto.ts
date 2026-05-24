@@ -1,42 +1,20 @@
-import { Optional } from '@nestjs/common';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsInt,
-  IsString,
-  IsUUID,
-  Min,
-} from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
-export class UpdateSquadDto {
+export class UpdateMySquadDto {
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   name?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   tag?: string;
 
   @ApiPropertyOptional()
-  @Optional()
-  @IsString()
-  description?: string;
-
-  @ApiPropertyOptional()
-  @Optional()
-  @IsString()
-  leaderId?: string;
-
-  @ApiPropertyOptional()
-  @Optional()
-  @IsUUID()
-  sideId?: string;
-
-  @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {
       return undefined;
@@ -53,7 +31,7 @@ export class UpdateSquadDto {
   recruiting?: boolean;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === '' || value === null || value === undefined) {
       return undefined;

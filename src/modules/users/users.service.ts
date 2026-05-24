@@ -298,6 +298,7 @@ export class UsersService {
         steamId: true,
         status: true,
         role: true,
+        squadRole: true,
         isMissionReviewer: true,
         avatarUrl: true,
         bannedUntil: true,
@@ -347,6 +348,7 @@ export class UsersService {
           select: {
             id: true,
             status: true,
+            squadRole: true,
             squadId: true,
             createdAt: true,
             updatedAt: true,
@@ -369,6 +371,8 @@ export class UsersService {
             id: true,
             name: true,
             tag: true,
+            recruiting: true,
+            activeCount: true,
             logo: {
               select: {
                 id: true,
@@ -380,6 +384,7 @@ export class UsersService {
                 id: true,
                 nickname: true,
                 role: true,
+                squadRole: true,
                 avatarUrl: true,
                 squad: {
                   select: {
@@ -1121,6 +1126,7 @@ export class UsersService {
         nickname: true,
         status: true,
         role: true,
+        squadRole: true,
         squad: {
           select: {
             tag: true,
