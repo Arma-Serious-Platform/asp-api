@@ -20,7 +20,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Prisma, SquadInviteStatus, User, UserPunishmentType, UserRole, UserStatus } from '@prisma/client';
+import { Prisma, Squad, SquadInviteStatus, SquadRole, User, UserPunishmentType, UserRole, UserStatus } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
@@ -1121,6 +1121,7 @@ export class UsersService {
         nickname: true,
         steamId: true,
         status: true,
+        squadRole: true,
         squad: {
           select: {
             tag: true,
@@ -1137,10 +1138,13 @@ export class UsersService {
         return [];
       }
 
+      const nickname = !user.squad ? 
+      user.nickname : user.squadRole === SquadRole.RECRUIT 
+      ? `[~${user.squad.tag}~] ${user.nickname}`
+      : `[${user.squad.tag}] ${user.nickname}`;
+
       return {
-        nickname: user.squad?.tag
-          ? `[${user.squad.tag}] ${user.nickname}`
-          : user.nickname,
+        nickname,
         steamId: user.steamId,
         GUID: this.generateGuidFromSteamId64(user.steamId),
         banned: user.status === UserStatus.BANNED,
