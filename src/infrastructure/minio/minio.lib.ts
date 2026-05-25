@@ -5,4 +5,5 @@ export enum ASP_BUCKET {
   BIG_MISSIONS = 'big-missions',
   MINI_MISSIONS = 'mini-missions',
   TESTING_MISSIONS = 'testing-missions',
+  SPECIALIZATION_ICONS = 'specialization-icons',
 }

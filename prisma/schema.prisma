@@ -19,6 +19,7 @@ model File {
   Mission        Mission[]
   MissionVersion MissionVersion[]
   missionVersionScreenshots MissionVersionScreenshot[]
+  specializationIcons Specialization[] @relation("SpecializationIcon")
 }
 
 model GamePlan {
@@ -105,6 +106,7 @@ model User {
   squadInvites                SquadInvitation[]
   squadJoinRequests           SquadJoinRequest[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
+  specializations             Specialization[]  @relation("UserSpecializations")
   games                       Game[]
   telegramUrl                 String?
   discordUrl                  String?
@@ -160,6 +162,17 @@ model UserPunishment {
 model SiteSetting {
   key       String   @id
   value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Specialization {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String?
+  iconId    String?
+  icon      File?    @relation("SpecializationIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  users     User[]   @relation("UserSpecializations")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

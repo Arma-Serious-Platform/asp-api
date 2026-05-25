@@ -14,6 +14,7 @@ import { ChatsModule } from './modules/chats/chats.module';
 import { HeadquartersModule } from './modules/headquarters/headquarters.module';
 import { IslandsModule } from './modules/islands/islands.module';
 import { RulesModule } from './modules/rules/rules.module';
+import { SpecializationsModule } from './modules/specializations/specializations.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { RulesModule } from './modules/rules/rules.module';
     ChatsModule,
     IslandsModule,
     RulesModule,
+    SpecializationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

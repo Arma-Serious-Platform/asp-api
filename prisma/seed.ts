@@ -8,6 +8,18 @@ import { ISLANDS } from './data/islands';
 
 const prisma = new PrismaClient();
 
+const DEFAULT_SPECIALIZATIONS = [
+  'КС',
+  'КВ',
+  'Гранатометник',
+  'Екіпаж',
+  'Екіпаж (мехвод)',
+  'Пілот літака',
+  'Пілот гелікоптера',
+  'Мінометник',
+  'Сапер',
+];
+
 export const seed = async () => {
   const ownerEmail = process.env.OWNER_EMAIL;
   const ownerPassword = process.env.OWNER_PASSWORD;
@@ -114,11 +126,24 @@ export const seed = async () => {
     }
   }
 
+  const seedSpecializations = async () => {
+    const count = await prisma.specialization.count();
+
+    if (count > 0) return;
+
+    await prisma.specialization.createMany({
+      data: DEFAULT_SPECIALIZATIONS.map((name) => ({ name })),
+    });
+
+    console.log('Specializations created');
+  }
+
   try {
     await Promise.all([
       seedUser(),
       seedSides(),
-      seedIslands()
+      seedIslands(),
+      seedSpecializations(),
     ])
   } catch (error) {
     console.log('Error seeding database');

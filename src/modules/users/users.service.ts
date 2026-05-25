@@ -299,6 +299,21 @@ export class UsersService {
         status: true,
         role: true,
         squadRole: true,
+        specializations: {
+          include: {
+            icon: {
+              select: {
+                id: true,
+                bucket: true,
+                filename: true,
+                url: true,
+              },
+            },
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        },
         isMissionReviewer: true,
         avatarUrl: true,
         bannedUntil: true,
@@ -386,6 +401,21 @@ export class UsersService {
                 role: true,
                 squadRole: true,
                 avatarUrl: true,
+                specializations: {
+                  include: {
+                    icon: {
+                      select: {
+                        id: true,
+                        bucket: true,
+                        filename: true,
+                        url: true,
+                      },
+                    },
+                  },
+                  orderBy: {
+                    name: 'asc',
+                  },
+                },
                 squad: {
                   select: {
                     id: true,
@@ -1127,6 +1157,21 @@ export class UsersService {
         status: true,
         role: true,
         squadRole: true,
+        specializations: {
+          include: {
+            icon: {
+              select: {
+                id: true,
+                bucket: true,
+                filename: true,
+                url: true,
+              },
+            },
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        },
         squad: {
           select: {
             tag: true,

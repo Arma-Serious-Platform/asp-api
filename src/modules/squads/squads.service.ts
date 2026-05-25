@@ -49,6 +49,21 @@ export class SquadsService {
             role: true,
             squadRole: true,
             avatarUrl: true,
+            specializations: {
+              include: {
+                icon: {
+                  select: {
+                    id: true,
+                    bucket: true,
+                    filename: true,
+                    url: true,
+                  },
+                },
+              },
+              orderBy: {
+                name: 'asc',
+              },
+            },
             avatar: {
               select: {
                 id: true,
@@ -133,6 +148,21 @@ export class SquadsService {
             squadRole: true,
             avatarUrl: true,
             status: true,
+            specializations: {
+              include: {
+                icon: {
+                  select: {
+                    id: true,
+                    bucket: true,
+                    filename: true,
+                    url: true,
+                  },
+                },
+              },
+              orderBy: {
+                name: 'asc',
+              },
+            },
             avatar: {
               select: {
                 id: true,
@@ -151,6 +181,21 @@ export class SquadsService {
             role: true,
             squadRole: true,
             avatarUrl: true,
+            specializations: {
+              include: {
+                icon: {
+                  select: {
+                    id: true,
+                    bucket: true,
+                    filename: true,
+                    url: true,
+                  },
+                },
+              },
+              orderBy: {
+                name: 'asc',
+              },
+            },
             avatar: {
               select: {
                 id: true,
