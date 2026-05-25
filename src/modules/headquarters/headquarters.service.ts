@@ -512,7 +512,7 @@ export class HeadquartersService {
         take,
         include: this.commentInclude,
         orderBy: {
-          createdAt: 'desc',
+          createdAt: 'asc',
         },
       }),
     ]);

@@ -138,7 +138,7 @@ export class MissionCommentsService {
           },
         },
         orderBy: {
-          createdAt: 'desc',
+          createdAt: 'asc',
         },
       }),
     ]);
