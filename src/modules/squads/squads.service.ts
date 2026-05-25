@@ -28,6 +28,18 @@ export class SquadsService {
     private readonly minioService: MinioService,
   ) { }
 
+  private async clampActiveCount(tx: Prisma.TransactionClient, squadId: string, activeCount?: number) {
+    if (typeof activeCount !== 'number') {
+      return undefined;
+    }
+
+    const membersCount = await tx.user.count({
+      where: { squadId },
+    });
+
+    return Math.min(activeCount, membersCount);
+  }
+
   async findAll(dto: FindSquadsDto) {
     const { take = 50, skip = 0 } = dto;
 
@@ -281,7 +293,6 @@ export class SquadsService {
               id: dto.leaderId,
             },
           },
-          activeCount: dto.activeCount,
         },
       });
 
@@ -304,6 +315,15 @@ export class SquadsService {
           squadRole: SquadRole.MEMBER,
         },
       });
+
+      if (typeof dto.activeCount === 'number') {
+        return tx.squad.update({
+          where: { id: squad.id },
+          data: {
+            activeCount: await this.clampActiveCount(tx, squad.id, dto.activeCount),
+          },
+        });
+      }
 
       return squad;
     });
@@ -349,7 +369,6 @@ export class SquadsService {
           ...(dto.tag && { tag: dto.tag }),
           ...(dto.description && { description: dto.description }),
           ...(typeof dto.recruiting === 'boolean' && { recruiting: dto.recruiting }),
-          ...(typeof dto.activeCount === 'number' && { activeCount: dto.activeCount }),
         },
       });
 
@@ -375,6 +394,15 @@ export class SquadsService {
         });
       }
 
+      if (typeof dto.activeCount === 'number') {
+        squad = await tx.squad.update({
+          where: { id: squad.id },
+          data: {
+            activeCount: await this.clampActiveCount(tx, squad.id, dto.activeCount),
+          },
+        });
+      }
+
       return squad;
     });
   }
@@ -392,13 +420,15 @@ export class SquadsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const activeCount = await this.clampActiveCount(tx, existingSquad.id, dto.activeCount);
+
       let squad = await tx.squad.update({
         where: { id: existingSquad.id },
         data: {
           ...(dto.name && { name: dto.name }),
           ...(dto.tag && { tag: dto.tag }),
           ...(typeof dto.recruiting === 'boolean' && { recruiting: dto.recruiting }),
-          ...(typeof dto.activeCount === 'number' && { activeCount: dto.activeCount }),
+          ...(activeCount !== undefined && { activeCount }),
         },
       });
 
