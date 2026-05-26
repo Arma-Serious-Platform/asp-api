@@ -113,6 +113,12 @@ export class SquadsController {
   }
 
   @UseGuards(AuthGuard)
+  @Post('/join-requests/reject/:requestId')
+  rejectJoinRequest(@Param() dto: AcceptJoinRequestDto, @Req() req: RequestType) {
+    return this.squadsService.rejectJoinRequest(dto.requestId, req.userId);
+  }
+
+  @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN'])
   @Delete(':id')
   delete(@Param() dto: DeleteSquadDto) {

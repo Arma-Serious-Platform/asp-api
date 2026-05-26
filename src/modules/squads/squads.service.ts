@@ -407,23 +407,14 @@ export class SquadsService {
     });
   }
 
-  async updateMySquad(leaderId: string, dto: UpdateMySquadDto, logo?: File) {
-    const existingSquad = await this.prisma.squad.findUnique({
-      where: { leaderId },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!existingSquad) {
-      throw new BadRequestException('You are not the leader of any squad');
-    }
+  async updateMySquad(userId: string, dto: UpdateMySquadDto, logo?: File) {
+    const managedSquad = await this.getSquadManagedByUser(userId);
 
     return this.prisma.$transaction(async (tx) => {
-      const activeCount = await this.clampActiveCount(tx, existingSquad.id, dto.activeCount);
+      const activeCount = await this.clampActiveCount(tx, managedSquad.id, dto.activeCount);
 
       let squad = await tx.squad.update({
-        where: { id: existingSquad.id },
+        where: { id: managedSquad.id },
         data: {
           ...(dto.name && { name: dto.name }),
           ...(dto.tag && { tag: dto.tag }),
@@ -760,13 +751,48 @@ export class SquadsService {
       await tx.squadJoinRequest.deleteMany({
         where: {
           userId: request.userId,
-          squadId: {
-            not: request.squadId,
-          },
+          status: SquadInviteStatus.PENDING,
+        },
+      });
+
+      await tx.squadInvitation.deleteMany({
+        where: {
+          userId: request.userId,
+          status: SquadInviteStatus.PENDING,
         },
       });
 
       return acceptedRequest;
+    });
+  }
+
+  async rejectJoinRequest(requestId: string, userId: string) {
+    const request = await this.prisma.squadJoinRequest.findUnique({
+      where: { id: requestId },
+      select: {
+        id: true,
+        status: true,
+        squadId: true,
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Join request not found');
+    }
+
+    const managedSquad = await this.getSquadManagedByUser(userId);
+
+    if (request.squadId !== managedSquad.id) {
+      throw new BadRequestException('You are not allowed to manage this request');
+    }
+
+    if (request.status !== SquadInviteStatus.PENDING) {
+      throw new BadRequestException('Join request is not pending');
+    }
+
+    return this.prisma.squadJoinRequest.update({
+      where: { id: request.id },
+      data: { status: SquadInviteStatus.REJECTED },
     });
   }
 
@@ -859,23 +885,14 @@ export class SquadsService {
   }
 
   async kickFromSquad(dto: KickFromSquadDto, leaderId: string) {
-    const squad = await this.prisma.squad.findUnique({
-      where: { leaderId },
-    });
-
-    if (!squad) {
-      throw new NotFoundException('Squad not found');
-    }
-
-    if (squad.leaderId !== leaderId) {
-      throw new BadRequestException('You are not the leader of this squad');
-    }
+    const squad = await this.getSquadManagedByUser(leaderId);
 
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
       select: {
         id: true,
         squadId: true,
+        squadRole: true,
       },
     });
 
@@ -885,6 +902,14 @@ export class SquadsService {
 
     if (user.squadId !== squad.id) {
       throw new BadRequestException('User is not in this squad');
+    }
+
+    if (user.id === squad.leaderId) {
+      throw new BadRequestException('You cannot kick the squad leader');
+    }
+
+    if (!squad.isActorLeader && user.squadRole === SquadRole.SUBLEADER) {
+      throw new BadRequestException('Subleader cannot kick another subleader');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -1011,10 +1036,26 @@ export class SquadsService {
         },
       });
 
-      return await tx.squadInvitation.update({
+      const acceptedInvitation = await tx.squadInvitation.update({
         where: { id: invitationId },
         data: { status: SquadInviteStatus.ACCEPTED },
       });
+
+      await tx.squadInvitation.deleteMany({
+        where: {
+          userId,
+          status: SquadInviteStatus.PENDING,
+        },
+      });
+
+      await tx.squadJoinRequest.deleteMany({
+        where: {
+          userId,
+          status: SquadInviteStatus.PENDING,
+        },
+      });
+
+      return acceptedInvitation;
     });
   }
 
