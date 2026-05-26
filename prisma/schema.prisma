@@ -77,6 +77,7 @@ model User {
   nickname                    String            @unique
   password                    String
   steamId                     String?           @unique
+  GUID                        String?           @unique
   lastIp                      String?
   abilities                   SoldierAbility[]
   squadId                     String?

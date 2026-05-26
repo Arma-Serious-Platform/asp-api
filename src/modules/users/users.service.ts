@@ -172,7 +172,10 @@ export class UsersService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { steamId },
+      data: {
+        steamId,
+        GUID: this.generateGuidFromSteamId64(steamId),
+      },
     });
   }
 
@@ -278,7 +281,10 @@ export class UsersService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { steamId: null },
+      data: {
+        steamId: null,
+        GUID: null,
+      },
     });
 
     return this.me(userId);
@@ -1120,6 +1126,7 @@ export class UsersService {
       select: {
         nickname: true,
         steamId: true,
+        GUID: true,
         status: true,
         squadRole: true,
         squad: {
@@ -1134,7 +1141,7 @@ export class UsersService {
     });
 
     return users.flatMap((user) => {
-      if (!user.steamId) {
+      if (!user.steamId || !user.GUID) {
         return [];
       }
 
@@ -1146,7 +1153,7 @@ export class UsersService {
       return {
         nickname,
         steamId: user.steamId,
-        GUID: this.generateGuidFromSteamId64(user.steamId),
+        GUID: user.GUID,
         banned: user.status === UserStatus.BANNED,
       };
     });
@@ -1189,6 +1196,7 @@ export class UsersService {
             url: true,
           },
         },
+        steamId: true,
         isMissionReviewer: true,
         discordUrl: true,
         youtubeUrl: true,

@@ -3,6 +3,7 @@
  
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs';
+import { createHash } from 'crypto';
 import 'dotenv/config';
 import { ISLANDS } from './data/islands';
 
@@ -19,6 +20,20 @@ const DEFAULT_SPECIALIZATIONS = [
   'Мінометник',
   'Сапер',
 ];
+
+const generateGuidFromSteamId64 = (steamId64: string) => {
+  let steamId = BigInt(steamId64);
+  const bytes = Buffer.alloc(8);
+
+  for (let i = 0; i < 8; i++) {
+    bytes[i] = Number(steamId & 0xffn);
+    steamId >>= 8n;
+  }
+
+  return createHash('md5')
+    .update(Buffer.concat([Buffer.from('BE'), bytes]))
+    .digest('hex');
+};
 
 export const seed = async () => {
   const ownerEmail = process.env.OWNER_EMAIL;
@@ -138,12 +153,44 @@ export const seed = async () => {
     console.log('Specializations created');
   }
 
+  // TODO: remove after first start.
+  const backfillUserGuids = async () => {
+    const users = await prisma.user.findMany({
+      where: {
+        steamId: { not: null },
+        GUID: null,
+      },
+      select: {
+        id: true,
+        steamId: true,
+      },
+    });
+
+    await Promise.all(users.flatMap((user) => {
+      if (!user.steamId) {
+        return [];
+      }
+
+      return prisma.user.update({
+        where: { id: user.id },
+        data: {
+          GUID: generateGuidFromSteamId64(user.steamId),
+        },
+      });
+    }));
+
+    if (users.length > 0) {
+      console.log(`Backfilled GUID for ${users.length} users`);
+    }
+  }
+
   try {
     await Promise.all([
       seedUser(),
       seedSides(),
       seedIslands(),
       seedSpecializations(),
+      backfillUserGuids(),
     ])
   } catch (error) {
     console.log('Error seeding database');
