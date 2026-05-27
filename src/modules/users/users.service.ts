@@ -394,6 +394,16 @@ export class UsersService {
             tag: true,
             recruiting: true,
             activeCount: true,
+            _count: {
+              select: {
+                members: true,
+                joinRequests: {
+                  where: {
+                    status: SquadInviteStatus.PENDING,
+                  }
+                }
+              },
+            },
             logo: {
               select: {
                 id: true,

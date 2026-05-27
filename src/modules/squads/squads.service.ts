@@ -918,12 +918,33 @@ export class SquadsService {
         data: {
           squadId: null,
           squadRole: SquadRole.MEMBER,
+          specializations: {
+            set: [],
+          },
         },
       });
 
-      return await tx.squadInvitation.deleteMany({
+      const deletedInvitations = await tx.squadInvitation.deleteMany({
         where: { userId: dto.userId, squadId: squad.id },
       });
+
+      const membersCount = await tx.user.count({
+        where: { squadId: squad.id },
+      });
+
+      await tx.squad.updateMany({
+        where: {
+          id: squad.id,
+          activeCount: {
+            gt: membersCount,
+          },
+        },
+        data: {
+          activeCount: membersCount,
+        },
+      });
+
+      return deletedInvitations;
     });
   }
 
