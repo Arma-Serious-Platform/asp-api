@@ -153,12 +153,49 @@ export const seed = async () => {
     console.log('Specializations created');
   }
 
+  const cleanupPendingSquadRequestsForMembers = async () => {
+    const usersInSquads = await prisma.user.findMany({
+      where: {
+        squadId: {
+          not: null,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const userIds = usersInSquads.map((user) => user.id);
+
+    if (userIds.length === 0) return;
+
+    const [deletedInvites, deletedJoinRequests] = await prisma.$transaction([
+      prisma.squadInvitation.deleteMany({
+        where: {
+          userId: { in: userIds },
+          status: 'PENDING',
+        },
+      }),
+      prisma.squadJoinRequest.deleteMany({
+        where: {
+          userId: { in: userIds },
+          status: 'PENDING',
+        },
+      }),
+    ]);
+
+    if (deletedInvites.count > 0 || deletedJoinRequests.count > 0) {
+      console.log(`Deleted ${deletedInvites.count} pending squad invites and ${deletedJoinRequests.count} pending join requests for users already in squads`);
+    }
+  }
+
   try {
     await Promise.all([
       seedUser(),
       seedSides(),
       seedIslands(),
       seedSpecializations(),
+      cleanupPendingSquadRequestsForMembers(),
     ])
   } catch (error) {
     console.log('Error seeding database');
