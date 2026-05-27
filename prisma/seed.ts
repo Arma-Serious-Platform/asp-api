@@ -153,44 +153,12 @@ export const seed = async () => {
     console.log('Specializations created');
   }
 
-  // TODO: remove after first start.
-  const backfillUserGuids = async () => {
-    const users = await prisma.user.findMany({
-      where: {
-        steamId: { not: null },
-        GUID: null,
-      },
-      select: {
-        id: true,
-        steamId: true,
-      },
-    });
-
-    await Promise.all(users.flatMap((user) => {
-      if (!user.steamId) {
-        return [];
-      }
-
-      return prisma.user.update({
-        where: { id: user.id },
-        data: {
-          GUID: generateGuidFromSteamId64(user.steamId),
-        },
-      });
-    }));
-
-    if (users.length > 0) {
-      console.log(`Backfilled GUID for ${users.length} users`);
-    }
-  }
-
   try {
     await Promise.all([
       seedUser(),
       seedSides(),
       seedIslands(),
       seedSpecializations(),
-      backfillUserGuids(),
     ])
   } catch (error) {
     console.log('Error seeding database');
