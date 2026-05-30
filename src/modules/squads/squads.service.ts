@@ -369,6 +369,11 @@ export class SquadsService {
           ...(dto.tag && { tag: dto.tag }),
           ...(dto.description && { description: dto.description }),
           ...(typeof dto.recruiting === 'boolean' && { recruiting: dto.recruiting }),
+          ...(dto.telegramUrl !== undefined && { telegramUrl: dto.telegramUrl }),
+          ...(dto.discordUrl !== undefined && { discordUrl: dto.discordUrl }),
+          ...(dto.youtubeUrl !== undefined && { youtubeUrl: dto.youtubeUrl }),
+          ...(dto.twitchUrl !== undefined && { twitchUrl: dto.twitchUrl }),
+          ...(dto.tiktokUrl !== undefined && { tiktokUrl: dto.tiktokUrl }),
         },
       });
 
@@ -418,8 +423,14 @@ export class SquadsService {
         data: {
           ...(dto.name && { name: dto.name }),
           ...(dto.tag && { tag: dto.tag }),
+          ...(dto.description !== undefined && { description: dto.description }),
           ...(typeof dto.recruiting === 'boolean' && { recruiting: dto.recruiting }),
           ...(activeCount !== undefined && { activeCount }),
+          ...(dto.telegramUrl !== undefined && { telegramUrl: dto.telegramUrl }),
+          ...(dto.discordUrl !== undefined && { discordUrl: dto.discordUrl }),
+          ...(dto.youtubeUrl !== undefined && { youtubeUrl: dto.youtubeUrl }),
+          ...(dto.twitchUrl !== undefined && { twitchUrl: dto.twitchUrl }),
+          ...(dto.tiktokUrl !== undefined && { tiktokUrl: dto.tiktokUrl }),
         },
       });
 

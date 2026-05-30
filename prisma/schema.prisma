@@ -113,6 +113,7 @@ model User {
   discordUrl                  String?
   youtubeUrl                  String?
   twitchUrl                   String?
+  tiktokUrl                   String?
   chats                       ChatUser[] @relation("ChatUsers")
   messages                    Message[] @relation("UserMessages")
   createdAt                   DateTime          @default(now())
@@ -196,6 +197,11 @@ model Squad {
   logoId      String?
   logo        File?             @relation(fields: [logoId], references: [id])
   recruiting  Boolean           @default(true)
+  telegramUrl String?
+  discordUrl  String?
+  youtubeUrl  String?
+  twitchUrl   String?
+  tiktokUrl   String?
   assignedGamePlanSlots GamePlanSlot[] @relation("AssignedGamePlanSlots")
   wantedGamePlanSlots   GamePlanSlot[] @relation("WantedGamePlanSlots")
 }

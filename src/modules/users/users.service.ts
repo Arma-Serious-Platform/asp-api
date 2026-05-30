@@ -328,6 +328,7 @@ export class UsersService {
         discordUrl: true,
         youtubeUrl: true,
         twitchUrl: true,
+        tiktokUrl: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -392,8 +393,14 @@ export class UsersService {
             id: true,
             name: true,
             tag: true,
+            description: true,
             recruiting: true,
             activeCount: true,
+            telegramUrl: true,
+            discordUrl: true,
+            youtubeUrl: true,
+            twitchUrl: true,
+            tiktokUrl: true,
             _count: {
               select: {
                 members: true,
@@ -1212,6 +1219,7 @@ export class UsersService {
         youtubeUrl: true,
         twitchUrl: true,
         telegramUrl: true,
+        tiktokUrl: true,
       },
     });
   }

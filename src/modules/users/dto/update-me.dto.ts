@@ -31,4 +31,9 @@ export class UpdateMeDto {
   @IsOptional()
   @IsString()
   twitchUrl: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  tiktokUrl: string;
 }

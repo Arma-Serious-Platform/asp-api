@@ -63,4 +63,29 @@ export class UpdateSquadDto {
   @IsInt()
   @Min(0)
   activeCount?: number;
+
+  @ApiPropertyOptional()
+  @Optional()
+  @IsString()
+  telegramUrl?: string;
+
+  @ApiPropertyOptional()
+  @Optional()
+  @IsString()
+  discordUrl?: string;
+
+  @ApiPropertyOptional()
+  @Optional()
+  @IsString()
+  youtubeUrl?: string;
+
+  @ApiPropertyOptional()
+  @Optional()
+  @IsString()
+  twitchUrl?: string;
+
+  @ApiPropertyOptional()
+  @Optional()
+  @IsString()
+  tiktokUrl?: string;
 }

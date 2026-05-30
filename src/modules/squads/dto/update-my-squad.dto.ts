@@ -15,6 +15,11 @@ export class UpdateMySquadDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {
       return undefined;
@@ -41,4 +46,29 @@ export class UpdateMySquadDto {
   @IsInt()
   @Min(0)
   activeCount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  telegramUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  discordUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  youtubeUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  twitchUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  tiktokUrl?: string;
 }
