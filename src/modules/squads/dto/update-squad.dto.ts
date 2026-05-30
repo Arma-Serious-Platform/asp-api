@@ -1,13 +1,16 @@
 import { Optional } from '@nestjs/common';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Prisma } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsOptional,
   IsString,
   IsUUID,
   Min,
 } from 'class-validator';
+import { normalizeJsonValue } from 'src/utils/normalize-json-value';
 
 export class UpdateSquadDto {
   @ApiPropertyOptional()
@@ -21,9 +24,9 @@ export class UpdateSquadDto {
   tag?: string;
 
   @ApiPropertyOptional()
-  @Optional()
-  @IsString()
-  description?: string;
+  @IsOptional()
+  @Transform(normalizeJsonValue)
+  description?: Prisma.InputJsonValue;
 
   @ApiPropertyOptional()
   @Optional()

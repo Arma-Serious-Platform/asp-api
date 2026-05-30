@@ -1,0 +1,38 @@
+-- AlterTable
+ALTER TABLE "Squad"
+ALTER COLUMN "description" TYPE JSONB
+USING CASE
+  WHEN "description" IS NULL THEN NULL
+  WHEN "description" = '' THEN NULL
+  ELSE jsonb_build_object(
+    'root', jsonb_build_object(
+      'children', jsonb_build_array(
+        jsonb_build_object(
+          'children', jsonb_build_array(
+            jsonb_build_object(
+              'detail', 0,
+              'format', 0,
+              'mode', 'normal',
+              'style', '',
+              'text', "description",
+              'type', 'text',
+              'version', 1
+            )
+          ),
+          'direction', NULL,
+          'format', '',
+          'indent', 0,
+          'type', 'paragraph',
+          'version', 1,
+          'textFormat', 0,
+          'textStyle', ''
+        )
+      ),
+      'direction', NULL,
+      'format', '',
+      'indent', 0,
+      'type', 'root',
+      'version', 1
+    )
+  )
+END;

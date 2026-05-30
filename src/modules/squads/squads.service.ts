@@ -367,7 +367,7 @@ export class SquadsService {
           ...(dto.leaderId && { leader: { connect: { id: dto.leaderId } } }),
           ...(dto.name && { name: dto.name }),
           ...(dto.tag && { tag: dto.tag }),
-          ...(dto.description && { description: dto.description }),
+          ...(dto.description !== undefined && { description: dto.description }),
           ...(typeof dto.recruiting === 'boolean' && { recruiting: dto.recruiting }),
           ...(dto.telegramUrl !== undefined && { telegramUrl: dto.telegramUrl }),
           ...(dto.discordUrl !== undefined && { discordUrl: dto.discordUrl }),
