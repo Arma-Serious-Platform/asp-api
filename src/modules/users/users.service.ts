@@ -490,6 +490,24 @@ export class UsersService {
       throw new BadRequestException('Invalid token');
     }
 
+    if (user.activationTokenExpiresAt && user.activationTokenExpiresAt < new Date()) {
+      const { token, expiresAt } = this.generateActivationToken();
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          activationToken: token,
+          activationTokenExpiresAt: expiresAt,
+        },
+      });
+
+      await this.sendActivationToken(user.email, token);
+
+      throw new BadRequestException(
+        'Activation token expired. New token sent to your email',
+      );
+    }
+
     if (!user.isEmailVerified) {
       await this.prisma.user.update({
         where: { id: user.id },
@@ -854,14 +872,14 @@ export class UsersService {
           data: { activationToken: token, activationTokenExpiresAt: expiresAt },
         });
 
-        await this.sendActivationToken(user.email, user.activationToken!);
+        await this.sendActivationToken(user.email, token);
 
         throw new BadRequestException(
           'Activation token expired. New token sent to your email',
         );
       } else {
         throw new BadRequestException(
-          'Activation token expired. Check your email for a new token',
+          'Please confirm your email before logging in',
         );
       }
     }
