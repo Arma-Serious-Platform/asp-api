@@ -1,10 +1,11 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionGameSide } from "@prisma/client";
-import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import { MissionGameSide, Prisma } from "@prisma/client";
+import { IsArray, IsDateString, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
 import { Transform, Type } from "class-transformer";
 import { normalizeStringArray } from "src/utils/normalize-string-array";
 import { normalizeObjectArray } from "src/utils/normalize-object-array";
+import { normalizeJsonValue } from "src/utils/normalize-json-value";
 
 export class UpdateMissionVersionDto {
   @ApiPropertyOptional()
@@ -65,4 +66,19 @@ export class UpdateMissionVersionDto {
   @IsArray()
   @IsString({ each: true })
   removeDefenseScreenshotIds?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  inGameTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  weather?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(normalizeJsonValue)
+  changelog?: Prisma.InputJsonValue;
 }

@@ -1,8 +1,9 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionType } from "@prisma/client";
+import { MissionType, Prisma } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsArray, IsEnum, IsOptional, IsString, IsUUID } from "class-validator";
 import { normalizeStringArray } from "src/utils/normalize-string-array";
+import { normalizeJsonValue } from "src/utils/normalize-json-value";
 
 export class UpdateMissionDto {
   @ApiPropertyOptional()
@@ -11,9 +12,9 @@ export class UpdateMissionDto {
   name?: string;
 
   @ApiPropertyOptional()
-  @IsString()
   @IsOptional()
-  description?: string;
+  @Transform(normalizeJsonValue)
+  description?: Prisma.InputJsonValue;
 
   @ApiPropertyOptional({ enum: MissionType })
   @IsEnum(MissionType)

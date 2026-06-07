@@ -1,8 +1,13 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionStatus, MissionType } from "@prisma/client";
+import { MissionStatus, MissionType, State } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
 import { PaginationDto } from "src/shared/dto/pagination.dto";
+import { OrderType } from "src/shared/enums/order-type.enum";
+
+export enum MissionOrderBy {
+  CREATED_AT = 'createdAt',
+}
 
 export class FindMissionsDto extends PaginationDto {
   @ApiPropertyOptional()
@@ -34,8 +39,23 @@ export class FindMissionsDto extends PaginationDto {
   @IsEnum(MissionType)
   missionType?: MissionType;
 
+  @ApiPropertyOptional({ enum: State })
+  @IsOptional()
+  @IsEnum(State)
+  state?: State;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
   islandId?: string;
+
+  @ApiPropertyOptional({ enum: MissionOrderBy, default: MissionOrderBy.CREATED_AT })
+  @IsOptional()
+  @IsEnum(MissionOrderBy)
+  orderBy?: MissionOrderBy = MissionOrderBy.CREATED_AT;
+
+  @ApiPropertyOptional({ enum: OrderType, default: OrderType.DESC })
+  @IsOptional()
+  @IsEnum(OrderType)
+  orderType?: OrderType = OrderType.DESC;
 }

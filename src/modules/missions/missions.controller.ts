@@ -11,6 +11,7 @@ import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
+import { ChangeMissionStateDto } from "./dto/change-mission-state.dto";
 
 @Controller('missions')
 export class MissionsController {
@@ -55,6 +56,12 @@ export class MissionsController {
   @UseInterceptors(FileInterceptor('image'))
   update(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) image: File, @Param('id') id: string, @Body() dto: UpdateMissionDto, @Req() req: RequestType) {
     return this.missionsService.updateMission(dto, id, req.userId, image);
+  }
+
+  @Patch(':id/state')
+  @UseGuards(AuthGuard)
+  changeState(@Param('id') id: string, @Body() dto: ChangeMissionStateDto, @Req() req: RequestType) {
+    return this.missionsService.changeMissionState(dto, id, req.userId, req.role);
   }
 
   @Delete(':id')

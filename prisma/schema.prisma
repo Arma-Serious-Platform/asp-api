@@ -284,6 +284,9 @@ model MissionVersion {
   defenseSideName    String
   weaponry           MissionWeaponry[] @relation("MissionVersionWeaponry")
   changesDescription String?
+  changelog          Json?
+  inGameTime         DateTime?
+  weather            String?
   games              Game[]
   rating             Int?
   fileId             String
@@ -337,8 +340,9 @@ enum MissionType {
 model Mission {
   id              String           @id @default(uuid())
   name            String
-  description     String
+  description     Json?
   missionType     MissionType @default(SG)
+  state           State       @default(ACTIVE)
   authorId        String?
   author          User?            @relation(fields: [authorId], references: [id])
   coauthors       User[]           @relation("MissionCoauthors")
@@ -451,6 +455,11 @@ enum SideType {
 enum UserStatus {
   ACTIVE
   BANNED
+}
+
+enum State {
+  ACTIVE
+  ARCHIVED
 }
 
 enum UserRole {

@@ -1,9 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionGameSide } from "@prisma/client";
+import { MissionGameSide, Prisma } from "@prisma/client";
 import { Transform, Type } from "class-transformer";
-import { IsArray, IsDefined, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsArray, IsDateString, IsDefined, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
 import { normalizeObjectArray } from "src/utils/normalize-object-array";
+import { normalizeJsonValue } from "src/utils/normalize-json-value";
 
 export class CreateMissionVersionDto {
   @ApiProperty()
@@ -59,4 +60,19 @@ export class CreateMissionVersionDto {
   @ValidateNested({ each: true })
   @Type(() => CreateMissionWeaponryDto)
   weaponry?: CreateMissionWeaponryDto[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  inGameTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  weather?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(normalizeJsonValue)
+  changelog?: Prisma.InputJsonValue;
 }

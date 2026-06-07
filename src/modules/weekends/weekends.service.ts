@@ -51,6 +51,72 @@ export class WeekendsService {
     },
   } satisfies Prisma.UserSelect;
 
+  private readonly missionSelectForWeekendGame = {
+    name: true,
+    description: true,
+    image: true,
+    author: {
+      select: this.missionAuthorSelect,
+    },
+    coauthors: {
+      select: this.missionAuthorSelect,
+    },
+  } satisfies Prisma.MissionSelect;
+
+  private readonly missionVersionBaseSelect = {
+    id: true,
+    version: true,
+    missionId: true,
+    status: true,
+    attackSideType: true,
+    defenseSideType: true,
+    attackSideSlots: true,
+    defenseSideSlots: true,
+    missionAttackSlots: true,
+    missionDefenceSlots: true,
+    attackSideName: true,
+    defenseSideName: true,
+    changesDescription: true,
+    inGameTime: true,
+    weather: true,
+    rating: true,
+    fileId: true,
+    createdAt: true,
+    updatedAt: true,
+  } satisfies Prisma.MissionVersionSelect;
+
+  private readonly missionVersionSelectForWeekendList = {
+    ...this.missionVersionBaseSelect,
+    weaponry: true,
+    file: {
+      select: {
+        id: true,
+        url: true,
+      },
+    },
+    uniformScreenshots: {
+      select: {
+        side: true,
+        file: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    },
+  } satisfies Prisma.MissionVersionSelect;
+
+  private readonly missionVersionSelectForWeekendGame = {
+    ...this.missionVersionBaseSelect,
+    mission: {
+      select: this.missionSelectForWeekendGame,
+    },
+  } satisfies Prisma.MissionVersionSelect;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly headquartersService: HeadquartersService,
@@ -90,29 +156,7 @@ export class WeekendsService {
                 }
               },
               missionVersion: {
-                include: {
-                  weaponry: true,
-                  file: {
-                    select: {
-                      id: true,
-                      url: true,
-                    }
-                  },
-                  uniformScreenshots: {
-                    select: {
-                      side: true,
-                      file: {
-                        select: {
-                          id: true,
-                          url: true,
-                        },
-                      },
-                    },
-                    orderBy: {
-                      createdAt: 'asc',
-                    },
-                  },
-                },
+                select: this.missionVersionSelectForWeekendList,
               },
               attackSide: {
                 select: {
@@ -154,21 +198,7 @@ export class WeekendsService {
         games: {
           include: {
             missionVersion: {
-              include: {
-                mission: {
-                  select: {
-                    name: true,
-                    description: true,
-                    image: true,
-                    author: {
-                      select: this.missionAuthorSelect,
-                    },
-                    coauthors: {
-                      select: this.missionAuthorSelect,
-                    },
-                  },
-                },
-              },
+              select: this.missionVersionSelectForWeekendGame,
             },
             attackSide: {
               select: {
@@ -288,21 +318,7 @@ export class WeekendsService {
         games: {
           include: {
             missionVersion: {
-              include: {
-                mission: {
-                  select: {
-                    name: true,
-                    description: true,
-                    image: true,
-                    author: {
-                      select: this.missionAuthorSelect,
-                    },
-                    coauthors: {
-                      select: this.missionAuthorSelect,
-                    },
-                  },
-                },
-              },
+              select: this.missionVersionSelectForWeekendGame,
             },
             attackSide: {
               select: {
@@ -353,21 +369,7 @@ export class WeekendsService {
         games: {
           include: {
             missionVersion: {
-              include: {
-                mission: {
-                  select: {
-                    name: true,
-                    description: true,
-                    image: true,
-                    author: {
-                      select: this.missionAuthorSelect,
-                    },
-                    coauthors: {
-                      select: this.missionAuthorSelect,
-                    },
-                  },
-                },
-              },
+              select: this.missionVersionSelectForWeekendGame,
             },
             attackSide: {
               select: {
@@ -532,21 +534,7 @@ export class WeekendsService {
       data: updateData,
       include: {
         missionVersion: {
-          include: {
-            mission: {
-              select: {
-                name: true,
-                description: true,
-                image: true,
-                author: {
-                  select: this.missionAuthorSelect,
-                },
-                coauthors: {
-                  select: this.missionAuthorSelect,
-                },
-              },
-            },
-          },
+          select: this.missionVersionSelectForWeekendGame,
         },
         attackSide: {
           select: {
@@ -682,21 +670,7 @@ export class WeekendsService {
       },
       include: {
         missionVersion: {
-          include: {
-            mission: {
-              select: {
-                name: true,
-                description: true,
-                image: true,
-                author: {
-                  select: this.missionAuthorSelect,
-                },
-                coauthors: {
-                  select: this.missionAuthorSelect,
-                },
-              },
-            },
-          },
+          select: this.missionVersionSelectForWeekendGame,
         },
         attackSide: {
           select: {

@@ -1,11 +1,11 @@
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { FindMissionsDto } from "./dto/find-missions.dto";
+import { FindMissionsDto, MissionOrderBy } from "./dto/find-missions.dto";
 import { CreateMissionDto } from "./dto/create-mission.dto";
 import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { resolveMissionVersionBucket } from "src/infrastructure/minio/mission-version-bucket";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
-import { MissionStatus, MissionType, Prisma, UserRole } from "@prisma/client";
+import { MissionStatus, MissionType, Prisma, State, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
@@ -13,6 +13,8 @@ import { FindMissionByIdDto } from "./dto/find-mission-by-id.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
 import { PboParserService } from "src/infrastructure/pbo-parser/pbo-parser.service";
 import { HeadquartersService } from "src/modules/headquarters/headquarters.service";
+import { ChangeMissionStateDto } from "./dto/change-mission-state.dto";
+import { OrderType } from "src/shared/enums/order-type.enum";
 
 @Injectable()
 export class MissionsService {
@@ -92,6 +94,10 @@ export class MissionsService {
     return ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(role);
   }
 
+  private canArchiveAnyMission(role: UserRole) {
+    return ([UserRole.OWNER, UserRole.UVK] as UserRole[]).includes(role);
+  }
+
   async findAllIslands() {
     return await this.prisma.island.findMany({
       select: {
@@ -105,7 +111,9 @@ export class MissionsService {
   }
 
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, status, missionType, islandId } = dto;
+    const { search, authorId, minSlots, maxSlots, status, missionType, state, islandId } = dto;
+    const orderBy = dto.orderBy ?? MissionOrderBy.CREATED_AT;
+    const orderType = dto.orderType ?? OrderType.DESC;
 
     // Get mission IDs that match slot criteria using raw SQL
     let missionIdsWithValidSlots: string[] | null = null;
@@ -145,14 +153,15 @@ export class MissionsService {
 
     const options: Prisma.MissionFindManyArgs = {
       orderBy: {
-        createdAt: 'desc',
-      },
+        [orderBy]: orderType,
+      } as Prisma.MissionOrderByWithRelationInput,
       where: {
         name: { contains: search, mode: 'insensitive' },
         ...(authorId ? { OR: [{ authorId }, { coauthors: { some: { id: authorId } } }] } : {}),
         ...(missionIdsWithValidSlots ? { id: { in: missionIdsWithValidSlots } } : {}),
         ...(status ? { missionVersions: { some: { status } } } : {}),
         ...(missionType ? { missionType } : {}),
+        ...(state ? { state } : {}),
         ...(islandId ? { islandId } : {}),
       },
       include: {
@@ -177,6 +186,8 @@ export class MissionsService {
             missionDefenceSlots: true,
             attackSideType: true,
             defenseSideType: true,
+            inGameTime: true,
+            weather: true,
             version: true,
             status: true,
 
@@ -255,7 +266,7 @@ export class MissionsService {
     return await this.prisma.mission.create({
       data: {
         name: dto.name,
-        description: dto.description,
+        ...(dto.description !== undefined && { description: dto.description }),
         missionType: dto.missionType ?? MissionType.SG,
         authorId: authorId,
         imageId: fileId,
@@ -344,6 +355,44 @@ export class MissionsService {
           },
         }),
       },
+      include: {
+        image: true,
+        island: true,
+        author: {
+          select: this.missionAuthorSelect,
+        },
+        coauthors: {
+          select: this.missionAuthorSelect,
+        },
+      },
+    });
+  }
+
+  async changeMissionState(dto: ChangeMissionStateDto, missionId: string, userId: string, role: UserRole) {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: {
+        id: true,
+        authorId: true,
+        coauthors: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!mission) {
+      throw new NotFoundException('Mission not found');
+    }
+
+    if (!this.canEditMission(mission, userId) && !this.canArchiveAnyMission(role)) {
+      throw new ForbiddenException('You are not authorized to archive this mission');
+    }
+
+    return await this.prisma.mission.update({
+      where: { id: missionId },
+      data: { state: dto.state },
       include: {
         image: true,
         island: true,
@@ -457,6 +506,7 @@ export class MissionsService {
       select: {
         authorId: true,
         missionType: true,
+        state: true,
         coauthors: {
           select: {
             id: true,
@@ -466,6 +516,10 @@ export class MissionsService {
     });
     if (!mission) {
       throw new NotFoundException('Mission not found');
+    }
+
+    if (mission.state === State.ARCHIVED) {
+      throw new BadRequestException('Cannot add a version to an archived mission');
     }
 
     if (!this.canEditMission(mission, userId)) {
@@ -501,6 +555,9 @@ export class MissionsService {
         missionDefenceSlots,
         attackSideName: dto.attackSideName,
         defenseSideName: dto.defenseSideName,
+        ...(dto.inGameTime !== undefined && { inGameTime: new Date(dto.inGameTime) }),
+        ...(dto.weather !== undefined && { weather: dto.weather }),
+        ...(dto.changelog !== undefined && { changelog: dto.changelog }),
         status: MissionStatus.PENDING_APPROVAL,
         weaponry: dto.weaponry
           ? {
@@ -577,6 +634,7 @@ export class MissionsService {
           select: {
             authorId: true,
             missionType: true,
+            state: true,
             coauthors: {
               select: {
                 id: true,
@@ -589,6 +647,10 @@ export class MissionsService {
 
     if (!missionVersion) {
       throw new NotFoundException('Mission version not found');
+    }
+
+    if (missionVersion.mission.state === State.ARCHIVED) {
+      throw new BadRequestException('Cannot update a version of an archived mission');
     }
 
     const canChangeAnyMissionVersion =
@@ -652,6 +714,18 @@ export class MissionsService {
 
     if (dto.defenseSideType !== undefined) {
       updateDto.defenseSideType = dto.defenseSideType;
+    }
+
+    if (dto.inGameTime !== undefined) {
+      updateDto.inGameTime = new Date(dto.inGameTime);
+    }
+
+    if (dto.weather !== undefined) {
+      updateDto.weather = dto.weather;
+    }
+
+    if (dto.changelog !== undefined) {
+      updateDto.changelog = dto.changelog;
     }
 
     if (dto.weaponry !== undefined) {
