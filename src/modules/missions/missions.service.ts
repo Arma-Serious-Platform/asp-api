@@ -94,6 +94,10 @@ export class MissionsService {
     return ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(role);
   }
 
+  private canChangeMissionVersionStatus(user: { role: UserRole; isMissionReviewer: boolean }) {
+    return user.isMissionReviewer || this.canManageAnyMission(user.role);
+  }
+
   private canArchiveAnyMission(role: UserRole) {
     return ([UserRole.OWNER, UserRole.UVK] as UserRole[]).includes(role);
   }
@@ -111,7 +115,7 @@ export class MissionsService {
   }
 
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, status, missionType, state, islandId } = dto;
+    const { search, authorId, minSlots, maxSlots, status, reviewerId, missionType, state, islandId } = dto;
     const orderBy = dto.orderBy ?? MissionOrderBy.CREATED_AT;
     const orderType = dto.orderType ?? OrderType.DESC;
 
@@ -151,6 +155,58 @@ export class MissionsService {
       }
     }
 
+    let missionIdsWithLatestVersionFilters: string[] | null = null;
+    if (status || reviewerId) {
+      let result: Array<{ missionId: string }>;
+
+      if (status && reviewerId) {
+        result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+          SELECT latest."missionId"
+          FROM (
+            SELECT DISTINCT ON ("missionId") "missionId", "status", "reviewerId"
+            FROM "MissionVersion"
+            ORDER BY "missionId", "createdAt" DESC, "id" DESC
+          ) latest
+          WHERE latest."status" = ${status}::"MissionStatus"
+            AND latest."reviewerId" = ${reviewerId}
+        `;
+      } else if (status) {
+        result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+          SELECT latest."missionId"
+          FROM (
+            SELECT DISTINCT ON ("missionId") "missionId", "status"
+            FROM "MissionVersion"
+            ORDER BY "missionId", "createdAt" DESC, "id" DESC
+          ) latest
+          WHERE latest."status" = ${status}::"MissionStatus"
+        `;
+      } else {
+        result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+          SELECT latest."missionId"
+          FROM (
+            SELECT DISTINCT ON ("missionId") "missionId", "reviewerId"
+            FROM "MissionVersion"
+            ORDER BY "missionId", "createdAt" DESC, "id" DESC
+          ) latest
+          WHERE latest."reviewerId" = ${reviewerId}
+        `;
+      }
+
+      missionIdsWithLatestVersionFilters = result.map((r) => r.missionId);
+
+      if (missionIdsWithLatestVersionFilters.length === 0) {
+        return {
+          data: [],
+          total: 0,
+        };
+      }
+    }
+
+    const missionIdConditions: Prisma.MissionWhereInput[] = [
+      ...(missionIdsWithValidSlots ? [{ id: { in: missionIdsWithValidSlots } }] : []),
+      ...(missionIdsWithLatestVersionFilters ? [{ id: { in: missionIdsWithLatestVersionFilters } }] : []),
+    ];
+
     const options: Prisma.MissionFindManyArgs = {
       orderBy: {
         [orderBy]: orderType,
@@ -158,8 +214,7 @@ export class MissionsService {
       where: {
         name: { contains: search, mode: 'insensitive' },
         ...(authorId ? { OR: [{ authorId }, { coauthors: { some: { id: authorId } } }] } : {}),
-        ...(missionIdsWithValidSlots ? { id: { in: missionIdsWithValidSlots } } : {}),
-        ...(status ? { missionVersions: { some: { status } } } : {}),
+        ...(missionIdConditions.length > 0 ? { AND: missionIdConditions } : {}),
         ...(missionType ? { missionType } : {}),
         ...(state ? { state } : {}),
         ...(islandId ? { islandId } : {}),
@@ -188,6 +243,10 @@ export class MissionsService {
             defenseSideType: true,
             inGameTime: true,
             weather: true,
+            reviewerId: true,
+            reviewer: {
+              select: this.missionAuthorSelect,
+            },
             version: true,
             status: true,
 
@@ -237,6 +296,9 @@ export class MissionsService {
           include: {
             file: true,
             weaponry: true,
+            reviewer: {
+              select: this.missionAuthorSelect,
+            },
             uniformScreenshots: {
               include: {
                 file: true,
@@ -326,10 +388,6 @@ export class MissionsService {
 
     const coauthorIds = this.normalizeCoauthorIds(dto.coauthorIds, mission.authorId ?? authorId);
     if (coauthorIds !== undefined) {
-      if (mission.authorId !== authorId && !canManageAnyMission) {
-        throw new ForbiddenException('Only the mission author can change coauthors');
-      }
-
       await this.ensureCoauthorsExist(coauthorIds);
     }
 
@@ -584,6 +642,9 @@ export class MissionsService {
       },
       include: {
         weaponry: true,
+        reviewer: {
+          select: this.missionAuthorSelect,
+        },
         uniformScreenshots: {
           include: {
             file: true,
@@ -795,6 +856,9 @@ export class MissionsService {
         where: { id: missionVersionId },
         data: updateDto,
         include: {
+          reviewer: {
+            select: this.missionAuthorSelect,
+          },
           uniformScreenshots: {
             include: {
               file: true,
@@ -910,7 +974,7 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.isMissionReviewer && !this.canManageAnyMission(user.role)) {
+    if (!this.canChangeMissionVersionStatus(user)) {
       throw new ForbiddenException('You are not authorized to change mission version status');
     }
 
@@ -919,13 +983,19 @@ export class MissionsService {
       select: {
         id: true,
         fileId: true,
-        mission: { select: { missionType: true } },
+        mission: {
+          select: {
+            missionType: true,
+          },
+        },
       },
     });
 
     if (!version) {
       throw new NotFoundException('Mission version not found');
     }
+
+    const shouldResetReviewer = dto.status === MissionStatus.PENDING_APPROVAL;
 
     const targetBucket = resolveMissionVersionBucket(
       dto.status,
@@ -935,9 +1005,15 @@ export class MissionsService {
 
     return await this.prisma.missionVersion.update({
       where: { id: versionId },
-      data: { status: dto.status },
+      data: {
+        status: dto.status,
+        reviewerId: shouldResetReviewer ? null : userId,
+      },
       include: {
         file: true,
+        reviewer: {
+          select: this.missionAuthorSelect,
+        },
       },
     });
   }

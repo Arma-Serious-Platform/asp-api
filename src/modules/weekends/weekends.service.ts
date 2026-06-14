@@ -79,6 +79,10 @@ export class WeekendsService {
     changesDescription: true,
     inGameTime: true,
     weather: true,
+    reviewerId: true,
+    reviewer: {
+      select: this.missionAuthorSelect,
+    },
     rating: true,
     fileId: true,
     createdAt: true,

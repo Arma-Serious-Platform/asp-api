@@ -34,6 +34,11 @@ export class FindMissionsDto extends PaginationDto {
   @IsEnum(MissionStatus)
   status?: MissionStatus;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  reviewerId?: string;
+
   @ApiPropertyOptional({ enum: MissionType })
   @IsOptional()
   @IsEnum(MissionType)

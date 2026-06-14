@@ -77,6 +77,23 @@ export class UsersService {
     return role === UserRole.OWNER || role === UserRole.SERVER_ADMIN;
   }
 
+  private appendUserWhereAnd(
+    where: Prisma.UserWhereInput | undefined,
+    condition: Prisma.UserWhereInput,
+  ): Prisma.UserWhereInput {
+    const currentAnd = where?.AND;
+    const andConditions = Array.isArray(currentAnd)
+      ? currentAnd
+      : currentAnd
+        ? [currentAnd]
+        : [];
+
+    return {
+      ...where,
+      AND: [...andConditions, condition],
+    };
+  }
+
   private generateGuidFromSteamId64(steamId64: string) {
     let steamId = BigInt(steamId64);
     const bytes = Buffer.alloc(8);
@@ -1086,6 +1103,23 @@ export class UsersService {
         ...options.where,
         missions: dto.hasMission ? { some: {} } : { none: {} },
       };
+    }
+
+    if (dto.canReviewMissions !== undefined) {
+      const reviewerRoles = [UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK];
+      const canReviewMissionsWhere: Prisma.UserWhereInput = dto.canReviewMissions
+        ? {
+          OR: [
+            { isMissionReviewer: true },
+            { role: { in: reviewerRoles } },
+          ],
+        }
+        : {
+          isMissionReviewer: false,
+          role: { notIn: reviewerRoles },
+        };
+
+      options.where = this.appendUserWhereAnd(options.where, canReviewMissionsWhere);
     }
 
     options.skip = skip;

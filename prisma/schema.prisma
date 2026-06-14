@@ -94,6 +94,7 @@ model User {
   isEmailVerified             Boolean           @default(false)
   missions                    Mission[]
   missionComments             MissionComment[]
+  reviewedMissionVersions     MissionVersion[]  @relation("MissionVersionReviewer")
   side                        Side?
   gamePlansAsCommander        GamePlan[]        @relation("GamePlanCommander")
   gamePlanComments            GamePlanComment[]
@@ -287,6 +288,8 @@ model MissionVersion {
   changelog          Json?
   inGameTime         DateTime?
   weather            String?
+  reviewerId         String?
+  reviewer           User?             @relation("MissionVersionReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   games              Game[]
   rating             Int?
   fileId             String
@@ -444,6 +447,7 @@ enum MissionStatus {
   APPROVED
   PENDING_APPROVAL
   CHANGES_REQUESTED
+  IN_REVIEW
 }
 
 enum SideType {

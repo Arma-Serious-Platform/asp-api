@@ -58,4 +58,21 @@ export class GetUsersDto extends PaginationDto {
   })
   @IsBoolean()
   hasMission?: boolean;
+
+  @ApiPropertyOptional({ description: 'Filter users who can review mission versions' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (value === true || value === 'true') {
+      return true;
+    }
+    if (value === false || value === 'false') {
+      return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  canReviewMissions?: boolean;
 }
