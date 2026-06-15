@@ -746,6 +746,7 @@ export class MissionsService {
       updateDto.file = { connect: { id: newFile.id } };
 
       updateDto.status = MissionStatus.PENDING_APPROVAL;
+      updateDto.reviewer = { disconnect: true };
     }
 
 
