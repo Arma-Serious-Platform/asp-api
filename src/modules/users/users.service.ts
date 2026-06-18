@@ -830,39 +830,22 @@ export class UsersService {
     };
   }
 
-  async login(loginUserDto: LoginUserDto, lastIp?: string) {
+  async authenticateLoginUser(loginUserDto: LoginUserDto, lastIp?: string) {
     const { emailOrNickname, password } = loginUserDto;
 
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [{ email: emailOrNickname }, { nickname: emailOrNickname }],
       },
-      omit: {
-        squadId: true,
-        abilities: true,
-      },
-      include: {
-        squad: {
-          select: {
-            id: true,
-            name: true,
-            tag: true,
-            logo: {
-              select: {
-                id: true,
-                url: true,
-              },
-            },
-            side: {
-              select: {
-                id: true,
-                name: true,
-                server: true,
-                type: true,
-              },
-            },
-          },
-        },
+      select: {
+        id: true,
+        password: true,
+        isEmailVerified: true,
+        activationToken: true,
+        activationTokenExpiresAt: true,
+        email: true,
+        lastIp: true,
+        status: true,
       },
     });
 
@@ -894,11 +877,15 @@ export class UsersService {
         throw new BadRequestException(
           'Activation token expired. New token sent to your email',
         );
-      } else {
-        throw new BadRequestException(
-          'Please confirm your email before logging in',
-        );
       }
+
+      throw new BadRequestException(
+        'Please confirm your email before logging in',
+      );
+    }
+
+    if (user.status === UserStatus.BANNED) {
+      throw new UnauthorizedException('User is banned');
     }
 
     if (lastIp && user.lastIp !== lastIp) {
@@ -907,6 +894,12 @@ export class UsersService {
         data: { lastIp },
       });
     }
+
+    return { id: user.id };
+  }
+
+  async login(loginUserDto: LoginUserDto, lastIp?: string) {
+    const user = await this.authenticateLoginUser(loginUserDto, lastIp);
 
     const data = await this.generateTokens(user);
 

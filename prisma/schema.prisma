@@ -117,8 +117,28 @@ model User {
   tiktokUrl                   String?
   chats                       ChatUser[] @relation("ChatUsers")
   messages                    Message[] @relation("UserMessages")
+  sessions                    UserSession[]
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
+}
+
+model UserSession {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip           String?
+  userAgent    String?
+  device       String?
+  location     String?
+  expiresAt    DateTime
+  lastActiveAt DateTime  @default(now())
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
 }
 
 model UserWarning {

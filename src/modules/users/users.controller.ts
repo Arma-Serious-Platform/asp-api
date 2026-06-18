@@ -37,6 +37,7 @@ import { CreateUserWarningDto } from './dto/create-user-warning.dto';
 import { OptionalPunishmentReasonDto, PunishmentReasonDto } from './dto/punishment-reason.dto';
 import { Request, Response } from 'express';
 import { StaticBearerTokenGuard } from 'src/shared/guards/static-bearer-token.guard';
+import { getRequestIp } from 'src/shared/utils/request-ip';
 
 @Controller('users')
 export class UsersController {
@@ -54,20 +55,6 @@ export class UsersController {
     return this.usersService.findWhitelist();
   }
 
-  private getRequestIp(req: Request) {
-    const forwardedFor = req.headers['x-forwarded-for'];
-
-    if (Array.isArray(forwardedFor)) {
-      return forwardedFor[0]?.split(',')[0]?.trim();
-    }
-
-    if (typeof forwardedFor === 'string') {
-      return forwardedFor.split(',')[0]?.trim();
-    }
-
-    return req.ip || req.socket?.remoteAddress;
-  }
-
   @Get('/me')
   @UseGuards(AuthGuard)
   me(@Req() req: RequestType) {
@@ -76,7 +63,7 @@ export class UsersController {
 
   @Post('/login')
   login(@Body() loginUserDto: LoginUserDto, @Req() req: Request) {
-    return this.usersService.login(loginUserDto, this.getRequestIp(req));
+    return this.usersService.login(loginUserDto, getRequestIp(req));
   }
 
   @Post('/refresh-token')

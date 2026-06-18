@@ -8,20 +8,25 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable, UseGuards } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { ChatsService } from './chats.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { AuthService } from 'src/modules/auth/auth.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
 
+const chatGatewayCors = {
+  origin: process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
+    : true,
+  credentials: true,
+};
+
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: chatGatewayCors,
   namespace: '/chat',
 })
 @Injectable()
@@ -29,55 +34,35 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  private userSockets = new Map<string, Set<string>>(); // userId -> Set of socketIds
-  private socketUsers = new Map<string, string>(); // socketId -> userId
+  private userSockets = new Map<string, Set<string>>();
+  private socketUsers = new Map<string, string>();
 
   constructor(
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
     private readonly prisma: PrismaService,
     private readonly chatsService: ChatsService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
+      const authUser = await this.authService.resolveHandshakeUser(client.handshake);
 
-      if (!token) {
+      if (!authUser) {
         client.disconnect();
         return;
       }
 
-      const decoded = this.jwtService.decode(token) as { userId?: string };
-      const userId = decoded?.userId;
-
-      if (!userId) {
-        client.disconnect();
-        return;
-      }
-
-      // Verify user exists
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        client.disconnect();
-        return;
-      }
-
+      const userId = authUser.userId;
       client.userId = userId;
 
-      // Track user socket connections
       if (!this.userSockets.has(userId)) {
         this.userSockets.set(userId, new Set());
       }
       this.userSockets.get(userId)!.add(client.id);
       this.socketUsers.set(client.id, userId);
 
-      // Join user's personal room
       client.join(`user:${userId}`);
 
-      // Join all user's chat rooms
       const chats = await this.prisma.chat.findMany({
         where: {
           users: {
@@ -93,8 +78,6 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       chats.forEach((chat) => {
         client.join(`chat:${chat.id}`);
       });
-
-      console.log(`User ${userId} connected (socket: ${client.id})`);
     } catch (error) {
       console.error('Connection error:', error);
       client.disconnect();
@@ -112,7 +95,6 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
       this.socketUsers.delete(client.id);
-      console.log(`User ${userId} disconnected (socket: ${client.id})`);
     }
   }
 
@@ -127,13 +109,11 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       const message = await this.chatsService.sendMessage(dto, client.userId);
-
-      // Emit to all users in the chat room
-      this.server.to(`chat:${dto.chatId}`).emit('new_message', message);
+      this.emitToChat(dto.chatId, 'new_message', message);
 
       return { success: true, data: message };
     } catch (error) {
-      return { error: error.message };
+      return { error: error instanceof Error ? error.message : 'Failed to send message' };
     }
   }
 
@@ -147,12 +127,11 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
-      // Verify user is a member
       await this.chatsService.findById(data.chatId, client.userId);
       client.join(`chat:${data.chatId}`);
       return { success: true };
     } catch (error) {
-      return { error: error.message };
+      return { error: error instanceof Error ? error.message : 'Failed to join chat' };
     }
   }
 
@@ -169,8 +148,21 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { success: true };
   }
 
-  // Helper method to emit to specific users
-  emitToUser(userId: string, event: string, data: any) {
+  joinOnlineUsersToChat(chatId: string, userIds: string[]) {
+    for (const userId of userIds) {
+      const sockets = this.userSockets.get(userId);
+      if (!sockets) {
+        continue;
+      }
+
+      for (const socketId of sockets) {
+        const socket = this.server.sockets.sockets.get(socketId) as AuthenticatedSocket | undefined;
+        socket?.join(`chat:${chatId}`);
+      }
+    }
+  }
+
+  emitToUser(userId: string, event: string, data: unknown) {
     const sockets = this.userSockets.get(userId);
     if (sockets) {
       sockets.forEach((socketId) => {
@@ -179,8 +171,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Helper method to emit to chat room
-  emitToChat(chatId: string, event: string, data: any) {
+  emitToChat(chatId: string, event: string, data: unknown) {
     this.server.to(`chat:${chatId}`).emit(event, data);
   }
 }
