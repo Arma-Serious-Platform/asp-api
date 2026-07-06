@@ -18,5 +18,6 @@ import { MinioModule } from 'src/infrastructure/minio/minio.module';
   ],
   controllers: [UsersController],
   providers: [UsersService],
+  exports: [UsersService],
 })
 export class UsersModule {}

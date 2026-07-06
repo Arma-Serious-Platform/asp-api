@@ -15,6 +15,7 @@ import { HeadquartersModule } from './modules/headquarters/headquarters.module';
 import { IslandsModule } from './modules/islands/islands.module';
 import { RulesModule } from './modules/rules/rules.module';
 import { SpecializationsModule } from './modules/specializations/specializations.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SpecializationsModule } from './modules/specializations/specializations
       isGlobal: true,
       envFilePath: '.env',
     }),
+    AuthModule,
     MailerModule.forRoot({
       transport: {
         host: process.env.EMAIL_HOST,

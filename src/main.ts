@@ -7,6 +7,7 @@ import { seed } from 'prisma/seed';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { HttpErrorLoggingFilter } from './shared/filters/http-error-logging.filter';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   await seed();
@@ -14,6 +15,7 @@ async function bootstrap() {
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new HttpErrorLoggingFilter(httpAdapter));
   app.useWebSocketAdapter(new IoAdapter(app));
+  app.use(cookieParser());
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
@@ -25,8 +27,13 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
+    : true;
+
   app.enableCors({
-    origin: '*',
+    origin: corsOrigins,
+    credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
