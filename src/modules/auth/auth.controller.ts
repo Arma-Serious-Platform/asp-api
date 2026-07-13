@@ -2,6 +2,7 @@ import { Controller, Delete, Get, Post, Body, Param, Req, Res, UseGuards } from 
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SessionLoginDto } from './dto/session-login.dto';
+import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { RequestType } from 'src/utils/types';
 
@@ -16,6 +17,15 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.authService.sessionLogin(dto, req, res);
+  }
+
+  @Post('verify-2fa')
+  verifyTwoFactor(
+    @Body() dto: VerifyTwoFactorDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.authService.verifySessionTwoFactor(dto, req, res);
   }
 
   @Post('logout')

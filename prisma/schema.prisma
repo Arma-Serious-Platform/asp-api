@@ -118,8 +118,24 @@ model User {
   chats                       ChatUser[] @relation("ChatUsers")
   messages                    Message[] @relation("UserMessages")
   sessions                    UserSession[]
+  twoFactorEnabled            Boolean           @default(false)
+  twoFactorSecret             String?
+  twoFactorPendingSecret      String?
+  twoFactorPendingSecretAt    DateTime?
+  twoFactorRecoveryCodes      UserTwoFactorRecoveryCode[]
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
+}
+
+model UserTwoFactorRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model UserSession {

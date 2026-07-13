@@ -10,6 +10,8 @@ import {
   SESSION_TTL_DAYS,
 } from './auth.constants';
 import { SessionLoginDto } from './dto/session-login.dto';
+import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
+import { TwoFactorService } from './two-factor.service';
 import { getRequestIp } from 'src/shared/utils/request-ip';
 
 export type ResolvedAuthUser = {
@@ -31,6 +33,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    private readonly twoFactorService: TwoFactorService,
   ) {}
 
   private getSessionExpiresAt(createdAt: Date) {
@@ -111,10 +114,43 @@ export class AuthService {
       getRequestIp(req),
     );
 
+    if (await this.twoFactorService.isTwoFactorEnabled(user.id)) {
+      const twoFactorToken = await this.twoFactorService.createLoginToken(user.id);
+
+      return {
+        requiresTwoFactor: true,
+        twoFactorToken,
+      };
+    }
+
     const session = await this.createSession(user.id, req, dto.device);
     this.setSessionCookie(res, session.id, session.expiresAt);
 
     const me = await this.usersService.me(user.id);
+
+    return { user: me };
+  }
+
+  async verifySessionTwoFactor(
+    dto: VerifyTwoFactorDto,
+    req: Request,
+    res: Response,
+  ) {
+    const userId = await this.twoFactorService.verifyLoginToken(dto.twoFactorToken);
+    const verified = await this.twoFactorService.verifyUserCodeOrRecovery(
+      userId,
+      dto.code,
+      dto.recoveryCode,
+    );
+
+    if (!verified) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    const session = await this.createSession(userId, req, dto.device);
+    this.setSessionCookie(res, session.id, session.expiresAt);
+
+    const me = await this.usersService.me(userId);
 
     return { user: me };
   }

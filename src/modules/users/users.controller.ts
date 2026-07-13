@@ -30,6 +30,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 import { ChangeNicknameDto } from './dto/change-nickname.dto';
@@ -64,6 +65,11 @@ export class UsersController {
   @Post('/login')
   login(@Body() loginUserDto: LoginUserDto, @Req() req: Request) {
     return this.usersService.login(loginUserDto, getRequestIp(req));
+  }
+
+  @Post('/login/verify-2fa')
+  verifyTwoFactorLogin(@Body() dto: VerifyTwoFactorDto) {
+    return this.usersService.verifyTwoFactorLogin(dto);
   }
 
   @Post('/refresh-token')

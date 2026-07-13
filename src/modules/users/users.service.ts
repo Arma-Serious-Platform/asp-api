@@ -32,6 +32,8 @@ import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { EmailTemplateService } from 'src/shared/services/email-template.service';
 import { CreateUserWarningDto } from './dto/create-user-warning.dto';
 import { OptionalPunishmentReasonDto, PunishmentReasonDto } from './dto/punishment-reason.dto';
+import { TwoFactorService } from 'src/modules/auth/two-factor.service';
+import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
 
 @Injectable()
 export class UsersService {
@@ -52,6 +54,7 @@ export class UsersService {
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
     private readonly minioService: MinioService,
+    private readonly twoFactorService: TwoFactorService,
   ) { }
 
   private generateActivationToken(minutes = 10) {
@@ -341,6 +344,7 @@ export class UsersService {
         avatarUrl: true,
         bannedUntil: true,
         isEmailVerified: true,
+        twoFactorEnabled: true,
         telegramUrl: true,
         discordUrl: true,
         youtubeUrl: true,
@@ -901,9 +905,39 @@ export class UsersService {
   async login(loginUserDto: LoginUserDto, lastIp?: string) {
     const user = await this.authenticateLoginUser(loginUserDto, lastIp);
 
+    if (await this.twoFactorService.isTwoFactorEnabled(user.id)) {
+      const twoFactorToken = await this.twoFactorService.createLoginToken(user.id);
+
+      return {
+        requiresTwoFactor: true,
+        twoFactorToken,
+      };
+    }
+
     const data = await this.generateTokens(user);
 
     const me = await this.me(user.id);
+
+    return {
+      user: me,
+      ...data,
+    };
+  }
+
+  async verifyTwoFactorLogin(dto: VerifyTwoFactorDto) {
+    const userId = await this.twoFactorService.verifyLoginToken(dto.twoFactorToken);
+    const verified = await this.twoFactorService.verifyUserCodeOrRecovery(
+      userId,
+      dto.code,
+      dto.recoveryCode,
+    );
+
+    if (!verified) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    const data = await this.generateTokens({ id: userId });
+    const me = await this.me(userId);
 
     return {
       user: me,
