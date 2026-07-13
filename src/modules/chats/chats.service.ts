@@ -4,14 +4,66 @@ import { CreateChatDto } from "./dto/create-chat.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FindMessagesDto } from "./dto/find-messages.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
+import { AddChatMembersDto } from "./dto/add-chat-members.dto";
 import { ChatType } from "@prisma/client";
+
+const chatInclude = {
+  users: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          nickname: true,
+          avatar: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 @Injectable()
 export class ChatsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async reactivateChatUsers(chatId: string, userIds: string[]) {
+    await this.prisma.chatUser.updateMany({
+      where: {
+        chatId,
+        userId: { in: userIds },
+        leftAt: { not: null },
+      },
+      data: {
+        leftAt: null,
+      },
+    });
+  }
+
+  private async findDirectChatBetweenUsers(userIds: string[]) {
+    if (userIds.length !== 2) {
+      return null;
+    }
+
+    return await this.prisma.chat.findFirst({
+      where: {
+        type: ChatType.DIRECT,
+        AND: userIds.map((id) => ({
+          users: {
+            some: {
+              userId: id,
+            },
+          },
+        })),
+      },
+      include: chatInclude,
+    });
+  }
+
   async create(dto: CreateChatDto, userId: string) {
-    // Validate all users exist
     const users = await this.prisma.user.findMany({
       where: { id: { in: dto.userIds } },
       select: { id: true },
@@ -23,7 +75,6 @@ export class ChatsService {
       throw new BadRequestException(`Users not found: ${missingIds.join(', ')}`);
     }
 
-    // For DIRECT chats, ensure only 2 users and check if chat already exists
     if (dto.type === ChatType.DIRECT) {
       if (dto.userIds.length !== 2) {
         throw new BadRequestException('Direct chats must have exactly 2 users');
@@ -33,37 +84,20 @@ export class ChatsService {
         throw new BadRequestException('You must be included in the chat');
       }
 
-      // Check if direct chat already exists between these two users
-      const existingChats = await this.prisma.chat.findMany({
-        where: {
-          type: ChatType.DIRECT,
-          users: {
-            some: {
-              userId: { in: dto.userIds },
-            },
-          },
-        },
-        include: {
-          users: {
-            where: {
-              leftAt: null,
-            },
-          },
-        },
-      });
-
-      // Find chat with exactly these two users
-      const existingChat = existingChats.find(
-        (chat) =>
-          chat.users.length === 2 &&
-          chat.users.every((cu) => dto.userIds.includes(cu.userId)),
-      );
+      const existingChat = await this.findDirectChatBetweenUsers(dto.userIds);
 
       if (existingChat) {
+        if (dto.name?.trim()) {
+          await this.prisma.chat.update({
+            where: { id: existingChat.id },
+            data: { name: dto.name.trim() },
+          });
+        }
+
+        await this.reactivateChatUsers(existingChat.id, dto.userIds);
         return this.findById(existingChat.id, userId);
       }
     } else {
-      // For GROUP chats, ensure creator is included
       if (!dto.userIds.includes(userId)) {
         throw new BadRequestException('You must be included in the chat');
       }
@@ -71,32 +105,16 @@ export class ChatsService {
 
     return await this.prisma.chat.create({
       data: {
-        name: dto.name,
+        name: dto.name?.trim() || undefined,
         type: dto.type,
+        creatorId: userId,
         users: {
-          create: dto.userIds.map((userId) => ({
-            userId,
+          create: dto.userIds.map((memberId) => ({
+            userId: memberId,
           })),
         },
       },
-      include: {
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-                avatar: {
-                  select: {
-                    id: true,
-                    url: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: chatInclude,
     });
   }
 
@@ -111,22 +129,7 @@ export class ChatsService {
         },
       },
       include: {
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-                avatar: {
-                  select: {
-                    id: true,
-                    url: true,
-                  },
-                },
-              },
-            },
-          },
-        },
+        ...chatInclude,
         messages: {
           take: 1,
           orderBy: {
@@ -151,31 +154,13 @@ export class ChatsService {
   async findById(id: string, userId: string) {
     const chat = await this.prisma.chat.findUnique({
       where: { id },
-      include: {
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-                avatar: {
-                  select: {
-                    id: true,
-                    url: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: chatInclude,
     });
 
     if (!chat) {
       throw new NotFoundException('Chat not found');
     }
 
-    // Check if user is part of the chat
     const isMember = chat.users.some((cu) => cu.userId === userId && !cu.leftAt);
     if (!isMember) {
       throw new ForbiddenException('You are not a member of this chat');
@@ -185,7 +170,6 @@ export class ChatsService {
   }
 
   async sendMessage(dto: SendMessageDto, userId: string) {
-    // Verify chat exists and user is a member
     const chat = await this.prisma.chat.findUnique({
       where: { id: dto.chatId },
       include: {
@@ -206,7 +190,6 @@ export class ChatsService {
       throw new ForbiddenException('You are not a member of this chat');
     }
 
-    // Verify quote message exists if provided
     if (dto.quoteMessageId) {
       const quoteMessage = await this.prisma.message.findUnique({
         where: { id: dto.quoteMessageId },
@@ -258,7 +241,6 @@ export class ChatsService {
       throw new BadRequestException('chatId is required');
     }
 
-    // Verify user is a member of the chat
     const chat = await this.prisma.chat.findUnique({
       where: { id: chatId },
       include: {
@@ -318,12 +300,28 @@ export class ChatsService {
     ]);
 
     return {
-      data: data.reverse(), // Reverse to show oldest first
+      data: data.reverse(),
       total,
     };
   }
 
   async leaveChat(chatId: string, userId: string) {
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        id: true,
+        creatorId: true,
+      },
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (chat.creatorId === userId) {
+      throw new BadRequestException('Chat creator cannot leave. Delete the chat instead.');
+    }
+
     const chatUser = await this.prisma.chatUser.findFirst({
       where: {
         chatId,
@@ -343,7 +341,115 @@ export class ChatsService {
       },
     });
 
-    return { message: 'Left chat successfully' };
+    return { message: 'Left chat successfully', chatId };
+  }
+
+  async deleteChat(chatId: string, userId: string) {
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        users: {
+          where: {
+            leftAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (chat.creatorId && chat.creatorId !== userId) {
+      throw new ForbiddenException('Only the chat creator can delete the chat');
+    }
+
+    const memberUserIds = chat.users.map((member) => member.userId);
+
+    await this.prisma.chat.delete({
+      where: { id: chatId },
+    });
+
+    return {
+      message: 'Chat deleted successfully',
+      chatId,
+      memberUserIds,
+    };
+  }
+
+  async addMembers(chatId: string, dto: AddChatMembersDto, userId: string) {
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        users: true,
+      },
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (chat.creatorId !== userId) {
+      throw new ForbiddenException('Only the chat creator can add members');
+    }
+
+    if (chat.type === ChatType.DIRECT) {
+      throw new BadRequestException('Cannot add members to a direct chat');
+    }
+
+    const isCreatorActive = chat.users.some(
+      (member) => member.userId === userId && !member.leftAt,
+    );
+
+    if (!isCreatorActive) {
+      throw new ForbiddenException('You are not a member of this chat');
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: dto.userIds } },
+      select: { id: true },
+    });
+
+    if (users.length !== dto.userIds.length) {
+      const foundIds = new Set(users.map((user) => user.id));
+      const missingIds = dto.userIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(`Users not found: ${missingIds.join(', ')}`);
+    }
+
+    const rejoinedUserIds: string[] = [];
+
+    for (const memberId of dto.userIds) {
+      const existingMember = chat.users.find((member) => member.userId === memberId);
+
+      if (existingMember) {
+        if (existingMember.leftAt) {
+          await this.prisma.chatUser.update({
+            where: { id: existingMember.id },
+            data: { leftAt: null },
+          });
+          rejoinedUserIds.push(memberId);
+        }
+        continue;
+      }
+
+      await this.prisma.chatUser.create({
+        data: {
+          chatId,
+          userId: memberId,
+        },
+      });
+      rejoinedUserIds.push(memberId);
+    }
+
+    const updatedChat = await this.findById(chatId, userId);
+
+    return {
+      chat: updatedChat,
+      rejoinedUserIds,
+    };
   }
 
   async update(id: string, dto: UpdateChatDto, userId: string) {
@@ -372,24 +478,7 @@ export class ChatsService {
       data: {
         name: dto.name,
       },
-      include: {
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-                avatar: {
-                  select: {
-                    id: true,
-                    url: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: chatInclude,
     });
   }
 }

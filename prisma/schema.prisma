@@ -116,6 +116,7 @@ model User {
   twitchUrl                   String?
   tiktokUrl                   String?
   chats                       ChatUser[] @relation("ChatUsers")
+  createdChats                Chat[]     @relation("ChatCreator")
   messages                    Message[] @relation("UserMessages")
   sessions                    UserSession[]
   twoFactorEnabled            Boolean           @default(false)
@@ -432,10 +433,14 @@ model Chat {
   id        String     @id @default(uuid())
   name      String?
   type      ChatType   @default(DIRECT)
+  creatorId String?
+  creator   User?      @relation("ChatCreator", fields: [creatorId], references: [id], onDelete: SetNull)
   users     ChatUser[]
   messages  Message[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@index([creatorId])
 }
 
 model ChatUser {

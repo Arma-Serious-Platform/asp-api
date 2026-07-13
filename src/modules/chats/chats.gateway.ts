@@ -7,7 +7,7 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Namespace, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { ChatsService } from './chats.service';
@@ -32,7 +32,7 @@ const chatGatewayCors = {
 @Injectable()
 export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server: Namespace;
 
   private userSockets = new Map<string, Set<string>>();
   private socketUsers = new Map<string, string>();
@@ -148,7 +148,19 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { success: true };
   }
 
+  private getSocketById(socketId: string) {
+    if (!this.server?.sockets) {
+      return undefined;
+    }
+
+    return this.server.sockets.get(socketId) as AuthenticatedSocket | undefined;
+  }
+
   joinOnlineUsersToChat(chatId: string, userIds: string[]) {
+    if (!this.server) {
+      return;
+    }
+
     for (const userId of userIds) {
       const sockets = this.userSockets.get(userId);
       if (!sockets) {
@@ -156,13 +168,17 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       for (const socketId of sockets) {
-        const socket = this.server.sockets.sockets.get(socketId) as AuthenticatedSocket | undefined;
+        const socket = this.getSocketById(socketId);
         socket?.join(`chat:${chatId}`);
       }
     }
   }
 
   emitToUser(userId: string, event: string, data: unknown) {
+    if (!this.server) {
+      return;
+    }
+
     const sockets = this.userSockets.get(userId);
     if (sockets) {
       sockets.forEach((socketId) => {
@@ -172,6 +188,47 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   emitToChat(chatId: string, event: string, data: unknown) {
+    if (!this.server) {
+      return;
+    }
+
     this.server.to(`chat:${chatId}`).emit(event, data);
+  }
+
+  removeUsersFromChatRoom(chatId: string, userIds: string[]) {
+    if (!this.server) {
+      return;
+    }
+
+    for (const userId of userIds) {
+      const sockets = this.userSockets.get(userId);
+      if (!sockets) {
+        continue;
+      }
+
+      for (const socketId of sockets) {
+        const socket = this.getSocketById(socketId);
+        socket?.leave(`chat:${chatId}`);
+      }
+    }
+  }
+
+  notifyChatDeleted(chatId: string, memberUserIds: string[]) {
+    for (const userId of memberUserIds) {
+      this.removeUsersFromChatRoom(chatId, [userId]);
+      this.emitToUser(userId, 'chat_deleted', { chatId });
+    }
+  }
+
+  notifyChatLeft(chatId: string, userId: string, memberUserIds: string[]) {
+    this.removeUsersFromChatRoom(chatId, [userId]);
+
+    for (const memberId of memberUserIds) {
+      if (memberId === userId) {
+        continue;
+      }
+
+      this.emitToUser(memberId, 'chat_left', { chatId, userId });
+    }
   }
 }
