@@ -9,18 +9,23 @@ import {
 } from "@nestjs/websockets";
 import { Injectable } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
-import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
+import { AuthService } from "src/modules/auth/auth.service";
 import { SideType, SquadRole } from "@prisma/client";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
 
+const headquartersGatewayCors = {
+  origin: process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
+    : true,
+  credentials: true,
+};
+
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: headquartersGatewayCors,
   namespace: '/headquarters',
 })
 @Injectable()
@@ -29,40 +34,21 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
   server: Server;
 
   constructor(
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
     private readonly prisma: PrismaService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      const token =
-        (client.handshake?.auth?.token as string) ||
-        (client.handshake?.headers?.authorization?.split(' ')[1] as string);
+      const authUser = await this.authService.resolveHandshakeUser(client.handshake);
 
-      if (!token) {
+      if (!authUser) {
         client.disconnect();
         return;
       }
 
-      const decoded = this.jwtService.decode(token) as { userId?: string | undefined };
-      const userId = decoded?.userId;
-
-      if (!userId) {
-        client.disconnect();
-        return;
-      }
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        client.disconnect();
-        return;
-      }
-
-      client.userId = userId;
-      console.log(`User ${userId} connected to headquarters (socket: ${client.id})`);
+      client.userId = authUser.userId;
+      console.log(`User ${authUser.userId} connected to headquarters (socket: ${client.id})`);
     } catch (error) {
       console.error('Headquarters connection error:', error);
       client.disconnect();
@@ -161,6 +147,10 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
 
   emitCommanderChanged(gamePlanId: string, data: any) {
     this.server.to(`headquarters:plan:${gamePlanId}`).emit('commander_changed', data);
+  }
+
+  emitHqSquadChanged(gamePlanId: string, data: any) {
+    this.server.to(`headquarters:plan:${gamePlanId}`).emit('hq_squad_changed', data);
   }
 
   emitSlotUpdated(gamePlanId: string, data: any) {

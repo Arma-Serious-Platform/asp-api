@@ -76,6 +76,8 @@ export class HeadquartersService {
         id: true,
         attackSideId: true,
         defenseSideId: true,
+        attackHqSquadId: true,
+        defenseHqSquadId: true,
         missionVersion: {
           select: {
             missionAttackSlots: true,
@@ -113,10 +115,13 @@ export class HeadquartersService {
         continue;
       }
 
+      const hqSquadId = this.resolveHqSquadIdForSide(game, side.id);
+
       const gamePlan = await db.gamePlan.create({
         data: {
           gameId,
           sideId: side.id,
+          hqSquadId,
         },
         select: { id: true },
       });
@@ -124,6 +129,77 @@ export class HeadquartersService {
       const rows = this.buildGamePlanSlotRows(game, side.id, gamePlan.id);
       await db.gamePlanSlot.createMany({ data: rows });
     }
+  }
+
+  async syncGamePlanHqSquadsFromGame(gameId: string) {
+    const game = await this.prisma.game.findUnique({
+      where: { id: gameId },
+      select: {
+        id: true,
+        attackSideId: true,
+        defenseSideId: true,
+        attackHqSquadId: true,
+        defenseHqSquadId: true,
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    const plans = await this.prisma.gamePlan.findMany({
+      where: { gameId },
+      select: {
+        id: true,
+        sideId: true,
+        hqSquadId: true,
+        gameCommanderId: true,
+      },
+    });
+
+    for (const plan of plans) {
+      const nextHqSquadId = this.resolveHqSquadIdForSide(game, plan.sideId);
+
+      if (plan.hqSquadId === nextHqSquadId) {
+        continue;
+      }
+
+      const updatedPlan = await this.prisma.gamePlan.update({
+        where: { id: plan.id },
+        data: {
+          hqSquadId: nextHqSquadId,
+          gameCommanderId: null,
+        },
+        include: this.gamePlanInclude,
+      });
+
+      this.headquartersGateway.emitHqSquadChanged(plan.id, updatedPlan);
+      this.headquartersGateway.emitGamePlanUpdated(plan.id, updatedPlan);
+
+      if (plan.gameCommanderId) {
+        this.headquartersGateway.emitCommanderChanged(plan.id, updatedPlan);
+      }
+    }
+  }
+
+  private resolveHqSquadIdForSide(
+    game: {
+      attackSideId: string;
+      defenseSideId: string;
+      attackHqSquadId: string | null;
+      defenseHqSquadId: string | null;
+    },
+    sideId: string,
+  ) {
+    if (sideId === game.attackSideId) {
+      return game.attackHqSquadId;
+    }
+
+    if (sideId === game.defenseSideId) {
+      return game.defenseHqSquadId;
+    }
+
+    return null;
   }
 
   /**
@@ -139,10 +215,12 @@ export class HeadquartersService {
         data: {
           gameCommanderId: null,
           planUrl: null,
+          hqSquadId: null,
         },
       });
     }
 
+    await this.syncGamePlanHqSquadsFromGame(gameId);
     await this.emitGamePlanUpdates(affectedPlanIds);
   }
 
@@ -352,7 +430,15 @@ export class HeadquartersService {
 
   async assignCommander(id: string, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(id);
-    await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+    const user = await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+
+    if (!gamePlan.hqSquadId) {
+      throw new BadRequestException('HQ squad must be assigned before selecting a commander');
+    }
+
+    if (user.squadId !== gamePlan.hqSquadId) {
+      throw new ForbiddenException('Only HQ squad members can become commander');
+    }
 
     const updatedPlan = await this.prisma.gamePlan.update({
       where: { id },
@@ -365,11 +451,66 @@ export class HeadquartersService {
     return updatedPlan;
   }
 
+  async assignHqSquad(id: string, userId: string) {
+    const gamePlan = await this.getGamePlanWithSide(id);
+    const user = await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+
+    if (gamePlan.hqSquadId) {
+      throw new BadRequestException('HQ squad is already assigned to this plan');
+    }
+
+    const updatedPlan = await this.prisma.gamePlan.update({
+      where: { id },
+      data: { hqSquadId: user.squadId },
+      include: this.gamePlanInclude,
+    });
+
+    this.headquartersGateway.emitHqSquadChanged(id, updatedPlan);
+    this.headquartersGateway.emitGamePlanUpdated(id, updatedPlan);
+    return updatedPlan;
+  }
+
+  async unassignHqSquad(id: string, userId: string, role: UserRole) {
+    const gamePlan = await this.getGamePlanWithSide(id);
+    const isSuperAdmin = this.isSuperAdmin(role);
+
+    if (!gamePlan.hqSquadId) {
+      throw new BadRequestException('HQ squad is not assigned to this plan');
+    }
+
+    if (!isSuperAdmin) {
+      const user = await this.getUserWithHeadquartersSquad(userId);
+
+      const isCurrentHqSquadLeader =
+        user.squadId === gamePlan.hqSquadId &&
+        (user.squad?.leaderId === user.id ||
+          user.squadRole === SquadRole.SUBLEADER ||
+          user.squadRole === SquadRole.HQ);
+
+      if (!isCurrentHqSquadLeader) {
+        throw new ForbiddenException('Only HQ squad leadership or super admin can unassign HQ squad');
+      }
+    }
+
+    const updatedPlan = await this.prisma.gamePlan.update({
+      where: { id },
+      data: {
+        hqSquadId: null,
+        gameCommanderId: null,
+      },
+      include: this.gamePlanInclude,
+    });
+
+    this.headquartersGateway.emitHqSquadChanged(id, updatedPlan);
+    this.headquartersGateway.emitGamePlanUpdated(id, updatedPlan);
+    this.headquartersGateway.emitCommanderChanged(id, updatedPlan);
+    return updatedPlan;
+  }
+
   async unassignCommander(id: string, userId: string, role: UserRole) {
     const gamePlan = await this.getGamePlanWithSide(id);
 
-    const superAdminRoles = new Set<UserRole>([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
-    const isSuperAdmin = superAdminRoles.has(role);
+    const isSuperAdmin = this.isSuperAdmin(role);
     const isCurrentCommander = gamePlan.gameCommanderId === userId;
 
     if (!isSuperAdmin) {
@@ -706,7 +847,34 @@ export class HeadquartersService {
       select: {
         id: true,
         nickname: true,
+        role: true,
+        squadRole: true,
+        isMissionReviewer: true,
         avatar: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
+        squad: {
+          select: {
+            id: true,
+            tag: true,
+            side: {
+              select: {
+                type: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    hqSquad: {
+      select: {
+        id: true,
+        name: true,
+        tag: true,
+        logo: {
           select: {
             id: true,
             url: true,
@@ -788,6 +956,7 @@ export class HeadquartersService {
         id: true,
         sideId: true,
         gameCommanderId: true,
+        hqSquadId: true,
       },
     });
 
@@ -900,6 +1069,11 @@ export class HeadquartersService {
     }
 
     return user;
+  }
+
+  private isSuperAdmin(role: UserRole) {
+    const superAdminRoles = new Set<UserRole>([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
+    return superAdminRoles.has(role);
   }
 
   private readonly publishedWeekendPlanWhere = {

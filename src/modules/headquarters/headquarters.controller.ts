@@ -61,6 +61,20 @@ export class HeadquartersController {
     return this.headquartersService.unassignCommander(id, req.userId, req.role);
   }
 
+  @Post('plans/:id/assign-hq-squad')
+  @UseGuards(AuthGuard)
+  @ApiOkResponse({ type: HeadquartersGamePlanResponseDto })
+  assignHqSquad(@Param('id') id: string, @Req() req: RequestType) {
+    return this.headquartersService.assignHqSquad(id, req.userId);
+  }
+
+  @Post('plans/:id/unassign-hq-squad')
+  @UseGuards(AuthGuard)
+  @ApiOkResponse({ type: HeadquartersGamePlanResponseDto })
+  unassignHqSquad(@Param('id') id: string, @Req() req: RequestType) {
+    return this.headquartersService.unassignHqSquad(id, req.userId, req.role);
+  }
+
   @Patch('slots/:slotId')
   @UseGuards(AuthGuard)
   @ApiOkResponse({ type: HeadquartersSlotResponseDto })

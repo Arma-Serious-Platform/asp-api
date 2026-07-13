@@ -276,6 +276,13 @@ export class WeekendsService {
           `Mission version ${game.missionVersionId} does not belong to mission ${game.missionId}`,
         );
       }
+
+      await this.validateGameHqSquads({
+        attackSideId: game.attackSideId,
+        defenseSideId: game.defenseSideId,
+        attackHqSquadId: game.attackHqSquadId,
+        defenseHqSquadId: game.defenseHqSquadId,
+      });
     }
 
     const missingSides = sideIds.filter((id) => !foundSideIds.has(id));
@@ -315,6 +322,8 @@ export class WeekendsService {
             attackSideId: game.attackSideId,
             defenseSideId: game.defenseSideId,
             ...(game.adminId != null && { adminId: game.adminId }),
+            ...(game.attackHqSquadId != null && { attackHqSquadId: game.attackHqSquadId }),
+            ...(game.defenseHqSquadId != null && { defenseHqSquadId: game.defenseHqSquadId }),
           })),
         },
       },
@@ -435,6 +444,8 @@ export class WeekendsService {
         id: true,
         attackSideId: true,
         defenseSideId: true,
+        attackHqSquadId: true,
+        defenseHqSquadId: true,
       },
     });
 
@@ -445,6 +456,20 @@ export class WeekendsService {
     const sidesChanged =
       (dto.attackSideId !== undefined && dto.attackSideId !== game.attackSideId) ||
       (dto.defenseSideId !== undefined && dto.defenseSideId !== game.defenseSideId);
+
+    const nextAttackSideId = dto.attackSideId ?? game.attackSideId;
+    const nextDefenseSideId = dto.defenseSideId ?? game.defenseSideId;
+
+    await this.validateGameHqSquads({
+      attackSideId: nextAttackSideId,
+      defenseSideId: nextDefenseSideId,
+      attackHqSquadId: dto.attackHqSquadId,
+      defenseHqSquadId: dto.defenseHqSquadId,
+    });
+
+    const hqSquadsChanged =
+      (dto.attackHqSquadId !== undefined && dto.attackHqSquadId !== game.attackHqSquadId) ||
+      (dto.defenseHqSquadId !== undefined && dto.defenseHqSquadId !== game.defenseHqSquadId);
 
     // Validate mission version belongs to mission when updating mission/version
     if (dto.missionVersionId !== undefined || dto.missionId !== undefined) {
@@ -533,6 +558,22 @@ export class WeekendsService {
       }
     }
 
+    if (dto.attackHqSquadId !== undefined) {
+      if (dto.attackHqSquadId === null) {
+        updateData.attackHqSquad = { disconnect: true };
+      } else {
+        updateData.attackHqSquad = { connect: { id: dto.attackHqSquadId } };
+      }
+    }
+
+    if (dto.defenseHqSquadId !== undefined) {
+      if (dto.defenseHqSquadId === null) {
+        updateData.defenseHqSquad = { disconnect: true };
+      } else {
+        updateData.defenseHqSquad = { connect: { id: dto.defenseHqSquadId } };
+      }
+    }
+
     const updatedGame = await this.prisma.game.update({
       where: { id: gameId },
       data: updateData,
@@ -568,6 +609,8 @@ export class WeekendsService {
 
     if (sidesChanged) {
       await this.headquartersService.resetGamePlansForGame(gameId);
+    } else if (hqSquadsChanged) {
+      await this.headquartersService.syncGamePlanHqSquadsFromGame(gameId);
     }
 
     return updatedGame;
@@ -661,6 +704,13 @@ export class WeekendsService {
       }
     }
 
+    await this.validateGameHqSquads({
+      attackSideId: dto.attackSideId,
+      defenseSideId: dto.defenseSideId,
+      attackHqSquadId: dto.attackHqSquadId,
+      defenseHqSquadId: dto.defenseHqSquadId,
+    });
+
     const game = await this.prisma.game.create({
       data: {
         weekendId,
@@ -671,6 +721,8 @@ export class WeekendsService {
         attackSideId: dto.attackSideId,
         defenseSideId: dto.defenseSideId,
         ...(dto.adminId != null && { adminId: dto.adminId }),
+        ...(dto.attackHqSquadId != null && { attackHqSquadId: dto.attackHqSquadId }),
+        ...(dto.defenseHqSquadId != null && { defenseHqSquadId: dto.defenseHqSquadId }),
       },
       include: {
         missionVersion: {
@@ -705,5 +757,42 @@ export class WeekendsService {
     await this.headquartersService.ensureGamePlansForGame(game.id);
 
     return game;
+  }
+
+  private async validateGameHqSquads(dto: {
+    attackSideId: string;
+    defenseSideId: string;
+    attackHqSquadId?: string | null;
+    defenseHqSquadId?: string | null;
+  }) {
+    if (dto.attackHqSquadId) {
+      const squad = await this.prisma.squad.findUnique({
+        where: { id: dto.attackHqSquadId },
+        select: { id: true, sideId: true },
+      });
+
+      if (!squad) {
+        throw new BadRequestException(`Attack HQ squad not found: ${dto.attackHqSquadId}`);
+      }
+
+      if (squad.sideId !== dto.attackSideId) {
+        throw new BadRequestException('Attack HQ squad must belong to the attack side');
+      }
+    }
+
+    if (dto.defenseHqSquadId) {
+      const squad = await this.prisma.squad.findUnique({
+        where: { id: dto.defenseHqSquadId },
+        select: { id: true, sideId: true },
+      });
+
+      if (!squad) {
+        throw new BadRequestException(`Defense HQ squad not found: ${dto.defenseHqSquadId}`);
+      }
+
+      if (squad.sideId !== dto.defenseSideId) {
+        throw new BadRequestException('Defense HQ squad must belong to the defense side');
+      }
+    }
   }
 }

@@ -38,6 +38,18 @@ export class CreateGameDto {
   @ValidateIf((_, v) => v != null)
   @IsString()
   adminId?: string | null;
+
+  @ApiPropertyOptional({ description: 'HQ squad id for the attack side (optional)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  attackHqSquadId?: string | null;
+
+  @ApiPropertyOptional({ description: 'HQ squad id for the defense side (optional)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  defenseHqSquadId?: string | null;
 }
 
 export class CreateWeekendDto {

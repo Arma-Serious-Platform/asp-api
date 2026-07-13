@@ -9,6 +9,44 @@ class HeadquartersSquadShortDto {
 
   @ApiProperty({ example: '1MEC' })
   tag: string;
+
+  @ApiProperty({ nullable: true })
+  logo?: {
+    id: string;
+    url: string;
+  } | null;
+}
+
+class HeadquartersCommanderDto {
+  @ApiProperty({ example: '4c4d0611-9f81-4ffd-b4ce-c8fe8f7f3b8b' })
+  id: string;
+
+  @ApiProperty({ example: 'CommanderNick' })
+  nickname: string;
+
+  @ApiProperty({ example: 'USER' })
+  role: string;
+
+  @ApiProperty({ example: 'LEADER', nullable: true })
+  squadRole: string | null;
+
+  @ApiProperty({ example: false })
+  isMissionReviewer: boolean;
+
+  @ApiProperty({ nullable: true })
+  avatar?: {
+    id: string;
+    url: string;
+  } | null;
+
+  @ApiProperty({ nullable: true })
+  squad?: {
+    id: string;
+    tag: string;
+    side?: {
+      type: string;
+    };
+  } | null;
 }
 
 export class HeadquartersSlotResponseDto {
@@ -74,6 +112,15 @@ export class HeadquartersGamePlanResponseDto {
 
   @ApiProperty({ example: '4c4d0611-9f81-4ffd-b4ce-c8fe8f7f3b8b', nullable: true })
   gameCommanderId: string | null;
+
+  @ApiProperty({ example: '2a6d7b86-57b4-4ca4-8f87-6aab1fcd8c23', nullable: true })
+  hqSquadId: string | null;
+
+  @ApiProperty({ type: HeadquartersCommanderDto, nullable: true })
+  gameCommander?: HeadquartersCommanderDto | null;
+
+  @ApiProperty({ type: HeadquartersSquadShortDto, nullable: true })
+  hqSquad?: HeadquartersSquadShortDto | null;
 
   @ApiProperty({ type: HeadquartersGameShortDto })
   game: HeadquartersGameShortDto;

@@ -38,4 +38,16 @@ export class UpdateGameDto {
   @ValidateIf((_, v) => v != null)
   @IsString()
   adminId?: string | null;
+
+  @ApiPropertyOptional({ description: 'HQ squad id for the attack side (optional, null to clear)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  attackHqSquadId?: string | null;
+
+  @ApiPropertyOptional({ description: 'HQ squad id for the defense side (optional, null to clear)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  defenseHqSquadId?: string | null;
 }

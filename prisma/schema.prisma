@@ -29,6 +29,8 @@ model GamePlan {
   sideId          String
   side            Side              @relation(fields: [sideId], references: [id], onDelete: Cascade)
   planUrl         String?
+  hqSquadId       String?
+  hqSquad         Squad?            @relation("GamePlanHqSquad", fields: [hqSquadId], references: [id], onDelete: SetNull)
   gameCommanderId String?
   gameCommander   User?             @relation("GamePlanCommander", fields: [gameCommanderId], references: [id], onDelete: SetNull)
   comments        GamePlanComment[]
@@ -37,6 +39,7 @@ model GamePlan {
   updatedAt       DateTime          @updatedAt
 
   @@unique([gameId, sideId])
+  @@index([hqSquadId])
 }
 
 model GamePlanComment {
@@ -242,6 +245,9 @@ model Squad {
   tiktokUrl   String?
   assignedGamePlanSlots GamePlanSlot[] @relation("AssignedGamePlanSlots")
   wantedGamePlanSlots   GamePlanSlot[] @relation("WantedGamePlanSlots")
+  hqGamePlans           GamePlan[]     @relation("GamePlanHqSquad")
+  attackHqGames         Game[]         @relation("GameAttackHqSquad")
+  defenseHqGames        Game[]         @relation("GameDefenseHqSquad")
 }
 
 model SquadInvitation {
@@ -398,24 +404,31 @@ model Mission {
 }
 
 model Game {
-  id            String   @id @default(uuid())
-  date          DateTime
-  weekendId     String
-  weekend       Weekend  @relation(fields: [weekendId], references: [id])
-  mission       Mission  @relation(fields: [missionId], references: [id])
-  missionId     String
-  missionVersion MissionVersion @relation(fields: [missionVersionId], references: [id])
+  id               String   @id @default(uuid())
+  date             DateTime
+  weekendId        String
+  weekend          Weekend  @relation(fields: [weekendId], references: [id])
+  mission          Mission  @relation(fields: [missionId], references: [id])
+  missionId        String
+  missionVersion   MissionVersion @relation(fields: [missionVersionId], references: [id])
   missionVersionId String
-  adminId       String?
-  admin         User?     @relation(fields: [adminId], references: [id])
-  attackSideId  String
-  attackSide    Side     @relation("GameAttackSide", fields: [attackSideId], references: [id])
-  defenseSideId String
-  defenseSide   Side     @relation("GameDefenseSide", fields: [defenseSideId], references: [id])
-  position      Int @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  gamePlans     GamePlan[]
+  adminId          String?
+  admin            User?     @relation(fields: [adminId], references: [id])
+  attackSideId     String
+  attackSide       Side     @relation("GameAttackSide", fields: [attackSideId], references: [id])
+  defenseSideId    String
+  defenseSide      Side     @relation("GameDefenseSide", fields: [defenseSideId], references: [id])
+  attackHqSquadId  String?
+  attackHqSquad    Squad?   @relation("GameAttackHqSquad", fields: [attackHqSquadId], references: [id], onDelete: SetNull)
+  defenseHqSquadId String?
+  defenseHqSquad   Squad?   @relation("GameDefenseHqSquad", fields: [defenseHqSquadId], references: [id], onDelete: SetNull)
+  position         Int @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  gamePlans        GamePlan[]
+
+  @@index([attackHqSquadId])
+  @@index([defenseHqSquadId])
 }
 
 model Weekend {
