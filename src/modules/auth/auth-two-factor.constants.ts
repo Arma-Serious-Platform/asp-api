@@ -1,0 +1,7 @@
+export const TWO_FACTOR_ISSUER = process.env.TWO_FACTOR_ISSUER ?? 'ASP';
+export const TWO_FACTOR_PENDING_TTL_MS = 10 * 60 * 1000;
+export const TWO_FACTOR_LOGIN_TOKEN_EXPIRES_IN = '5m';
+export const TWO_FACTOR_LOGIN_TOKEN_PURPOSE = '2fa';
+export const TWO_FACTOR_RECOVERY_CODE_COUNT = 10;
+export const TWO_FACTOR_MAX_VERIFY_ATTEMPTS = 5;
+export const TWO_FACTOR_VERIFY_WINDOW_MS = 15 * 60 * 1000;
