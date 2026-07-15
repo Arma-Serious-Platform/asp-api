@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req, UploadedFiles, UseInterceptors } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { Multer } from "multer";
 import { ApiOkResponse } from "@nestjs/swagger";
 import { MissionCommentsService } from "./mission-comments.service";
 import { CreateMissionCommentDto } from "./dto/create-mission-comment.dto";
@@ -11,6 +13,7 @@ import {
 } from "./dto/mission-comment-response.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { RequestType } from "src/utils/types";
+import { validateAttachmentFiles } from "src/shared/utils/validate-attachments";
 
 @Controller('mission-comments')
 export class MissionCommentsController {
@@ -30,9 +33,15 @@ export class MissionCommentsController {
 
   @Post()
   @UseGuards(AuthGuard)
+  @UseInterceptors(FilesInterceptor('attachments', 10))
   @ApiOkResponse({ description: 'Created mission comment', type: MissionCommentResponseDto })
-  create(@Body() dto: CreateMissionCommentDto, @Req() req: RequestType) {
-    return this.missionCommentsService.create(dto, req.userId);
+  create(
+    @UploadedFiles() attachments: Multer.File[],
+    @Body() dto: CreateMissionCommentDto,
+    @Req() req: RequestType,
+  ) {
+    validateAttachmentFiles(attachments);
+    return this.missionCommentsService.create(dto, req.userId, attachments);
   }
 
   @Patch(':id')

@@ -20,6 +20,9 @@ model File {
   MissionVersion MissionVersion[]
   missionVersionScreenshots MissionVersionScreenshot[]
   specializationIcons Specialization[] @relation("SpecializationIcon")
+  missionCommentAttachments MissionCommentAttachment[]
+  messageAttachments MessageAttachment[]
+  gamePlanCommentAttachments GamePlanCommentAttachment[]
 }
 
 model GamePlan {
@@ -52,6 +55,7 @@ model GamePlanComment {
   replyId    String?
   replyTo    GamePlanComment?  @relation("GamePlanCommentReplies", fields: [replyId], references: [id])
   replies    GamePlanComment[] @relation("GamePlanCommentReplies")
+  attachments GamePlanCommentAttachment[]
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
 }
@@ -366,6 +370,7 @@ model MissionComment {
   replyId   String?
   replyTo   MissionComment? @relation("CommentReplies", fields: [replyId], references: [id])
   replies   MissionComment[] @relation("CommentReplies")
+  attachments MissionCommentAttachment[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 }
@@ -481,11 +486,54 @@ model Message {
   user          User     @relation("UserMessages", fields: [userId], references: [id])
   chatId        String
   chat          Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  attachments   MessageAttachment[]
   editedAt      DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([chatId, createdAt])
+}
+
+model MissionCommentAttachment {
+  id               String         @id @default(uuid())
+  missionCommentId String
+  missionComment   MissionComment @relation(fields: [missionCommentId], references: [id], onDelete: Cascade)
+  fileId           String
+  file             File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  originalName     String
+  mimeType         String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([missionCommentId])
+}
+
+model MessageAttachment {
+  id           String   @id @default(uuid())
+  messageId    String
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  originalName String
+  mimeType     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([messageId])
+}
+
+model GamePlanCommentAttachment {
+  id               String          @id @default(uuid())
+  gamePlanCommentId String
+  gamePlanComment  GamePlanComment @relation(fields: [gamePlanCommentId], references: [id], onDelete: Cascade)
+  fileId           String
+  file             File            @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  originalName     String
+  mimeType         String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([gamePlanCommentId])
 }
 
 enum ChatType {

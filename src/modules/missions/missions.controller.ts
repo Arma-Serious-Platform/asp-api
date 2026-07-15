@@ -22,10 +22,10 @@ export class MissionsController {
       throw new BadRequestException('File is required');
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 10 * 1024 * 1024;
     const exceeded = files.find((file) => file.size > maxSize);
     if (exceeded) {
-      throw new BadRequestException(`File ${(exceeded as { originalname?: string }).originalname ?? 'unknown'} exceeds 5MB size limit`);
+      throw new BadRequestException(`File ${(exceeded as { originalname?: string }).originalname ?? 'unknown'} exceeds 10MB size limit`);
     }
   }
 
@@ -47,14 +47,14 @@ export class MissionsController {
   @Post()
   @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('image'))
-  create(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) image: File, @Body() createMissionDto: CreateMissionDto, @Req() req: RequestType) {
+  create(@FileValidation({ required: false, maxSize: 10 * 1024 * 1024 /* 10MB */ }) image: File, @Body() createMissionDto: CreateMissionDto, @Req() req: RequestType) {
     return this.missionsService.createMission(createMissionDto, req.userId, image);
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('image'))
-  update(@FileValidation({ required: false, maxSize: 5 * 1024 * 1024 /* 5MB */ }) image: File, @Param('id') id: string, @Body() dto: UpdateMissionDto, @Req() req: RequestType) {
+  update(@FileValidation({ required: false, maxSize: 10 * 1024 * 1024 /* 10MB */ }) image: File, @Param('id') id: string, @Body() dto: UpdateMissionDto, @Req() req: RequestType) {
     return this.missionsService.updateMission(dto, id, req.userId, image);
   }
 

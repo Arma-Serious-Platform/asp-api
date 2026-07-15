@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import { IsNotEmpty, IsObject, IsOptional, IsString } from "class-validator";
+import { normalizeJsonValue } from "src/utils/normalize-json-value";
 
 export class CreateGamePlanCommentDto {
   @ApiProperty({
@@ -23,6 +25,7 @@ export class CreateGamePlanCommentDto {
       },
     },
   })
+  @Transform(normalizeJsonValue)
   @IsObject()
   @IsNotEmpty()
   message: any;

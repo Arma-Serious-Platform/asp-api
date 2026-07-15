@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, Delete, Patch } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Post, Param, Body, Query, UseGuards, Req, Delete, Patch, UploadedFiles, UseInterceptors } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { Multer } from "multer";
 import { ChatsService } from "./chats.service";
 import { ChatsGateway } from "./chats.gateway";
 import { CreateChatDto } from "./dto/create-chat.dto";
@@ -8,6 +10,8 @@ import { UpdateChatDto } from "./dto/update-chat.dto";
 import { AddChatMembersDto } from "./dto/add-chat-members.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { RequestType } from "src/utils/types";
+import { validateAttachmentFiles } from "src/shared/utils/validate-attachments";
+import { normalizeJsonValue } from "src/utils/normalize-json-value";
 
 @Controller('chats')
 @UseGuards(AuthGuard)
@@ -39,16 +43,31 @@ export class ChatsController {
   }
 
   @Post(':id/messages')
-  async sendMessage(@Param('id') chatId: string, @Body() dto: Omit<SendMessageDto, 'chatId'> & Record<string, unknown>, @Req() req: RequestType) {
-    const { content, quoteMessageId, ...rawContent } = dto;
+  @UseInterceptors(FilesInterceptor('attachments', 10))
+  async sendMessage(
+    @Param('id') chatId: string,
+    @UploadedFiles() attachments: Multer.File[],
+    @Body() dto: Omit<SendMessageDto, 'chatId'> & Record<string, unknown>,
+    @Req() req: RequestType,
+  ) {
+    validateAttachmentFiles(attachments);
+
+    const rawContent = dto.content ?? dto;
+    const content = normalizeJsonValue({ value: rawContent });
+    const quoteMessageId = typeof dto.quoteMessageId === 'string' ? dto.quoteMessageId : undefined;
+
+    if (!content || typeof content !== 'object') {
+      throw new BadRequestException('Message content is required');
+    }
 
     const message = await this.chatsService.sendMessage(
       {
         chatId,
         quoteMessageId,
-        content: content ?? rawContent,
+        content,
       },
       req.userId,
+      attachments,
     );
 
     this.chatsGateway.emitToChat(chatId, 'new_message', message);

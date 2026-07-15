@@ -52,30 +52,45 @@ export class MinioService {
     return safeOriginalName;
   }
 
+  private isBucketAlreadyOwnedError(error: unknown) {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === 'BucketAlreadyOwnedByYou'
+    );
+  }
+
   private async ensureBucket(bucket: ASP_BUCKET) {
     try {
       const exists = await this.minioClient
         .bucketExists(bucket)
         .catch(() => false);
+
+      const policy = {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { AWS: ['*'] },
+            Action: ['s3:GetObject'],
+            Resource: [`arn:aws:s3:::${bucket}/*`],
+          },
+        ],
+      };
+
       if (!exists) {
         this.logger.log(`Bucket "${bucket}" not found. Creating...`);
-        await this.minioClient.makeBucket(bucket, 'us-east-1');
-
-        // Apply public-read policy
-        const policy = {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { AWS: ['*'] },
-              Action: ['s3:GetObject'],
-              Resource: [`arn:aws:s3:::${bucket}/*`],
-            },
-          ],
-        };
-
-        await this.minioClient.setBucketPolicy(bucket, JSON.stringify(policy));
+        try {
+          await this.minioClient.makeBucket(bucket, 'us-east-1');
+        } catch (error) {
+          if (!this.isBucketAlreadyOwnedError(error)) {
+            throw error;
+          }
+        }
       }
+
+      await this.minioClient.setBucketPolicy(bucket, JSON.stringify(policy));
     } catch (error) {
       this.logger.error('Failed to ensure bucket', error);
       throw new Error('Failed to ensure bucket');

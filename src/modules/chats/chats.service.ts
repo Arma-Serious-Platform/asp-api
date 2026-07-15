@@ -6,6 +6,9 @@ import { FindMessagesDto } from "./dto/find-messages.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
 import { AddChatMembersDto } from "./dto/add-chat-members.dto";
 import { ChatType } from "@prisma/client";
+import { MinioService } from "src/infrastructure/minio/minio.service";
+import { Multer } from "multer";
+import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
 
 const chatInclude = {
   users: {
@@ -28,7 +31,10 @@ const chatInclude = {
 
 @Injectable()
 export class ChatsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly minioService: MinioService,
+  ) {}
 
   private async reactivateChatUsers(chatId: string, userIds: string[]) {
     await this.prisma.chatUser.updateMany({
@@ -169,7 +175,7 @@ export class ChatsService {
     return chat;
   }
 
-  async sendMessage(dto: SendMessageDto, userId: string) {
+  async sendMessage(dto: SendMessageDto, userId: string, attachmentFiles: Multer.File[] = []) {
     const chat = await this.prisma.chat.findUnique({
       where: { id: dto.chatId },
       include: {
@@ -200,12 +206,23 @@ export class ChatsService {
       }
     }
 
+    const uploadedAttachments = await uploadAttachmentFiles(this.minioService, attachmentFiles);
+
     return await this.prisma.message.create({
       data: {
         content: dto.content,
         chatId: dto.chatId,
         userId,
         ...(dto.quoteMessageId && { quoteMessageId: dto.quoteMessageId }),
+        ...(uploadedAttachments.length > 0 && {
+          attachments: {
+            create: uploadedAttachments.map((attachment) => ({
+              fileId: attachment.fileId,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+            })),
+          },
+        }),
       },
       include: {
         user: {
@@ -230,6 +247,7 @@ export class ChatsService {
             },
           },
         },
+        ...attachmentInclude,
       },
     });
   }
@@ -292,6 +310,7 @@ export class ChatsService {
               },
             },
           },
+          ...attachmentInclude,
         },
         orderBy: {
           createdAt: 'desc',

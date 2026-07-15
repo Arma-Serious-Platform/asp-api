@@ -13,6 +13,9 @@ import { CreateGamePlanCommentDto } from "./dto/create-game-plan-comment.dto";
 import { UpdateGamePlanCommentDto } from "./dto/update-game-plan-comment.dto";
 import { FindGamePlanCommentsDto } from "./dto/find-game-plan-comments.dto";
 import { HeadquartersGateway } from "./headquarters.gateway";
+import { MinioService } from "src/infrastructure/minio/minio.service";
+import { Multer } from "multer";
+import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
 
 /** PBO slot unit names often look like: `1. Role@Callsign | gear | gear`. */
 function parseSlotUnitDisplayName(raw: string): {
@@ -65,6 +68,7 @@ export class HeadquartersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly headquartersGateway: HeadquartersGateway,
+    private readonly minioService: MinioService,
   ) {}
 
   async ensureGamePlansForGame(gameId: string, tx?: Prisma.TransactionClient) {
@@ -664,7 +668,12 @@ export class HeadquartersService {
     };
   }
 
-  async createComment(gamePlanId: string, dto: CreateGamePlanCommentDto, userId: string) {
+  async createComment(
+    gamePlanId: string,
+    dto: CreateGamePlanCommentDto,
+    userId: string,
+    attachmentFiles: Multer.File[] = [],
+  ) {
     const gamePlan = await this.getGamePlanWithSide(gamePlanId);
     await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
 
@@ -682,12 +691,23 @@ export class HeadquartersService {
       replyId = dto.replyId;
     }
 
+    const uploadedAttachments = await uploadAttachmentFiles(this.minioService, attachmentFiles);
+
     const comment = await this.prisma.gamePlanComment.create({
       data: {
         gamePlanId,
         userId,
         message: dto.message,
         ...(replyId && { replyId }),
+        ...(uploadedAttachments.length > 0 && {
+          attachments: {
+            create: uploadedAttachments.map((attachment) => ({
+              fileId: attachment.fileId,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+            })),
+          },
+        }),
       },
       include: this.commentInclude,
     });
@@ -750,7 +770,16 @@ export class HeadquartersService {
   async deleteComment(commentId: string, userId: string) {
     const comment = await this.prisma.gamePlanComment.findUnique({
       where: { id: commentId },
-      select: { id: true, userId: true, gamePlanId: true },
+      select: {
+        id: true,
+        userId: true,
+        gamePlanId: true,
+        attachments: {
+          select: {
+            fileId: true,
+          },
+        },
+      },
     });
 
     if (!comment) {
@@ -761,9 +790,15 @@ export class HeadquartersService {
       throw new ForbiddenException('You can only delete your own comments');
     }
 
+    const fileIds = comment.attachments.map((attachment) => attachment.fileId);
+
     await this.prisma.gamePlanComment.delete({
       where: { id: commentId },
     });
+
+    for (const fileId of fileIds) {
+      await this.minioService.deleteFile(fileId);
+    }
 
     this.headquartersGateway.emitCommentDeleted(comment.gamePlanId, commentId);
 
@@ -947,6 +982,7 @@ export class HeadquartersService {
         },
       },
     },
+    ...attachmentInclude,
   } satisfies Prisma.GamePlanCommentInclude;
 
   private async getGamePlanWithSide(id: string) {

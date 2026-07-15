@@ -5,17 +5,20 @@ import { UpdateMissionCommentDto } from "./dto/update-mission-comment.dto";
 import { FindMissionCommentsDto } from "./dto/find-mission-comments.dto";
 import { MissionCommentsGateway } from "./mission-comments.gateway";
 import { Prisma } from "@prisma/client";
+import { MinioService } from "src/infrastructure/minio/minio.service";
+import { Multer } from "multer";
+import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
 
 @Injectable()
 export class MissionCommentsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly minioService: MinioService,
     @Inject(forwardRef(() => MissionCommentsGateway))
     private readonly gateway: MissionCommentsGateway,
   ) {}
 
-  async create(dto: CreateMissionCommentDto, userId: string) {
-    // Verify mission exists
+  async create(dto: CreateMissionCommentDto, userId: string, attachmentFiles: Multer.File[] = []) {
     const mission = await this.prisma.mission.findUnique({
       where: { id: dto.missionId },
     });
@@ -38,12 +41,23 @@ export class MissionCommentsService {
       replyId = dto.replyId as string;
     }
 
+    const uploadedAttachments = await uploadAttachmentFiles(this.minioService, attachmentFiles);
+
     const comment = await this.prisma.missionComment.create({
       data: {
         missionId: dto.missionId,
         userId,
         message: dto.message,
         ...(replyId && { replyId }),
+        ...(uploadedAttachments.length > 0 && {
+          attachments: {
+            create: uploadedAttachments.map((attachment) => ({
+              fileId: attachment.fileId,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+            })),
+          },
+        }),
       },
       include: {
         user: {
@@ -72,10 +86,10 @@ export class MissionCommentsService {
             },
           },
         },
+        ...attachmentInclude,
       },
     });
 
-    // Emit real-time update
     this.gateway.emitNewComment(dto.missionId, comment);
 
     return comment;
@@ -136,6 +150,7 @@ export class MissionCommentsService {
               },
             },
           },
+          ...attachmentInclude,
         },
         orderBy: {
           createdAt: 'asc',
@@ -185,6 +200,7 @@ export class MissionCommentsService {
             },
           },
         },
+        ...attachmentInclude,
       },
     });
 
@@ -259,10 +275,10 @@ export class MissionCommentsService {
             },
           },
         },
+        ...attachmentInclude,
       },
     });
 
-    // Emit real-time update
     this.gateway.emitUpdatedComment(comment.missionId, updatedComment);
 
     return updatedComment;
@@ -271,6 +287,13 @@ export class MissionCommentsService {
   async delete(id: string, userId: string) {
     const comment = await this.prisma.missionComment.findUnique({
       where: { id },
+      include: {
+        attachments: {
+          select: {
+            fileId: true,
+          },
+        },
+      },
     });
 
     if (!comment) {
@@ -282,12 +305,16 @@ export class MissionCommentsService {
     }
 
     const missionId = comment.missionId;
+    const fileIds = comment.attachments.map((attachment) => attachment.fileId);
 
     await this.prisma.missionComment.delete({
       where: { id },
     });
 
-    // Emit real-time update
+    for (const fileId of fileIds) {
+      await this.minioService.deleteFile(fileId);
+    }
+
     this.gateway.emitDeletedComment(missionId, id);
 
     return { message: 'Comment deleted successfully' };

@@ -8,8 +8,12 @@ import {
   Post,
   Query,
   Req,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { Multer } from "multer";
 import { ApiOkResponse } from "@nestjs/swagger";
 import { HeadquartersService } from "./headquarters.service";
 import { AuthGuard } from "src/shared/guards/auth.guard";
@@ -21,6 +25,7 @@ import { CreateGamePlanCommentDto } from "./dto/create-game-plan-comment.dto";
 import { UpdateGamePlanCommentDto } from "./dto/update-game-plan-comment.dto";
 import { FindGamePlanCommentsDto } from "./dto/find-game-plan-comments.dto";
 import { HeadquartersGamePlanResponseDto, HeadquartersSlotResponseDto } from "./dto/headquarters-response.dto";
+import { validateAttachmentFiles } from "src/shared/utils/validate-attachments";
 
 @Controller('headquarters')
 export class HeadquartersController {
@@ -118,12 +123,15 @@ export class HeadquartersController {
 
   @Post('plans/:gamePlanId/comments')
   @UseGuards(AuthGuard)
+  @UseInterceptors(FilesInterceptor('attachments', 10))
   createComment(
     @Param('gamePlanId') gamePlanId: string,
+    @UploadedFiles() attachments: Multer.File[],
     @Body() dto: CreateGamePlanCommentDto,
     @Req() req: RequestType,
   ) {
-    return this.headquartersService.createComment(gamePlanId, dto, req.userId);
+    validateAttachmentFiles(attachments);
+    return this.headquartersService.createComment(gamePlanId, dto, req.userId, attachments);
   }
 
   @Patch('comments/:id')
