@@ -5,10 +5,10 @@ import { ChatsService } from "./chats.service";
 import { ChatsGateway } from "./chats.gateway";
 import { CreateChatDto } from "./dto/create-chat.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
-import { FindMessagesDto } from "./dto/find-messages.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
 import { UpdateMessageDto } from "./dto/update-message.dto";
 import { AddChatMembersDto } from "./dto/add-chat-members.dto";
+import { PaginationDto } from "src/shared/dto/pagination.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { RequestType } from "src/utils/types";
 import { validateAttachmentFiles } from "src/shared/utils/validate-attachments";
@@ -110,9 +110,20 @@ export class ChatsController {
     return message;
   }
 
+  @Delete(':id/messages/:messageId')
+  async deleteMessage(
+    @Param('id') chatId: string,
+    @Param('messageId') messageId: string,
+    @Req() req: RequestType,
+  ) {
+    const result = await this.chatsService.deleteMessage(chatId, messageId, req.userId);
+    this.chatsGateway.emitToChat(chatId, 'message_deleted', result);
+    return result;
+  }
+
   @Get(':id/messages')
-  findMessages(@Param('id') chatId: string, @Query() dto: Omit<FindMessagesDto, 'chatId'>, @Req() req: RequestType) {
-    return this.chatsService.findMessages({ ...dto, chatId }, req.userId);
+  findMessages(@Param('id') chatId: string, @Query() query: PaginationDto, @Req() req: RequestType) {
+    return this.chatsService.findMessages({ ...query, chatId }, req.userId);
   }
 
   @Post(':id/members')

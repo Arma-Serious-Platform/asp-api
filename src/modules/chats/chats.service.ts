@@ -252,36 +252,14 @@ export class ChatsService {
           },
         }),
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: {
-              select: {
-                id: true,
-                url: true,
-              },
-            },
-          },
-        },
-        quoteMessage: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-              },
-            },
-          },
-        },
-        ...attachmentInclude,
-      },
+      include: messageInclude,
     });
   }
 
   async findMessages(dto: FindMessagesDto, userId: string) {
-    const { chatId, skip = 0, take = 100 } = dto;
+    const chatId = dto.chatId;
+    const skip = Number(dto.skip ?? 0);
+    const take = Number(dto.take ?? 100);
 
     if (!chatId) {
       throw new BadRequestException('chatId is required');
@@ -315,31 +293,7 @@ export class ChatsService {
         where: { chatId },
         skip,
         take,
-        include: {
-          user: {
-            select: {
-              id: true,
-              nickname: true,
-              avatar: {
-                select: {
-                  id: true,
-                  url: true,
-                },
-              },
-            },
-          },
-          quoteMessage: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  nickname: true,
-                },
-              },
-            },
-          },
-          ...attachmentInclude,
-        },
+        include: messageInclude,
         orderBy: {
           createdAt: 'desc',
         },
@@ -347,7 +301,7 @@ export class ChatsService {
     ]);
 
     return {
-      data: data.reverse(),
+      data: [...data].reverse(),
       total,
     };
   }
@@ -430,6 +384,59 @@ export class ChatsService {
       },
       include: messageInclude,
     });
+  }
+
+  async deleteMessage(chatId: string, messageId: string, userId: string) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        attachments: {
+          select: {
+            fileId: true,
+          },
+        },
+      },
+    });
+
+    if (!message || message.chatId !== chatId) {
+      throw new NotFoundException('Message not found');
+    }
+
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        users: {
+          where: {
+            userId,
+            leftAt: null,
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (chat.users.length === 0) {
+      throw new ForbiddenException('You are not a member of this chat');
+    }
+
+    if (message.userId !== userId) {
+      throw new ForbiddenException('You can only delete your own messages');
+    }
+
+    const fileIds = message.attachments.map((attachment) => attachment.fileId);
+
+    await this.prisma.message.delete({
+      where: { id: messageId },
+    });
+
+    for (const fileId of fileIds) {
+      await this.minioService.deleteFile(fileId);
+    }
+
+    return { message: 'Message deleted successfully', id: messageId, chatId };
   }
 
   async leaveChat(chatId: string, userId: string) {
