@@ -39,6 +39,12 @@ export class CreateMissionVersionDto {
   @Type(() => Number)
   defenseSideSlots: number;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  minSlotsToPlay?: number;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()

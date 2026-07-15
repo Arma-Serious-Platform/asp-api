@@ -115,7 +115,7 @@ export class MissionsService {
   }
 
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, status, reviewerId, missionType, state, islandId } = dto;
+    const { search, authorId, minSlots, maxSlots, minSlotsToPlay, status, reviewerId, missionType, state, islandId } = dto;
     const orderBy = dto.orderBy ?? MissionOrderBy.CREATED_AT;
     const orderType = dto.orderType ?? OrderType.DESC;
 
@@ -202,9 +202,32 @@ export class MissionsService {
       }
     }
 
+    let missionIdsWithMinSlotsToPlay: string[] | null = null;
+    if (minSlotsToPlay !== undefined) {
+      const result = await this.prisma.$queryRaw<Array<{ missionId: string }>>`
+        SELECT latest."missionId"
+        FROM (
+          SELECT DISTINCT ON ("missionId") "missionId", "minSlotsToPlay"
+          FROM "MissionVersion"
+          ORDER BY "missionId", "createdAt" DESC, "id" DESC
+        ) latest
+        WHERE latest."minSlotsToPlay" = ${minSlotsToPlay}
+      `;
+
+      missionIdsWithMinSlotsToPlay = result.map((r) => r.missionId);
+
+      if (missionIdsWithMinSlotsToPlay.length === 0) {
+        return {
+          data: [],
+          total: 0,
+        };
+      }
+    }
+
     const missionIdConditions: Prisma.MissionWhereInput[] = [
       ...(missionIdsWithValidSlots ? [{ id: { in: missionIdsWithValidSlots } }] : []),
       ...(missionIdsWithLatestVersionFilters ? [{ id: { in: missionIdsWithLatestVersionFilters } }] : []),
+      ...(missionIdsWithMinSlotsToPlay ? [{ id: { in: missionIdsWithMinSlotsToPlay } }] : []),
     ];
 
     const options: Prisma.MissionFindManyArgs = {
@@ -237,6 +260,7 @@ export class MissionsService {
             defenseSideName: true,
             attackSideSlots: true,
             defenseSideSlots: true,
+            minSlotsToPlay: true,
             missionAttackSlots: true,
             missionDefenceSlots: true,
             attackSideType: true,
@@ -609,6 +633,7 @@ export class MissionsService {
         defenseSideType: dto.defenseSideType,
         attackSideSlots: dto.attackSideSlots,
         defenseSideSlots: dto.defenseSideSlots,
+        ...(dto.minSlotsToPlay !== undefined && { minSlotsToPlay: dto.minSlotsToPlay }),
         missionAttackSlots,
         missionDefenceSlots,
         attackSideName: dto.attackSideName,
@@ -768,6 +793,10 @@ export class MissionsService {
 
     if (dto.defenseSideSlots !== undefined) {
       updateDto.defenseSideSlots = dto.defenseSideSlots;
+    }
+
+    if (dto.minSlotsToPlay !== undefined) {
+      updateDto.minSlotsToPlay = dto.minSlotsToPlay;
     }
 
     if (dto.attackSideType !== undefined) {

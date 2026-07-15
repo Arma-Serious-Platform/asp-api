@@ -33,7 +33,14 @@ export class UpdateMissionVersionDto {
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
-  defenseSideSlots?: number;  
+  defenseSideSlots?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? null : Number(value)))
+  @IsNumber()
+  @Type(() => Number)
+  minSlotsToPlay?: number | null;
 
   @ApiPropertyOptional()
   @IsEnum(MissionGameSide)

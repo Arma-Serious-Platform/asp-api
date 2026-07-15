@@ -9,7 +9,8 @@ export function resolveMissionVersionBucket(
   if (
     status === MissionStatus.PENDING_APPROVAL ||
     status === MissionStatus.CHANGES_REQUESTED ||
-    status === MissionStatus.IN_REVIEW
+    status === MissionStatus.IN_REVIEW ||
+    status === MissionStatus.PENDING_GAME_APPROVAL
   ) {
     return ASP_BUCKET.TESTING_MISSIONS;
   }

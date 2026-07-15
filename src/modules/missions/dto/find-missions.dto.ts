@@ -29,6 +29,13 @@ export class FindMissionsDto extends PaginationDto {
   @Transform(({ value }) => parseInt(value as string))
   maxSlots?: number;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Transform(({ value }) => parseInt(value as string))
+  minSlotsToPlay?: number;
+
   @ApiPropertyOptional({ enum: MissionStatus })
   @IsOptional()
   @IsEnum(MissionStatus)

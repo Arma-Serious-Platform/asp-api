@@ -322,6 +322,7 @@ model MissionVersion {
   defenseSideType    MissionGameSide
   attackSideSlots    Int
   defenseSideSlots   Int
+  minSlotsToPlay     Int?
   missionAttackSlots Json?
   missionDefenceSlots Json?
   attackSideName     String
@@ -502,6 +503,7 @@ enum MissionStatus {
   PENDING_APPROVAL
   CHANGES_REQUESTED
   IN_REVIEW
+  PENDING_GAME_APPROVAL
 }
 
 enum SideType {
