@@ -1,5 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsObject, IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsArray, IsNotEmpty, IsObject, IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import { parseRemovedAttachmentIds } from 'src/shared/utils/sync-comment-attachments';
+import { normalizeJsonValue } from 'src/utils/normalize-json-value';
 
 export class UpdateMissionCommentDto {
   @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'ID of comment this replies to (null to clear)' })
@@ -29,8 +32,19 @@ export class UpdateMissionCommentDto {
       },
     },
   })
+  @Transform(normalizeJsonValue)
   @IsObject()
   @IsOptional()
   @IsNotEmpty()
   message?: any;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Attachment ids to remove from the comment',
+  })
+  @Transform(({ value }) => parseRemovedAttachmentIds(value))
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  removedAttachmentIds?: string[];
 }

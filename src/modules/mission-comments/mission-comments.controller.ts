@@ -46,9 +46,16 @@ export class MissionCommentsController {
 
   @Patch(':id')
   @UseGuards(AuthGuard)
+  @UseInterceptors(FilesInterceptor('attachments', 10))
   @ApiOkResponse({ description: 'Updated mission comment', type: MissionCommentResponseDto })
-  update(@Param('id') id: string, @Body() dto: UpdateMissionCommentDto, @Req() req: RequestType) {
-    return this.missionCommentsService.update(id, dto, req.userId);
+  update(
+    @Param('id') id: string,
+    @UploadedFiles() attachments: Multer.File[],
+    @Body() dto: UpdateMissionCommentDto,
+    @Req() req: RequestType,
+  ) {
+    validateAttachmentFiles(attachments);
+    return this.missionCommentsService.update(id, dto, req.userId, attachments);
   }
 
   @Delete(':id')

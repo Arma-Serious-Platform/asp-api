@@ -8,6 +8,8 @@ import { Prisma } from "@prisma/client";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { Multer } from "multer";
 import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
+import { commentReplyUserSelect, commentUserSelect } from "src/shared/utils/comment-user-select";
+import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
 
 @Injectable()
 export class MissionCommentsService {
@@ -17,6 +19,24 @@ export class MissionCommentsService {
     @Inject(forwardRef(() => MissionCommentsGateway))
     private readonly gateway: MissionCommentsGateway,
   ) {}
+
+  private readonly commentInclude = {
+    user: {
+      select: commentUserSelect,
+    },
+    replyTo: {
+      select: {
+        id: true,
+        userId: true,
+        message: true,
+        createdAt: true,
+        user: {
+          select: commentReplyUserSelect,
+        },
+      },
+    },
+    ...attachmentInclude,
+  } satisfies Prisma.MissionCommentInclude;
 
   async create(dto: CreateMissionCommentDto, userId: string, attachmentFiles: Multer.File[] = []) {
     const mission = await this.prisma.mission.findUnique({
@@ -59,35 +79,7 @@ export class MissionCommentsService {
           },
         }),
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: {
-              select: {
-                id: true,
-                url: true,
-              },
-            },
-          },
-        },
-        replyTo: {
-          select: {
-            id: true,
-            userId: true,
-            message: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-              },
-            },
-          },
-        },
-        ...attachmentInclude,
-      },
+      include: this.commentInclude,
     });
 
     this.gateway.emitNewComment(dto.missionId, comment);
@@ -112,46 +104,7 @@ export class MissionCommentsService {
         where,
         skip,
         take,
-        include: {
-          user: {
-            select: {
-              id: true,
-              nickname: true,
-              avatar: {
-                select: {
-                  id: true,
-                  url: true,
-                },
-              },
-              squad: {
-                select: {
-                  id: true,
-                  tag: true,
-                  side: {
-                    select: {
-                      type: true
-                    }
-                  }
-                }
-              }
-            },
-          },
-          replyTo: {
-            select: {
-              id: true,
-              userId: true,
-              message: true,
-              createdAt: true,
-              user: {
-                select: {
-                  id: true,
-                  nickname: true,
-                },
-              },
-            },
-          },
-          ...attachmentInclude,
-        },
+        include: this.commentInclude,
         orderBy: {
           createdAt: 'asc',
         },
@@ -168,39 +121,13 @@ export class MissionCommentsService {
     const comment = await this.prisma.missionComment.findUnique({
       where: { id },
       include: {
-        user: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: {
-              select: {
-                id: true,
-                url: true,
-              },
-            },
-          },
-        },
+        ...this.commentInclude,
         mission: {
           select: {
             id: true,
             name: true,
           },
         },
-        replyTo: {
-          select: {
-            id: true,
-            userId: true,
-            message: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-              },
-            },
-          },
-        },
-        ...attachmentInclude,
       },
     });
 
@@ -211,9 +138,17 @@ export class MissionCommentsService {
     return comment;
   }
 
-  async update(id: string, dto: UpdateMissionCommentDto, userId: string) {
+  async update(id: string, dto: UpdateMissionCommentDto, userId: string, attachmentFiles: Multer.File[] = []) {
     const comment = await this.prisma.missionComment.findUnique({
       where: { id },
+      include: {
+        attachments: {
+          select: {
+            id: true,
+            fileId: true,
+          },
+        },
+      },
     });
 
     if (!comment) {
@@ -245,38 +180,31 @@ export class MissionCommentsService {
       }
     }
 
+    const removedAttachmentIds = parseRemovedAttachmentIds(dto.removedAttachmentIds);
+    const uploadedAttachments = await syncAttachmentUpdates({
+      minioService: this.minioService,
+      existing: comment.attachments,
+      removedAttachmentIds,
+      newFiles: attachmentFiles,
+      deleteAttachment: (attachmentId) =>
+        this.prisma.missionCommentAttachment.delete({ where: { id: attachmentId } }),
+    });
+
     const updatedComment = await this.prisma.missionComment.update({
       where: { id },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: {
-              select: {
-                id: true,
-                url: true,
-              },
-            },
+      data: {
+        ...updateData,
+        ...(uploadedAttachments.length > 0 && {
+          attachments: {
+            create: uploadedAttachments.map((attachment) => ({
+              fileId: attachment.fileId,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+            })),
           },
-        },
-        replyTo: {
-          select: {
-            id: true,
-            userId: true,
-            message: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                nickname: true,
-              },
-            },
-          },
-        },
-        ...attachmentInclude,
+        }),
       },
+      include: this.commentInclude,
     });
 
     this.gateway.emitUpdatedComment(comment.missionId, updatedComment);

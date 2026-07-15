@@ -136,8 +136,15 @@ export class HeadquartersController {
 
   @Patch('comments/:id')
   @UseGuards(AuthGuard)
-  updateComment(@Param('id') id: string, @Body() dto: UpdateGamePlanCommentDto, @Req() req: RequestType) {
-    return this.headquartersService.updateComment(id, dto, req.userId);
+  @UseInterceptors(FilesInterceptor('attachments', 10))
+  updateComment(
+    @Param('id') id: string,
+    @UploadedFiles() attachments: Multer.File[],
+    @Body() dto: UpdateGamePlanCommentDto,
+    @Req() req: RequestType,
+  ) {
+    validateAttachmentFiles(attachments);
+    return this.headquartersService.updateComment(id, dto, req.userId, attachments);
   }
 
   @Delete('comments/:id')

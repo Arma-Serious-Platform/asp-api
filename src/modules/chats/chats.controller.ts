@@ -7,6 +7,7 @@ import { CreateChatDto } from "./dto/create-chat.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FindMessagesDto } from "./dto/find-messages.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
+import { UpdateMessageDto } from "./dto/update-message.dto";
 import { AddChatMembersDto } from "./dto/add-chat-members.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { RequestType } from "src/utils/types";
@@ -71,6 +72,40 @@ export class ChatsController {
     );
 
     this.chatsGateway.emitToChat(chatId, 'new_message', message);
+
+    return message;
+  }
+
+  @Patch(':id/messages/:messageId')
+  @UseInterceptors(FilesInterceptor('attachments', 10))
+  async updateMessage(
+    @Param('id') chatId: string,
+    @Param('messageId') messageId: string,
+    @UploadedFiles() attachments: Multer.File[],
+    @Body() dto: UpdateMessageDto & Record<string, unknown>,
+    @Req() req: RequestType,
+  ) {
+    validateAttachmentFiles(attachments);
+
+    const rawContent = dto.content;
+    const content = rawContent === undefined ? undefined : normalizeJsonValue({ value: rawContent });
+
+    if (content !== undefined && (typeof content !== 'object' || content === null)) {
+      throw new BadRequestException('Message content must be a valid JSON object');
+    }
+
+    const message = await this.chatsService.updateMessage(
+      chatId,
+      messageId,
+      {
+        ...(content !== undefined && { content }),
+        removedAttachmentIds: dto.removedAttachmentIds,
+      },
+      req.userId,
+      attachments,
+    );
+
+    this.chatsGateway.emitToChat(chatId, 'message_updated', message);
 
     return message;
   }

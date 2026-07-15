@@ -16,6 +16,7 @@ import { HeadquartersGateway } from "./headquarters.gateway";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { Multer } from "multer";
 import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
+import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
 
 /** PBO slot unit names often look like: `1. Role@Callsign | gear | gear`. */
 function parseSlotUnitDisplayName(raw: string): {
@@ -716,13 +717,21 @@ export class HeadquartersService {
     return comment;
   }
 
-  async updateComment(commentId: string, dto: UpdateGamePlanCommentDto, userId: string) {
+  async updateComment(
+    commentId: string,
+    dto: UpdateGamePlanCommentDto,
+    userId: string,
+    attachmentFiles: Multer.File[] = [],
+  ) {
     const comment = await this.prisma.gamePlanComment.findUnique({
       where: { id: commentId },
-      select: {
-        id: true,
-        userId: true,
-        gamePlanId: true,
+      include: {
+        attachments: {
+          select: {
+            id: true,
+            fileId: true,
+          },
+        },
       },
     });
 
@@ -757,9 +766,30 @@ export class HeadquartersService {
       }
     }
 
+    const removedAttachmentIds = parseRemovedAttachmentIds(dto.removedAttachmentIds);
+    const uploadedAttachments = await syncAttachmentUpdates({
+      minioService: this.minioService,
+      existing: comment.attachments,
+      removedAttachmentIds,
+      newFiles: attachmentFiles,
+      deleteAttachment: (attachmentId) =>
+        this.prisma.gamePlanCommentAttachment.delete({ where: { id: attachmentId } }),
+    });
+
     const updatedComment = await this.prisma.gamePlanComment.update({
       where: { id: commentId },
-      data: updateData,
+      data: {
+        ...updateData,
+        ...(uploadedAttachments.length > 0 && {
+          attachments: {
+            create: uploadedAttachments.map((attachment) => ({
+              fileId: attachment.fileId,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+            })),
+          },
+        }),
+      },
       include: this.commentInclude,
     });
 
@@ -931,6 +961,7 @@ export class HeadquartersService {
         id: true,
         nickname: true,
         role: true,
+        isMissionReviewer: true,
         avatar: {
           select: {
             id: true,

@@ -4,11 +4,13 @@ import { CreateChatDto } from "./dto/create-chat.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FindMessagesDto } from "./dto/find-messages.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
+import { UpdateMessageDto } from "./dto/update-message.dto";
 import { AddChatMembersDto } from "./dto/add-chat-members.dto";
 import { ChatType } from "@prisma/client";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { Multer } from "multer";
 import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
+import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
 
 const chatInclude = {
   users: {
@@ -27,6 +29,32 @@ const chatInclude = {
       },
     },
   },
+} as const;
+
+const messageInclude = {
+  user: {
+    select: {
+      id: true,
+      nickname: true,
+      avatar: {
+        select: {
+          id: true,
+          url: true,
+        },
+      },
+    },
+  },
+  quoteMessage: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          nickname: true,
+        },
+      },
+    },
+  },
+  ...attachmentInclude,
 } as const;
 
 @Injectable()
@@ -322,6 +350,86 @@ export class ChatsService {
       data: data.reverse(),
       total,
     };
+  }
+
+  async updateMessage(
+    chatId: string,
+    messageId: string,
+    dto: UpdateMessageDto,
+    userId: string,
+    attachmentFiles: Multer.File[] = [],
+  ) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        attachments: {
+          select: {
+            id: true,
+            fileId: true,
+          },
+        },
+      },
+    });
+
+    if (!message || message.chatId !== chatId) {
+      throw new NotFoundException('Message not found');
+    }
+
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        users: {
+          where: {
+            userId,
+            leftAt: null,
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (chat.users.length === 0) {
+      throw new ForbiddenException('You are not a member of this chat');
+    }
+
+    if (message.userId !== userId) {
+      throw new ForbiddenException('You can only update your own messages');
+    }
+
+    if (dto.content === undefined && !dto.removedAttachmentIds?.length && attachmentFiles.length === 0) {
+      throw new BadRequestException('Nothing to update');
+    }
+
+    const removedAttachmentIds = parseRemovedAttachmentIds(dto.removedAttachmentIds);
+    const uploadedAttachments = await syncAttachmentUpdates({
+      minioService: this.minioService,
+      existing: message.attachments,
+      removedAttachmentIds,
+      newFiles: attachmentFiles,
+      deleteAttachment: (attachmentId) =>
+        this.prisma.messageAttachment.delete({ where: { id: attachmentId } }),
+    });
+
+    return await this.prisma.message.update({
+      where: { id: messageId },
+      data: {
+        ...(dto.content !== undefined && { content: dto.content }),
+        editedAt: new Date(),
+        ...(uploadedAttachments.length > 0 && {
+          attachments: {
+            create: uploadedAttachments.map((attachment) => ({
+              fileId: attachment.fileId,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+            })),
+          },
+        }),
+      },
+      include: messageInclude,
+    });
   }
 
   async leaveChat(chatId: string, userId: string) {
