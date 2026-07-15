@@ -45,12 +45,32 @@ export class AuthService {
     return slidingExpiresAt < maxExpiresAt ? slidingExpiresAt : maxExpiresAt;
   }
 
-  private getCookieOptions(expiresAt: Date) {
-    return {
+  private getBaseCookieOptions() {
+    const options: {
+      httpOnly: true;
+      secure: boolean;
+      sameSite: 'lax';
+      path: string;
+      domain?: string;
+    } = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax' as const,
+      sameSite: 'lax',
       path: '/',
+    };
+
+    const domain = process.env.SESSION_COOKIE_DOMAIN?.trim();
+
+    if (domain) {
+      options.domain = domain;
+    }
+
+    return options;
+  }
+
+  private getCookieOptions(expiresAt: Date) {
+    return {
+      ...this.getBaseCookieOptions(),
       expires: expiresAt,
     };
   }
@@ -90,22 +110,24 @@ export class AuthService {
   }
 
   setSessionCookie(res: Response, sessionId: string, expiresAt: Date) {
+    const baseOptions = this.getBaseCookieOptions();
+
     res.clearCookie(SESSION_COOKIE_NAME, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...baseOptions,
       path: '/api',
     });
+    res.clearCookie(SESSION_COOKIE_NAME, baseOptions);
     res.cookie(SESSION_COOKIE_NAME, sessionId, this.getCookieOptions(expiresAt));
   }
 
   clearSessionCookie(res: Response) {
+    const baseOptions = this.getBaseCookieOptions();
+
     res.clearCookie(SESSION_COOKIE_NAME, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
+      ...baseOptions,
+      path: '/api',
     });
+    res.clearCookie(SESSION_COOKIE_NAME, baseOptions);
   }
 
   async sessionLogin(dto: SessionLoginDto, req: Request, res: Response) {
