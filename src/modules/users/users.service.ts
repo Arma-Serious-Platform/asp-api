@@ -125,7 +125,31 @@ export class UsersService {
   }
 
   getFrontendSteamLinkedRedirectUrl() {
-    return process.env.FRONTEND_STEAM_LINKED_URL ?? '/';
+    const baseUrl = process.env.FRONTEND_STEAM_LINKED_URL ?? '/';
+
+    try {
+      const url = new URL(baseUrl);
+      url.searchParams.set('steam', 'linked');
+
+      return url.toString();
+    } catch {
+      const separator = baseUrl.includes('?') ? '&' : '?';
+
+      return `${baseUrl}${separator}steam=linked`;
+    }
+  }
+
+  async createSteamLinkToken(userId: string) {
+    return this.jwtService.signAsync(
+      {
+        userId,
+        purpose: 'steam-link',
+      },
+      {
+        secret: process.env.JWT_SECRET,
+        expiresIn: '15m',
+      },
+    );
   }
 
   getSteamLoginRedirectUrl(accessToken: string, callbackUrl: string) {
@@ -149,11 +173,24 @@ export class UsersService {
       return;
     }
 
-    const data = this.jwtService.decode<{userId: string }>(accessToken);
+    let userId: string | undefined;
 
-    if (!data?.userId) return;
+    try {
+      const data = await this.jwtService.verifyAsync<{
+        userId: string;
+        purpose?: string;
+      }>(accessToken, {
+        secret: process.env.JWT_SECRET,
+      });
 
-    const { userId } = data;
+      if (data?.purpose !== 'steam-link' || !data.userId) {
+        return;
+      }
+
+      userId = data.userId;
+    } catch {
+      return;
+    }
 
 
     const steamId = this.extractAndVerifySteamId(query);

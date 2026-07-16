@@ -96,9 +96,12 @@ export class UsersController {
   }
 
   @Get('/steam-login')
-  steamLogin(@Query('accessToken') accessToken: string, @Req() req: Request, @Res() res: Response) {
+  @UseGuards(AuthGuard)
+  async steamLogin(@Req() req: RequestType, @Res() res: Response) {
     const callbackUrl = `${req.protocol}://${req.get('host')}/api/users/steam/callback`;
+    const accessToken = await this.usersService.createSteamLinkToken(req.userId);
     const redirectUrl = this.usersService.getSteamLoginRedirectUrl(accessToken, callbackUrl);
+
     return res.redirect(redirectUrl);
   }
 
