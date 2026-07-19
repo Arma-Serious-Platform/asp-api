@@ -4,9 +4,10 @@ import { MinioModule } from "src/infrastructure/minio/minio.module";
 import { HeadquartersService } from "./headquarters.service";
 import { HeadquartersController } from "./headquarters.controller";
 import { HeadquartersGateway } from "./headquarters.gateway";
+import { UsersModule } from "../users/users.module";
 
 @Module({
-  imports: [PrismaModule, MinioModule],
+  imports: [PrismaModule, MinioModule, UsersModule],
   providers: [HeadquartersService, HeadquartersGateway],
   controllers: [HeadquartersController],
   exports: [HeadquartersService, HeadquartersGateway],

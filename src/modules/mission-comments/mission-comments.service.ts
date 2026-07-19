@@ -10,6 +10,7 @@ import { Multer } from "multer";
 import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
 import { commentReplyUserSelect, commentUserSelect } from "src/shared/utils/comment-user-select";
 import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
+import { UserRestrictionsService } from "../users/user-restrictions.service";
 
 @Injectable()
 export class MissionCommentsService {
@@ -18,6 +19,7 @@ export class MissionCommentsService {
     private readonly minioService: MinioService,
     @Inject(forwardRef(() => MissionCommentsGateway))
     private readonly gateway: MissionCommentsGateway,
+    private readonly userRestrictionsService: UserRestrictionsService,
   ) {}
 
   private readonly commentInclude = {
@@ -39,6 +41,8 @@ export class MissionCommentsService {
   } satisfies Prisma.MissionCommentInclude;
 
   async create(dto: CreateMissionCommentDto, userId: string, attachmentFiles: Multer.File[] = []) {
+    await this.userRestrictionsService.assertCanCommunicate(userId);
+
     const mission = await this.prisma.mission.findUnique({
       where: { id: dto.missionId },
     });
@@ -139,6 +143,8 @@ export class MissionCommentsService {
   }
 
   async update(id: string, dto: UpdateMissionCommentDto, userId: string, attachmentFiles: Multer.File[] = []) {
+    await this.userRestrictionsService.assertCanCommunicate(userId);
+
     const comment = await this.prisma.missionComment.findUnique({
       where: { id },
       include: {

@@ -5,6 +5,9 @@ import { PrismaModule } from 'src/infrastructure/prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { MinioModule } from 'src/infrastructure/minio/minio.module';
+import { UsersHistoryService } from './users-history.service';
+import { UsersBanExpirationService } from './users-ban-expiration.service';
+import { UserRestrictionsService } from './user-restrictions.service';
 
 @Module({
   imports: [
@@ -17,7 +20,12 @@ import { MinioModule } from 'src/infrastructure/minio/minio.module';
     }),
   ],
   controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService],
+  providers: [
+    UsersService,
+    UsersHistoryService,
+    UsersBanExpirationService,
+    UserRestrictionsService,
+  ],
+  exports: [UsersService, UsersHistoryService, UserRestrictionsService],
 })
 export class UsersModule {}

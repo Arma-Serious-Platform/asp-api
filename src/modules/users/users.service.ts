@@ -20,7 +20,17 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Prisma, Squad, SquadInviteStatus, SquadRole, User, UserPunishmentType, UserRole, UserStatus } from '@prisma/client';
+import {
+  Prisma,
+  Squad,
+  SquadInviteStatus,
+  SquadRole,
+  User,
+  UserHistoryEventType,
+  UserPunishmentType,
+  UserRole,
+  UserStatus,
+} from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
@@ -31,13 +41,19 @@ import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto
 import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { EmailTemplateService } from 'src/shared/services/email-template.service';
 import { CreateUserWarningDto } from './dto/create-user-warning.dto';
-import { OptionalPunishmentReasonDto, PunishmentReasonDto } from './dto/punishment-reason.dto';
+import {
+  OptionalPunishmentReasonDto,
+  PunishmentReasonDto,
+} from './dto/punishment-reason.dto';
+import { BanPunishmentDto } from './dto/ban-punishment.dto';
 import { TwoFactorService } from 'src/modules/auth/two-factor.service';
 import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
+import { UsersHistoryService } from './users-history.service';
 
 @Injectable()
 export class UsersService {
-  private static readonly STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login';
+  private static readonly STEAM_OPENID_ENDPOINT =
+    'https://steamcommunity.com/openid/login';
 
   private static readonly ROLE_RANK: Record<UserRole, number> = {
     [UserRole.USER]: 0,
@@ -55,7 +71,8 @@ export class UsersService {
     private readonly mailerService: MailerService,
     private readonly minioService: MinioService,
     private readonly twoFactorService: TwoFactorService,
-  ) { }
+    private readonly usersHistoryService: UsersHistoryService,
+  ) {}
 
   private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
@@ -120,8 +137,29 @@ export class UsersService {
       actorRole !== UserRole.OWNER &&
       UsersService.ROLE_RANK[actorRole] <= UsersService.ROLE_RANK[targetRole]
     ) {
-      throw new BadRequestException('You cannot moderate user with your level of access');
+      throw new BadRequestException(
+        'You cannot moderate user with your level of access',
+      );
     }
+  }
+
+  private async resolveBanReason(userId: string, status: UserStatus) {
+    if (status !== UserStatus.BANNED) {
+      return null;
+    }
+
+    const punishment = await this.prisma.userPunishment.findFirst({
+      where: {
+        userId,
+        type: {
+          in: [UserPunishmentType.TEMP_BAN, UserPunishmentType.PERMANENT_BAN],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { reason: true },
+    });
+
+    return punishment?.reason ?? null;
   }
 
   getFrontendSteamLinkedRedirectUrl() {
@@ -166,7 +204,7 @@ export class UsersService {
   }
 
   async linkSteamFromCallback(
-    query: Record<string, string | string[] | undefined>
+    query: Record<string, string | string[] | undefined>,
   ) {
     const accessToken = this.getSingleQueryValue(query.accessToken);
     if (!accessToken) {
@@ -191,7 +229,6 @@ export class UsersService {
     } catch {
       return;
     }
-
 
     const steamId = this.extractAndVerifySteamId(query);
 
@@ -241,7 +278,7 @@ export class UsersService {
   }
 
   private extractAndVerifySteamId(
-    query: Record<string, string | string[] | undefined>
+    query: Record<string, string | string[] | undefined>,
   ) {
     const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
     if (!claimedId) {
@@ -279,7 +316,12 @@ export class UsersService {
     return this.me(userId);
   }
 
-  async changeNickname(userId: string, dto: ChangeNicknameDto, actorRole?: UserRole) {
+  async changeNickname(
+    userId: string,
+    dto: ChangeNicknameDto,
+    actorRole?: UserRole,
+    actorId?: string,
+  ) {
     const nickname = dto.nickname.trim();
 
     if (!nickname) {
@@ -314,9 +356,21 @@ export class UsersService {
       throw new BadRequestException('Nickname is already taken');
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { nickname },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { nickname },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId,
+        actorId: actorId ?? userId,
+        type: UserHistoryEventType.NICKNAME_CHANGE,
+        payload: {
+          oldNickname: user.nickname,
+          newNickname: nickname,
+        },
+      });
     });
 
     return this.me(userId);
@@ -380,6 +434,7 @@ export class UsersService {
         isMissionReviewer: true,
         avatarUrl: true,
         bannedUntil: true,
+        isMuted: true,
         isEmailVerified: true,
         twoFactorEnabled: true,
         telegramUrl: true,
@@ -401,13 +456,13 @@ export class UsersService {
                     coauthors: {
                       some: {
                         id: userId,
-                      }
-                    }
-                  }
-                ]
-              }
+                      },
+                    },
+                  },
+                ],
+              },
             },
-          }
+          },
         },
         avatar: {
           select: {
@@ -439,9 +494,9 @@ export class UsersService {
                 tag: true,
                 logo: {
                   select: {
-                    url: true
-                  }
-                }
+                    url: true,
+                  },
+                },
               },
             },
           },
@@ -465,15 +520,15 @@ export class UsersService {
                 joinRequests: {
                   where: {
                     status: SquadInviteStatus.PENDING,
-                  }
-                }
+                  },
+                },
               },
             },
             logo: {
               select: {
                 id: true,
                 url: true,
-              }
+              },
             },
             members: {
               select: {
@@ -502,13 +557,13 @@ export class UsersService {
                     id: true,
                     tag: true,
                     side: {
-                      select :{
+                      select: {
                         id: true,
                         name: true,
                         type: true,
-                      }
-                    }
-                  }
+                      },
+                    },
+                  },
                 },
                 status: true,
                 avatar: {
@@ -528,15 +583,22 @@ export class UsersService {
               select: {
                 id: true,
                 type: true,
-                name: true
-              }
-            }
+                name: true,
+              },
+            },
           },
         },
       },
     });
 
-    return user;
+    if (!user) {
+      return user;
+    }
+
+    return {
+      ...user,
+      banReason: await this.resolveBanReason(user.id, user.status),
+    };
   }
 
   async confirmSignUp(dto: ConfirmSignUpDto) {
@@ -548,7 +610,10 @@ export class UsersService {
       throw new BadRequestException('Invalid token');
     }
 
-    if (user.activationTokenExpiresAt && user.activationTokenExpiresAt < new Date()) {
+    if (
+      user.activationTokenExpiresAt &&
+      user.activationTokenExpiresAt < new Date()
+    ) {
       const { token, expiresAt } = this.generateActivationToken();
 
       await this.prisma.user.update({
@@ -598,21 +663,33 @@ export class UsersService {
     const hashedPassword = await hash(signUpDto.password, 15);
     const { token, expiresAt } = this.generateActivationToken();
 
-    const { email, activationToken } = await this.prisma.user.create({
-      data: {
-        ...signUpDto,
-        password: hashedPassword,
-        role: 'USER',
-        isEmailVerified: false,
-        activationToken: token,
-        activationTokenExpiresAt: expiresAt,
+    const { email, activationToken } = await this.prisma.$transaction(
+      async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            ...signUpDto,
+            password: hashedPassword,
+            role: 'USER',
+            isEmailVerified: false,
+            activationToken: token,
+            activationTokenExpiresAt: expiresAt,
+          },
+        });
+
+        await this.usersHistoryService.append(tx, {
+          userId: user.id,
+          type: UserHistoryEventType.SIGN_UP,
+          payload: {},
+        });
+
+        return user;
       },
-    });
+    );
 
     await this.sendActivationToken(email, activationToken!);
   }
 
-  async changeUserRole(dto: ChangeUserRoleDto) {
+  async changeUserRole(dto: ChangeUserRoleDto, actorId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.id },
     });
@@ -631,9 +708,21 @@ export class UsersService {
       );
     }
 
-    await this.prisma.user.update({
-      where: { id: dto.id },
-      data: { role: dto.role },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: dto.id },
+        data: { role: dto.role },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: dto.id,
+        actorId,
+        type: UserHistoryEventType.ROLE_CHANGE,
+        payload: {
+          oldRole: user.role,
+          newRole: dto.role,
+        },
+      });
     });
 
     return {
@@ -641,7 +730,10 @@ export class UsersService {
     };
   }
 
-  async changeIsMissionReviewer(dto: ChangeIsMissionReviewerDto) {
+  async changeIsMissionReviewer(
+    dto: ChangeIsMissionReviewerDto,
+    actorId: string,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
     });
@@ -650,17 +742,44 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    await this.prisma.user.update({
-      where: { id: dto.userId },
-      data: { isMissionReviewer: dto.isMissionReviewer },
+    if (user.isMissionReviewer === dto.isMissionReviewer) {
+      return {
+        message: dto.isMissionReviewer
+          ? 'User is now a mission reviewer'
+          : 'User is no longer a mission reviewer',
+      };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: dto.userId },
+        data: { isMissionReviewer: dto.isMissionReviewer },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: dto.userId,
+        actorId,
+        type: UserHistoryEventType.REVIEWER_CHANGE,
+        payload: {
+          oldValue: user.isMissionReviewer,
+          newValue: dto.isMissionReviewer,
+        },
+      });
     });
 
     return {
-      message: dto.isMissionReviewer ? 'User is now a mission reviewer' : 'User is no longer a mission reviewer',
+      message: dto.isMissionReviewer
+        ? 'User is now a mission reviewer'
+        : 'User is no longer a mission reviewer',
     };
   }
 
-  async createWarning(userId: string, dto: CreateUserWarningDto, adminId: string, actorRole: UserRole) {
+  async createWarning(
+    userId: string,
+    dto: CreateUserWarningDto,
+    adminId: string,
+    actorRole: UserRole,
+  ) {
     const reason = dto.reason.trim();
 
     if (!reason) {
@@ -678,7 +797,7 @@ export class UsersService {
 
     this.ensureCanModerateTarget(user.role, actorRole);
 
-    return this.prisma.$transaction(async tx => {
+    return this.prisma.$transaction(async (tx) => {
       const warning = await tx.userWarning.create({
         data: {
           userId,
@@ -708,6 +827,16 @@ export class UsersService {
           warningId: warning.id,
           type: UserPunishmentType.WARNING,
           reason,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId,
+        actorId: adminId,
+        type: UserHistoryEventType.WARNING,
+        payload: {
+          reason,
+          warningId: warning.id,
         },
       });
 
@@ -747,7 +876,12 @@ export class UsersService {
     });
   }
 
-  async removeWarning(warningId: string, dto: OptionalPunishmentReasonDto, adminId: string, actorRole: UserRole) {
+  async removeWarning(
+    warningId: string,
+    dto: OptionalPunishmentReasonDto,
+    adminId: string,
+    actorRole: UserRole,
+  ) {
     const warning = await this.prisma.userWarning.findUnique({
       where: { id: warningId },
       include: {
@@ -772,7 +906,7 @@ export class UsersService {
 
     const reason = dto.reason?.trim() || null;
 
-    return this.prisma.$transaction(async tx => {
+    return this.prisma.$transaction(async (tx) => {
       const removedWarning = await tx.userWarning.update({
         where: { id: warningId },
         data: {
@@ -803,6 +937,16 @@ export class UsersService {
           warningId,
           type: UserPunishmentType.WARNING_REMOVED,
           reason,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: warning.userId,
+        actorId: adminId,
+        type: UserHistoryEventType.WARNING_REMOVED,
+        payload: {
+          reason,
+          warningId,
         },
       });
 
@@ -887,6 +1031,7 @@ export class UsersService {
         email: true,
         lastIp: true,
         status: true,
+        bannedUntil: true,
       },
     });
 
@@ -925,8 +1070,8 @@ export class UsersService {
       );
     }
 
-    if (user.status === UserStatus.BANNED) {
-      throw new UnauthorizedException('User is banned');
+    if (user.status === UserStatus.BANNED && user.bannedUntil === null) {
+      throw new UnauthorizedException('Вас забанено назавжди');
     }
 
     if (lastIp && user.lastIp !== lastIp) {
@@ -943,7 +1088,9 @@ export class UsersService {
     const user = await this.authenticateLoginUser(loginUserDto, lastIp);
 
     if (await this.twoFactorService.isTwoFactorEnabled(user.id)) {
-      const twoFactorToken = await this.twoFactorService.createLoginToken(user.id);
+      const twoFactorToken = await this.twoFactorService.createLoginToken(
+        user.id,
+      );
 
       return {
         requiresTwoFactor: true,
@@ -962,7 +1109,9 @@ export class UsersService {
   }
 
   async verifyTwoFactorLogin(dto: VerifyTwoFactorDto) {
-    const userId = await this.twoFactorService.verifyLoginToken(dto.twoFactorToken);
+    const userId = await this.twoFactorService.verifyLoginToken(
+      dto.twoFactorToken,
+    );
     const verified = await this.twoFactorService.verifyUserCodeOrRecovery(
       userId,
       dto.code,
@@ -971,6 +1120,23 @@ export class UsersService {
 
     if (!verified) {
       throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        status: true,
+        bannedUntil: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    if (user.status === UserStatus.BANNED && user.bannedUntil === null) {
+      throw new UnauthorizedException('Вас забанено назавжди');
     }
 
     const data = await this.generateTokens({ id: userId });
@@ -990,6 +1156,26 @@ export class UsersService {
           secret: process.env.JWT_SECRET,
         },
       );
+
+      const userRecord = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          status: true,
+          bannedUntil: true,
+        },
+      });
+
+      if (!userRecord) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      if (
+        userRecord.status === UserStatus.BANNED &&
+        userRecord.bannedUntil === null
+      ) {
+        throw new UnauthorizedException('Вас забанено назавжди');
+      }
 
       const user = await this.me(userId);
 
@@ -1129,11 +1315,9 @@ export class UsersService {
       ];
 
       if (canSeeSensitiveUsersData) {
-        searchConditions.push(
-          { email: { contains: dto.search, mode: 'insensitive' } },
-          { steamId: { contains: dto.search, mode: 'insensitive' } },
-          { lastIp: { contains: dto.search, mode: 'insensitive' } },
-        );
+        searchConditions.push({
+          steamId: { contains: dto.search, mode: 'insensitive' },
+        });
       }
 
       options.where = {
@@ -1170,20 +1354,28 @@ export class UsersService {
     }
 
     if (dto.canReviewMissions !== undefined) {
-      const reviewerRoles = [UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK];
-      const canReviewMissionsWhere: Prisma.UserWhereInput = dto.canReviewMissions
-        ? {
-          OR: [
-            { isMissionReviewer: true },
-            { role: { in: reviewerRoles } },
-          ],
-        }
-        : {
-          isMissionReviewer: false,
-          role: { notIn: reviewerRoles },
-        };
+      const reviewerRoles = [
+        UserRole.OWNER,
+        UserRole.SERVER_ADMIN,
+        UserRole.UVK,
+      ];
+      const canReviewMissionsWhere: Prisma.UserWhereInput =
+        dto.canReviewMissions
+          ? {
+              OR: [
+                { isMissionReviewer: true },
+                { role: { in: reviewerRoles } },
+              ],
+            }
+          : {
+              isMissionReviewer: false,
+              role: { notIn: reviewerRoles },
+            };
 
-      options.where = this.appendUserWhereAnd(options.where, canReviewMissionsWhere);
+      options.where = this.appendUserWhereAnd(
+        options.where,
+        canReviewMissionsWhere,
+      );
     }
 
     options.skip = skip;
@@ -1200,7 +1392,7 @@ export class UsersService {
           id: true,
           name: true,
           tag: true,
-          side: true
+          side: true,
         },
       },
       warnings: {
@@ -1220,11 +1412,13 @@ export class UsersService {
       abilities: true,
       resetPasswordTokenExpiresAt: true,
       activationTokenExpiresAt: true,
-      ...(canSeeSensitiveUsersData ? {} : {
-        email: true,
-        steamId: true,
-        lastIp: true,
-      }),
+      email: true,
+      lastIp: true,
+      ...(canSeeSensitiveUsersData
+        ? {}
+        : {
+            steamId: true,
+          }),
     };
     options.orderBy = {
       createdAt: 'desc',
@@ -1235,13 +1429,17 @@ export class UsersService {
       this.prisma.user.count({ where: options.where }),
     ]);
 
-    const usersWithWarnings = data as Array<(typeof data)[number] & { warnings: { id: string }[] }>;
-    const dataWithActiveWarningsCount = usersWithWarnings.map(({ warnings, ...user }) => ({
-      ...user,
-      _count: {
-        warnings: warnings.length,
-      },
-    }));
+    const usersWithWarnings = data as Array<
+      (typeof data)[number] & { warnings: { id: string }[] }
+    >;
+    const dataWithActiveWarningsCount = usersWithWarnings.map(
+      ({ warnings, ...user }) => ({
+        ...user,
+        _count: {
+          warnings: warnings.length,
+        },
+      }),
+    );
 
     return {
       data: dataWithActiveWarningsCount,
@@ -1278,10 +1476,11 @@ export class UsersService {
         return [];
       }
 
-      const nickname = !user.squad ? 
-      user.nickname : user.squadRole === SquadRole.RECRUIT 
-      ? `[~${user.squad.tag}~] ${user.nickname}`
-      : `[${user.squad.tag}] ${user.nickname}`;
+      const nickname = !user.squad
+        ? user.nickname
+        : user.squadRole === SquadRole.RECRUIT
+          ? `[~${user.squad.tag}~] ${user.nickname}`
+          : `[${user.squad.tag}] ${user.nickname}`;
 
       return {
         nickname,
@@ -1292,8 +1491,8 @@ export class UsersService {
     });
   }
 
-  findOne(idOrName: string) {
-    return this.prisma.user.findFirst({
+  async findOne(idOrName: string) {
+    const user = await this.prisma.user.findFirst({
       where: { OR: [{ id: idOrName }, { nickname: idOrName }] },
       select: {
         id: true,
@@ -1301,6 +1500,8 @@ export class UsersService {
         status: true,
         role: true,
         squadRole: true,
+        bannedUntil: true,
+        isMuted: true,
         specializations: {
           include: {
             icon: {
@@ -1320,7 +1521,7 @@ export class UsersService {
           select: {
             tag: true,
             side: true,
-            leaderId: true
+            leaderId: true,
           },
         },
         avatar: {
@@ -1338,6 +1539,25 @@ export class UsersService {
         tiktokUrl: true,
       },
     });
+
+    if (!user) {
+      return user;
+    }
+
+    return {
+      ...user,
+      banReason: await this.resolveBanReason(user.id, user.status),
+    };
+  }
+
+  async findHistory(userId: string) {
+    const events = await this.usersHistoryService.findByUserId(userId);
+
+    if (events === null) {
+      throw new NotFoundException('User not found');
+    }
+
+    return events;
   }
 
   async delete(id: string) {
@@ -1354,7 +1574,12 @@ export class UsersService {
     return user;
   }
 
-  async banUser(dto: BanUserDto, body: PunishmentReasonDto, adminId: string, role: UserRole) {
+  async banUser(
+    dto: BanUserDto,
+    body: BanPunishmentDto,
+    adminId: string,
+    role: UserRole,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
     });
@@ -1380,27 +1605,42 @@ export class UsersService {
     }
 
     const reason = body.reason.trim();
+    const isMuted = body.mute === true;
 
     if (!reason) {
       throw new BadRequestException('Ban reason is required');
     }
 
-    await this.prisma.$transaction(async tx => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: dto.userId },
         data: {
           status: 'BANNED',
           bannedUntil,
+          isMuted,
         },
       });
 
-      await tx.userPunishment.create({
+      const punishment = await tx.userPunishment.create({
         data: {
           userId: dto.userId,
           adminId,
           type: UserPunishmentType.TEMP_BAN,
           reason,
           bannedUntil,
+          isMuted,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: dto.userId,
+        actorId: adminId,
+        type: UserHistoryEventType.TEMP_BAN,
+        payload: {
+          reason,
+          bannedUntil: bannedUntil.toISOString(),
+          punishmentId: punishment.id,
+          isMuted,
         },
       });
     });
@@ -1408,7 +1648,12 @@ export class UsersService {
     return this.me(dto.userId);
   }
 
-  async permanentlyBanUser(dto: UnbanUserDto, body: PunishmentReasonDto, adminId: string, role: UserRole) {
+  async permanentlyBanUser(
+    dto: UnbanUserDto,
+    body: PunishmentReasonDto,
+    adminId: string,
+    role: UserRole,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
     });
@@ -1429,21 +1674,34 @@ export class UsersService {
       throw new BadRequestException('Ban reason is required');
     }
 
-    await this.prisma.$transaction(async tx => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: dto.userId },
         data: {
           status: 'BANNED',
           bannedUntil: null,
+          isMuted: false,
         },
       });
 
-      await tx.userPunishment.create({
+      const punishment = await tx.userPunishment.create({
         data: {
           userId: dto.userId,
           adminId,
           type: UserPunishmentType.PERMANENT_BAN,
           reason,
+          isMuted: false,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: dto.userId,
+        actorId: adminId,
+        type: UserHistoryEventType.PERMANENT_BAN,
+        payload: {
+          reason,
+          punishmentId: punishment.id,
+          isMuted: false,
         },
       });
     });
@@ -1451,7 +1709,12 @@ export class UsersService {
     return this.me(dto.userId);
   }
 
-  async unbanUser(dto: UnbanUserDto, body: OptionalPunishmentReasonDto, adminId: string, role: UserRole) {
+  async unbanUser(
+    dto: UnbanUserDto,
+    body: OptionalPunishmentReasonDto,
+    adminId: string,
+    role: UserRole,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
     });
@@ -1464,18 +1727,29 @@ export class UsersService {
 
     const reason = body.reason?.trim() || null;
 
-    await this.prisma.$transaction(async tx => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: dto.userId },
-        data: { status: 'ACTIVE', bannedUntil: null },
+        data: { status: 'ACTIVE', bannedUntil: null, isMuted: false },
       });
 
-      await tx.userPunishment.create({
+      const punishment = await tx.userPunishment.create({
         data: {
           userId: dto.userId,
           adminId,
           type: UserPunishmentType.UNBAN,
           reason,
+          isMuted: false,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: dto.userId,
+        actorId: adminId,
+        type: UserHistoryEventType.UNBAN,
+        payload: {
+          reason,
+          punishmentId: punishment.id,
         },
       });
     });

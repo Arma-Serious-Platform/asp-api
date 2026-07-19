@@ -6,13 +6,14 @@ import {
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { CreateSquadDto } from './dto/create-squad.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
-import { Prisma, SquadInviteStatus, SquadRole } from '@prisma/client';
+import { Prisma, SquadInviteStatus, SquadRole, UserHistoryEventType } from '@prisma/client';
 import { FindSquadsDto } from './dto/find-squads.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { UpdateSquadDto } from './dto/update-squad.dto';
 import { KickFromSquadDto } from './dto/kick-from-squad.dto';
 import { UpdateMySquadDto } from './dto/update-my-squad.dto';
+import { UsersHistoryService } from '../users/users-history.service';
 
 /** Prisma squad ids are UUIDs; only then include `id` in lookup to avoid invalid UUID queries. */
 const UUID_PARAM_RE = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -26,6 +27,7 @@ export class SquadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
+    private readonly usersHistoryService: UsersHistoryService,
   ) { }
 
   private async clampActiveCount(tx: Prisma.TransactionClient, squadId: string, activeCount?: number) {
@@ -313,6 +315,16 @@ export class SquadsService {
         data: {
           squadId: squad.id,
           squadRole: SquadRole.MEMBER,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: dto.leaderId,
+        actorId: dto.leaderId,
+        type: UserHistoryEventType.SQUAD_JOIN,
+        payload: {
+          squadId: squad.id,
+          squadTag: squad.tag,
         },
       });
 
@@ -722,6 +734,7 @@ export class SquadsService {
           select: {
             id: true,
             leaderId: true,
+            tag: true,
           },
         },
       },
@@ -770,6 +783,16 @@ export class SquadsService {
         where: {
           userId: request.userId,
           status: SquadInviteStatus.PENDING,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId: request.userId,
+        actorId: leaderId,
+        type: UserHistoryEventType.SQUAD_JOIN,
+        payload: {
+          squadId: request.squadId,
+          squadTag: request.squad.tag,
         },
       });
 
@@ -935,6 +958,16 @@ export class SquadsService {
         },
       });
 
+      await this.usersHistoryService.append(tx, {
+        userId: dto.userId,
+        actorId: leaderId,
+        type: UserHistoryEventType.SQUAD_LEAVE,
+        payload: {
+          squadId: squad.id,
+          squadTag: squad.tag,
+        },
+      });
+
       const deletedInvitations = await tx.squadInvitation.deleteMany({
         where: { userId: dto.userId, squadId: squad.id },
       });
@@ -972,7 +1005,8 @@ export class SquadsService {
         squad: {
           select: {
             id: true,
-            leaderId: true
+            leaderId: true,
+            tag: true,
           }
         },
       },
@@ -983,11 +1017,11 @@ export class SquadsService {
     }
 
 
-    if (!user.squadId) {
+    if (!user.squadId || !user.squad) {
       throw new NotFoundException('Squad not found');
     }
 
-    const isUserLeader = user.id === user?.squad?.leaderId;
+    const isUserLeader = user.id === user.squad.leaderId;
 
     if (isUserLeader && !newLeaderId) {
       throw new BadRequestException('You are the leader of this squad & you need to assign a new leader');
@@ -1013,18 +1047,42 @@ export class SquadsService {
       });
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        squadId: null,
-        squadRole: SquadRole.MEMBER,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          squadId: null,
+          squadRole: SquadRole.MEMBER,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId,
+        actorId: userId,
+        type: UserHistoryEventType.SQUAD_LEAVE,
+        payload: {
+          squadId: user.squadId,
+          squadTag: user.squad!.tag,
+        },
+      });
     });
   }
 
   async acceptInvitation(invitationId: string, userId: string) {
     const invitation = await this.prisma.squadInvitation.findUnique({
       where: { id: invitationId },
+      select: {
+        id: true,
+        status: true,
+        squadId: true,
+        squadRole: true,
+        squad: {
+          select: {
+            id: true,
+            tag: true,
+          },
+        },
+      },
     });
 
     const me = await this.prisma.user.findUnique({
@@ -1084,6 +1142,16 @@ export class SquadsService {
         where: {
           userId,
           status: SquadInviteStatus.PENDING,
+        },
+      });
+
+      await this.usersHistoryService.append(tx, {
+        userId,
+        actorId: userId,
+        type: UserHistoryEventType.SQUAD_JOIN,
+        payload: {
+          squadId: invitation.squadId,
+          squadTag: invitation.squad.tag,
         },
       });
 
@@ -1233,6 +1301,7 @@ export class SquadsService {
           select: {
             id: true,
             leaderId: true,
+            tag: true,
           },
         },
       },

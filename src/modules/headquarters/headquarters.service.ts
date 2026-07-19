@@ -3,20 +3,33 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from "@nestjs/common";
-import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { MissionGameSide, Prisma, SideType, SquadRole, UserRole } from "@prisma/client";
-import { UpdateGamePlanDto } from "./dto/update-game-plan.dto";
-import { UpdateGamePlanSlotDto } from "./dto/update-game-plan-slot.dto";
-import { AssignSlotSquadDto } from "./dto/assign-slot-squad.dto";
-import { CreateGamePlanCommentDto } from "./dto/create-game-plan-comment.dto";
-import { UpdateGamePlanCommentDto } from "./dto/update-game-plan-comment.dto";
-import { FindGamePlanCommentsDto } from "./dto/find-game-plan-comments.dto";
-import { HeadquartersGateway } from "./headquarters.gateway";
-import { MinioService } from "src/infrastructure/minio/minio.service";
-import { Multer } from "multer";
-import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
-import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
+} from '@nestjs/common';
+import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
+import {
+  MissionGameSide,
+  Prisma,
+  SideType,
+  SquadRole,
+  UserRole,
+} from '@prisma/client';
+import { UpdateGamePlanDto } from './dto/update-game-plan.dto';
+import { UpdateGamePlanSlotDto } from './dto/update-game-plan-slot.dto';
+import { AssignSlotSquadDto } from './dto/assign-slot-squad.dto';
+import { CreateGamePlanCommentDto } from './dto/create-game-plan-comment.dto';
+import { UpdateGamePlanCommentDto } from './dto/update-game-plan-comment.dto';
+import { FindGamePlanCommentsDto } from './dto/find-game-plan-comments.dto';
+import { HeadquartersGateway } from './headquarters.gateway';
+import { MinioService } from 'src/infrastructure/minio/minio.service';
+import { Multer } from 'multer';
+import {
+  attachmentInclude,
+  uploadAttachmentFiles,
+} from 'src/shared/utils/upload-attachments';
+import {
+  parseRemovedAttachmentIds,
+  syncAttachmentUpdates,
+} from 'src/shared/utils/sync-comment-attachments';
+import { UserRestrictionsService } from '../users/user-restrictions.service';
 
 /** PBO slot unit names often look like: `1. Role@Callsign | gear | gear`. */
 function parseSlotUnitDisplayName(raw: string): {
@@ -28,12 +41,15 @@ function parseSlotUnitDisplayName(raw: string): {
     return { name: raw };
   }
 
-  s = s.replace(/^\d+\.\s*/, "");
-  s = s.replace(/\s*"@[^"]*"\s*/g, " ");
-  s = s.replace(/\s*@[^|]+\s*/g, " ");
-  s = s.replace(/\s+/g, " ").trim();
+  s = s.replace(/^\d+\.\s*/, '');
+  s = s.replace(/\s*"@[^"]*"\s*/g, ' ');
+  s = s.replace(/\s*@[^|]+\s*/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
 
-  const parts = s.split("|").map((p) => p.trim()).filter(Boolean);
+  const parts = s
+    .split('|')
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (parts.length === 0) {
     return { name: raw.trim() };
   }
@@ -42,16 +58,41 @@ function parseSlotUnitDisplayName(raw: string): {
   }
   return {
     name: parts[0]!,
-    weaponry: parts.slice(1).join(", "),
+    weaponry: parts.slice(1).join(', '),
   };
 }
 
 const DEFAULT_CALLSIGNS = [
-  'Alpha 1-1', 'Alpha 1-2', 'Alpha 1-3', 'Alpha 1-4', 'Alpha 1-5', 'Alpha 1-6',
-  'Alpha 2-1', 'Alpha 2-2', 'Alpha 2-3', 'Alpha 2-4', 'Alpha 2-5', 'Alpha 2-6',
-  'Alpha 3-1', 'Alpha 3-2', 'Alpha 3-3', 'Alpha 3-4', 'Alpha 3-5', 'Alpha 3-6',
-  'Alpha 4-1', 'Alpha 4-2', 'Alpha 4-3', 'Alpha 4-4', 'Alpha 4-5', 'Alpha 4-6',
-  'Alpha 5-1', 'Alpha 5-2', 'Alpha 5-3', 'Alpha 5-4', 'Alpha 5-5', 'Alpha 5-6',
+  'Alpha 1-1',
+  'Alpha 1-2',
+  'Alpha 1-3',
+  'Alpha 1-4',
+  'Alpha 1-5',
+  'Alpha 1-6',
+  'Alpha 2-1',
+  'Alpha 2-2',
+  'Alpha 2-3',
+  'Alpha 2-4',
+  'Alpha 2-5',
+  'Alpha 2-6',
+  'Alpha 3-1',
+  'Alpha 3-2',
+  'Alpha 3-3',
+  'Alpha 3-4',
+  'Alpha 3-5',
+  'Alpha 3-6',
+  'Alpha 4-1',
+  'Alpha 4-2',
+  'Alpha 4-3',
+  'Alpha 4-4',
+  'Alpha 4-5',
+  'Alpha 4-6',
+  'Alpha 5-1',
+  'Alpha 5-2',
+  'Alpha 5-3',
+  'Alpha 5-4',
+  'Alpha 5-5',
+  'Alpha 5-6',
 ];
 
 type ParsedMissionUnit = {
@@ -70,6 +111,7 @@ export class HeadquartersService {
     private readonly prisma: PrismaService,
     private readonly headquartersGateway: HeadquartersGateway,
     private readonly minioService: MinioService,
+    private readonly userRestrictionsService: UserRestrictionsService,
   ) {}
 
   async ensureGamePlansForGame(gameId: string, tx?: Prisma.TransactionClient) {
@@ -357,28 +399,45 @@ export class HeadquartersService {
     sideId: string,
   ): ParsedMissionSlot[] {
     if (sideId === game.attackSideId) {
-      return this.extractSlotsArrayBySide(game.missionVersion.missionAttackSlots);
+      return this.extractSlotsArrayBySide(
+        game.missionVersion.missionAttackSlots,
+      );
     }
 
     if (sideId === game.defenseSideId) {
-      return this.extractSlotsArrayBySide(game.missionVersion.missionDefenceSlots);
+      return this.extractSlotsArrayBySide(
+        game.missionVersion.missionDefenceSlots,
+      );
     }
 
     return [];
   }
 
-  private extractSlotsArrayBySide(slotsJson: Prisma.JsonValue | null): ParsedMissionSlot[] {
-    if (!slotsJson || typeof slotsJson !== 'object' || Array.isArray(slotsJson)) {
+  private extractSlotsArrayBySide(
+    slotsJson: Prisma.JsonValue | null,
+  ): ParsedMissionSlot[] {
+    if (
+      !slotsJson ||
+      typeof slotsJson !== 'object' ||
+      Array.isArray(slotsJson)
+    ) {
       return [];
     }
 
-    for (const side of [MissionGameSide.BLUE, MissionGameSide.RED, MissionGameSide.GREEN]) {
+    for (const side of [
+      MissionGameSide.BLUE,
+      MissionGameSide.RED,
+      MissionGameSide.GREEN,
+    ]) {
       const slots = (slotsJson as Record<string, unknown>)[side];
       if (!Array.isArray(slots)) {
         continue;
       }
 
-      return slots.filter((slot): slot is ParsedMissionSlot => typeof slot === 'object' && slot !== null);
+      return slots.filter(
+        (slot): slot is ParsedMissionSlot =>
+          typeof slot === 'object' && slot !== null,
+      );
     }
 
     return [];
@@ -435,14 +494,21 @@ export class HeadquartersService {
 
   async assignCommander(id: string, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(id);
-    const user = await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+    const user = await this.ensureUserCanAccessHeadquartersForSide(
+      userId,
+      gamePlan.sideId,
+    );
 
     if (!gamePlan.hqSquadId) {
-      throw new BadRequestException('HQ squad must be assigned before selecting a commander');
+      throw new BadRequestException(
+        'HQ squad must be assigned before selecting a commander',
+      );
     }
 
     if (user.squadId !== gamePlan.hqSquadId) {
-      throw new ForbiddenException('Only HQ squad members can become commander');
+      throw new ForbiddenException(
+        'Only HQ squad members can become commander',
+      );
     }
 
     const updatedPlan = await this.prisma.gamePlan.update({
@@ -458,10 +524,15 @@ export class HeadquartersService {
 
   async assignHqSquad(id: string, userId: string) {
     const gamePlan = await this.getGamePlanWithSide(id);
-    const user = await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+    const user = await this.ensureUserCanAccessHeadquartersForSide(
+      userId,
+      gamePlan.sideId,
+    );
 
     if (gamePlan.hqSquadId) {
-      throw new BadRequestException('HQ squad is already assigned to this plan');
+      throw new BadRequestException(
+        'HQ squad is already assigned to this plan',
+      );
     }
 
     const updatedPlan = await this.prisma.gamePlan.update({
@@ -493,7 +564,9 @@ export class HeadquartersService {
           user.squadRole === SquadRole.HQ);
 
       if (!isCurrentHqSquadLeader) {
-        throw new ForbiddenException('Only HQ squad leadership or super admin can unassign HQ squad');
+        throw new ForbiddenException(
+          'Only HQ squad leadership or super admin can unassign HQ squad',
+        );
       }
     }
 
@@ -519,11 +592,16 @@ export class HeadquartersService {
     const isCurrentCommander = gamePlan.gameCommanderId === userId;
 
     if (!isSuperAdmin) {
-      await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
+      await this.ensureUserCanAccessHeadquartersForSide(
+        userId,
+        gamePlan.sideId,
+      );
     }
 
     if (!isCurrentCommander && !isSuperAdmin) {
-      throw new ForbiddenException('Only current commander or super admin can unassign commander');
+      throw new ForbiddenException(
+        'Only current commander or super admin can unassign commander',
+      );
     }
 
     const updatedPlan = await this.prisma.gamePlan.update({
@@ -557,7 +635,11 @@ export class HeadquartersService {
     return updatedSlot;
   }
 
-  async assignSquadToSlot(slotId: string, dto: AssignSlotSquadDto, userId: string) {
+  async assignSquadToSlot(
+    slotId: string,
+    dto: AssignSlotSquadDto,
+    userId: string,
+  ) {
     const slot = await this.getSlotWithPlan(slotId);
     await this.ensureIsCommander(slot.gamePlanId, userId);
     await this.ensureSquadInSameSide(dto.squadId, slot.gamePlan.sideId);
@@ -576,7 +658,11 @@ export class HeadquartersService {
     return updatedSlot;
   }
 
-  async unassignSquadFromSlot(slotId: string, dto: AssignSlotSquadDto, userId: string) {
+  async unassignSquadFromSlot(
+    slotId: string,
+    dto: AssignSlotSquadDto,
+    userId: string,
+  ) {
     const slot = await this.getSlotWithPlan(slotId);
     await this.ensureIsCommander(slot.gamePlanId, userId);
 
@@ -596,7 +682,10 @@ export class HeadquartersService {
 
   async assignMySquadAsWanted(slotId: string, userId: string) {
     const slot = await this.getSlotWithPlan(slotId);
-    const me = await this.ensureUserCanAccessHeadquartersForSide(userId, slot.gamePlan.sideId);
+    const me = await this.ensureUserCanAccessHeadquartersForSide(
+      userId,
+      slot.gamePlan.sideId,
+    );
     const squadId = me.squadId;
 
     if (!squadId) {
@@ -619,7 +708,10 @@ export class HeadquartersService {
 
   async unassignMySquadAsWanted(slotId: string, userId: string) {
     const slot = await this.getSlotWithPlan(slotId);
-    const me = await this.ensureUserCanAccessHeadquartersForSide(userId, slot.gamePlan.sideId);
+    const me = await this.ensureUserCanAccessHeadquartersForSide(
+      userId,
+      slot.gamePlan.sideId,
+    );
     const squadId = me.squadId;
 
     if (!squadId) {
@@ -640,7 +732,11 @@ export class HeadquartersService {
     return updatedSlot;
   }
 
-  async findComments(gamePlanId: string, dto: FindGamePlanCommentsDto, userId: string) {
+  async findComments(
+    gamePlanId: string,
+    dto: FindGamePlanCommentsDto,
+    userId: string,
+  ) {
     const gamePlan = await this.getGamePlanWithSide(gamePlanId);
     await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
     const { replyId, skip = 0, take = 100 } = dto;
@@ -675,6 +771,8 @@ export class HeadquartersService {
     userId: string,
     attachmentFiles: Multer.File[] = [],
   ) {
+    await this.userRestrictionsService.assertCanCommunicate(userId);
+
     const gamePlan = await this.getGamePlanWithSide(gamePlanId);
     await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
 
@@ -687,12 +785,17 @@ export class HeadquartersService {
         throw new NotFoundException('Reply-to comment not found');
       }
       if (replyTo.gamePlanId !== gamePlanId) {
-        throw new BadRequestException('Reply must be to a comment in the same game plan');
+        throw new BadRequestException(
+          'Reply must be to a comment in the same game plan',
+        );
       }
       replyId = dto.replyId;
     }
 
-    const uploadedAttachments = await uploadAttachmentFiles(this.minioService, attachmentFiles);
+    const uploadedAttachments = await uploadAttachmentFiles(
+      this.minioService,
+      attachmentFiles,
+    );
 
     const comment = await this.prisma.gamePlanComment.create({
       data: {
@@ -723,6 +826,8 @@ export class HeadquartersService {
     userId: string,
     attachmentFiles: Multer.File[] = [],
   ) {
+    await this.userRestrictionsService.assertCanCommunicate(userId);
+
     const comment = await this.prisma.gamePlanComment.findUnique({
       where: { id: commentId },
       include: {
@@ -743,7 +848,10 @@ export class HeadquartersService {
       throw new ForbiddenException('You can only update your own comments');
     }
 
-    const updateData: { message?: Prisma.InputJsonValue; replyId?: string | null } = {};
+    const updateData: {
+      message?: Prisma.InputJsonValue;
+      replyId?: string | null;
+    } = {};
 
     if (dto.message !== undefined) {
       updateData.message = dto.message as Prisma.InputJsonValue;
@@ -760,20 +868,26 @@ export class HeadquartersService {
           throw new NotFoundException('Reply-to comment not found');
         }
         if (replyTo.gamePlanId !== comment.gamePlanId) {
-          throw new BadRequestException('Reply must be to a comment in the same game plan');
+          throw new BadRequestException(
+            'Reply must be to a comment in the same game plan',
+          );
         }
         updateData.replyId = dto.replyId;
       }
     }
 
-    const removedAttachmentIds = parseRemovedAttachmentIds(dto.removedAttachmentIds);
+    const removedAttachmentIds = parseRemovedAttachmentIds(
+      dto.removedAttachmentIds,
+    );
     const uploadedAttachments = await syncAttachmentUpdates({
       minioService: this.minioService,
       existing: comment.attachments,
       removedAttachmentIds,
       newFiles: attachmentFiles,
       deleteAttachment: (attachmentId) =>
-        this.prisma.gamePlanCommentAttachment.delete({ where: { id: attachmentId } }),
+        this.prisma.gamePlanCommentAttachment.delete({
+          where: { id: attachmentId },
+        }),
     });
 
     const updatedComment = await this.prisma.gamePlanComment.update({
@@ -793,7 +907,10 @@ export class HeadquartersService {
       include: this.commentInclude,
     });
 
-    this.headquartersGateway.emitCommentUpdated(comment.gamePlanId, updatedComment);
+    this.headquartersGateway.emitCommentUpdated(
+      comment.gamePlanId,
+      updatedComment,
+    );
     return updatedComment;
   }
 
@@ -1060,7 +1177,9 @@ export class HeadquartersService {
     await this.ensureUserCanAccessHeadquartersForSide(userId, gamePlan.sideId);
 
     if (gamePlan.gameCommanderId !== userId) {
-      throw new ForbiddenException('Only game commander can perform this action');
+      throw new ForbiddenException(
+        'Only game commander can perform this action',
+      );
     }
   }
 
@@ -1110,7 +1229,10 @@ export class HeadquartersService {
     return user;
   }
 
-  private async ensureUserCanAccessHeadquartersForSide(userId: string, sideId: string) {
+  private async ensureUserCanAccessHeadquartersForSide(
+    userId: string,
+    sideId: string,
+  ) {
     const user = await this.getUserWithHeadquartersSquad(userId);
 
     if (!user.squadId || !user.squad?.sideId) {
@@ -1119,11 +1241,15 @@ export class HeadquartersService {
 
     const allowedTypes = new Set<SideType>([SideType.BLUE, SideType.RED]);
     if (!allowedTypes.has(user.squad.side.type)) {
-      throw new ForbiddenException('Your side is not eligible for headquarters plans');
+      throw new ForbiddenException(
+        'Your side is not eligible for headquarters plans',
+      );
     }
 
     if (user.squad.sideId !== sideId) {
-      throw new ForbiddenException('Your squad side does not match game plan side');
+      throw new ForbiddenException(
+        'Your squad side does not match game plan side',
+      );
     }
 
     const hasSquadPlanAccess =
@@ -1132,14 +1258,20 @@ export class HeadquartersService {
       user.squadRole === SquadRole.HQ;
 
     if (!hasSquadPlanAccess) {
-      throw new ForbiddenException('Your squad role does not allow headquarters plan access');
+      throw new ForbiddenException(
+        'Your squad role does not allow headquarters plan access',
+      );
     }
 
     return user;
   }
 
   private isSuperAdmin(role: UserRole) {
-    const superAdminRoles = new Set<UserRole>([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
+    const superAdminRoles = new Set<UserRole>([
+      UserRole.OWNER,
+      UserRole.SERVER_ADMIN,
+      UserRole.UVK,
+    ]);
     return superAdminRoles.has(role);
   }
 
@@ -1158,7 +1290,10 @@ export class HeadquartersService {
       throw new ForbiddenException('You are not a member of a squad');
     }
 
-    await this.ensureUserCanAccessHeadquartersForSide(userId, user.squad.sideId);
+    await this.ensureUserCanAccessHeadquartersForSide(
+      userId,
+      user.squad.sideId,
+    );
 
     return user.squad.sideId;
   }

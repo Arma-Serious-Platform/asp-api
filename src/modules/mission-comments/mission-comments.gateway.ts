@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { AuthService } from 'src/modules/auth/auth.service';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 
 interface AuthenticatedSocket extends Socket {
@@ -31,57 +31,29 @@ export class MissionCommentsGateway
   server: Server;
 
   constructor(
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
     private readonly prisma: PrismaService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      const token =
-        client.handshake?.auth?.token as string ||
-        (client.handshake?.headers?.authorization?.split(' ')[1] as string);
-
-      if (!token) {
-        client.disconnect();
-        return;
-      }
-
-      const decoded = this.jwtService.decode(token) as { userId?: string | undefined }
-      ;
-      const userId = decoded?.userId;
-
-      if (!userId) {
-        client.disconnect();
-        return;
-      }
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        client.disconnect();
-        return;
-      }
-
-      client.userId = userId;
-      console.log(
-        `User ${userId} connected to mission-comments (socket: ${client.id})`,
+      const authUser = await this.authService.resolveHandshakeUser(
+        client.handshake,
       );
+
+      if (!authUser) {
+        client.disconnect();
+        return;
+      }
+
+      client.userId = authUser.userId;
     } catch (error) {
       console.error('Mission comments connection error:', error);
       client.disconnect();
     }
   }
 
-  handleDisconnect(client: AuthenticatedSocket) {
-    const userId = client.userId;
-    if (userId) {
-      console.log(
-        `User ${userId} disconnected from mission-comments (socket: ${client.id})`,
-      );
-    }
-  }
+  handleDisconnect(_client: AuthenticatedSocket) {}
 
   @SubscribeMessage('join_mission')
   async handleJoinMission(
@@ -93,9 +65,9 @@ export class MissionCommentsGateway
     }
 
     try {
-      // Verify mission exists
       const mission = await this.prisma.mission.findUnique({
         where: { id: data.missionId },
+        select: { id: true },
       });
 
       if (!mission) {
@@ -105,7 +77,10 @@ export class MissionCommentsGateway
       client.join(`mission:${data.missionId}`);
       return { success: true };
     } catch (error) {
-      return { error: error.message };
+      return {
+        error:
+          error instanceof Error ? error.message : 'Failed to join mission',
+      };
     }
   }
 

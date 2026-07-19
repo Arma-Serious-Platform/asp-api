@@ -98,6 +98,7 @@ model User {
   resetPasswordTokenExpiresAt DateTime?
   avatarUrl                   String?
   bannedUntil                 DateTime?
+  isMuted                     Boolean           @default(false)
   isEmailVerified             Boolean           @default(false)
   missions                    Mission[]
   missionComments             MissionComment[]
@@ -111,6 +112,8 @@ model User {
   removedWarnings             UserWarning[]     @relation("RemovedUserWarnings")
   punishments                 UserPunishment[]  @relation("UserPunishments")
   issuedPunishments           UserPunishment[]  @relation("IssuedUserPunishments")
+  historyEvents               UserHistoryEvent[] @relation("UserHistoryEvents")
+  actedHistoryEvents          UserHistoryEvent[] @relation("UserHistoryEventActors")
   leadingSquad                Squad?            @relation("SquadLeader")
   squadInvites                SquadInvitation[]
   squadJoinRequests           SquadJoinRequest[]
@@ -197,12 +200,27 @@ model UserPunishment {
   type          UserPunishmentType
   reason        String?
   bannedUntil   DateTime?
+  isMuted       Boolean            @default(false)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
   @@index([userId])
   @@index([adminId])
   @@index([warningId])
+  @@index([type])
+}
+
+model UserHistoryEvent {
+  id        String               @id @default(uuid())
+  userId    String
+  user      User                 @relation("UserHistoryEvents", fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?                @relation("UserHistoryEventActors", fields: [actorId], references: [id], onDelete: SetNull)
+  type      UserHistoryEventType
+  payload   Json                 @default("{}")
+  createdAt DateTime             @default(now())
+
+  @@index([userId, createdAt])
   @@index([type])
 }
 
@@ -586,6 +604,20 @@ enum UserPunishmentType {
   TEMP_BAN
   PERMANENT_BAN
   UNBAN
+}
+
+enum UserHistoryEventType {
+  SIGN_UP
+  SQUAD_JOIN
+  SQUAD_LEAVE
+  WARNING
+  WARNING_REMOVED
+  TEMP_BAN
+  PERMANENT_BAN
+  UNBAN
+  NICKNAME_CHANGE
+  ROLE_CHANGE
+  REVIEWER_CHANGE
 }
 
 enum SoldierAbility {

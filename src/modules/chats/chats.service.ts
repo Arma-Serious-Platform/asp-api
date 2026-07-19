@@ -1,16 +1,28 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from "@nestjs/common";
-import { PrismaService } from "src/infrastructure/prisma/prisma.service";
-import { CreateChatDto } from "./dto/create-chat.dto";
-import { SendMessageDto } from "./dto/send-message.dto";
-import { FindMessagesDto } from "./dto/find-messages.dto";
-import { UpdateChatDto } from "./dto/update-chat.dto";
-import { UpdateMessageDto } from "./dto/update-message.dto";
-import { AddChatMembersDto } from "./dto/add-chat-members.dto";
-import { ChatType } from "@prisma/client";
-import { MinioService } from "src/infrastructure/minio/minio.service";
-import { Multer } from "multer";
-import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/upload-attachments";
-import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
+import { CreateChatDto } from './dto/create-chat.dto';
+import { SendMessageDto } from './dto/send-message.dto';
+import { FindMessagesDto } from './dto/find-messages.dto';
+import { UpdateChatDto } from './dto/update-chat.dto';
+import { UpdateMessageDto } from './dto/update-message.dto';
+import { AddChatMembersDto } from './dto/add-chat-members.dto';
+import { ChatType } from '@prisma/client';
+import { MinioService } from 'src/infrastructure/minio/minio.service';
+import { Multer } from 'multer';
+import {
+  attachmentInclude,
+  uploadAttachmentFiles,
+} from 'src/shared/utils/upload-attachments';
+import {
+  parseRemovedAttachmentIds,
+  syncAttachmentUpdates,
+} from 'src/shared/utils/sync-comment-attachments';
+import { UserRestrictionsService } from '../users/user-restrictions.service';
 
 const chatInclude = {
   users: {
@@ -62,6 +74,7 @@ export class ChatsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
+    private readonly userRestrictionsService: UserRestrictionsService,
   ) {}
 
   private async reactivateChatUsers(chatId: string, userIds: string[]) {
@@ -106,7 +119,9 @@ export class ChatsService {
     if (users.length !== dto.userIds.length) {
       const foundIds = new Set(users.map((u) => u.id));
       const missingIds = dto.userIds.filter((id) => !foundIds.has(id));
-      throw new BadRequestException(`Users not found: ${missingIds.join(', ')}`);
+      throw new BadRequestException(
+        `Users not found: ${missingIds.join(', ')}`,
+      );
     }
 
     if (dto.type === ChatType.DIRECT) {
@@ -195,7 +210,9 @@ export class ChatsService {
       throw new NotFoundException('Chat not found');
     }
 
-    const isMember = chat.users.some((cu) => cu.userId === userId && !cu.leftAt);
+    const isMember = chat.users.some(
+      (cu) => cu.userId === userId && !cu.leftAt,
+    );
     if (!isMember) {
       throw new ForbiddenException('You are not a member of this chat');
     }
@@ -203,7 +220,13 @@ export class ChatsService {
     return chat;
   }
 
-  async sendMessage(dto: SendMessageDto, userId: string, attachmentFiles: Multer.File[] = []) {
+  async sendMessage(
+    dto: SendMessageDto,
+    userId: string,
+    attachmentFiles: Multer.File[] = [],
+  ) {
+    await this.userRestrictionsService.assertCanCommunicate(userId);
+
     const chat = await this.prisma.chat.findUnique({
       where: { id: dto.chatId },
       include: {
@@ -230,11 +253,16 @@ export class ChatsService {
       });
 
       if (!quoteMessage || quoteMessage.chatId !== dto.chatId) {
-        throw new BadRequestException('Quote message not found or belongs to different chat');
+        throw new BadRequestException(
+          'Quote message not found or belongs to different chat',
+        );
       }
     }
 
-    const uploadedAttachments = await uploadAttachmentFiles(this.minioService, attachmentFiles);
+    const uploadedAttachments = await uploadAttachmentFiles(
+      this.minioService,
+      attachmentFiles,
+    );
 
     return await this.prisma.message.create({
       data: {
@@ -313,6 +341,8 @@ export class ChatsService {
     userId: string,
     attachmentFiles: Multer.File[] = [],
   ) {
+    await this.userRestrictionsService.assertCanCommunicate(userId);
+
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
@@ -353,11 +383,17 @@ export class ChatsService {
       throw new ForbiddenException('You can only update your own messages');
     }
 
-    if (dto.content === undefined && !dto.removedAttachmentIds?.length && attachmentFiles.length === 0) {
+    if (
+      dto.content === undefined &&
+      !dto.removedAttachmentIds?.length &&
+      attachmentFiles.length === 0
+    ) {
       throw new BadRequestException('Nothing to update');
     }
 
-    const removedAttachmentIds = parseRemovedAttachmentIds(dto.removedAttachmentIds);
+    const removedAttachmentIds = parseRemovedAttachmentIds(
+      dto.removedAttachmentIds,
+    );
     const uploadedAttachments = await syncAttachmentUpdates({
       minioService: this.minioService,
       existing: message.attachments,
@@ -453,7 +489,9 @@ export class ChatsService {
     }
 
     if (chat.creatorId === userId) {
-      throw new BadRequestException('Chat creator cannot leave. Delete the chat instead.');
+      throw new BadRequestException(
+        'Chat creator cannot leave. Delete the chat instead.',
+      );
     }
 
     const chatUser = await this.prisma.chatUser.findFirst({
@@ -550,13 +588,17 @@ export class ChatsService {
     if (users.length !== dto.userIds.length) {
       const foundIds = new Set(users.map((user) => user.id));
       const missingIds = dto.userIds.filter((id) => !foundIds.has(id));
-      throw new BadRequestException(`Users not found: ${missingIds.join(', ')}`);
+      throw new BadRequestException(
+        `Users not found: ${missingIds.join(', ')}`,
+      );
     }
 
     const rejoinedUserIds: string[] = [];
 
     for (const memberId of dto.userIds) {
-      const existingMember = chat.users.find((member) => member.userId === memberId);
+      const existingMember = chat.users.find(
+        (member) => member.userId === memberId,
+      );
 
       if (existingMember) {
         if (existingMember.leftAt) {

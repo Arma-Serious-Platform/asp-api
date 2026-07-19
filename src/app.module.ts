@@ -16,6 +16,7 @@ import { IslandsModule } from './modules/islands/islands.module';
 import { RulesModule } from './modules/rules/rules.module';
 import { SpecializationsModule } from './modules/specializations/specializations.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuthModule } from './modules/auth/auth.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     AuthModule,
     MailerModule.forRoot({
       transport: {
@@ -53,4 +55,4 @@ import { AuthModule } from './modules/auth/auth.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

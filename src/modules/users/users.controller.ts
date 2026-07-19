@@ -35,7 +35,11 @@ import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { CreateUserWarningDto } from './dto/create-user-warning.dto';
-import { OptionalPunishmentReasonDto, PunishmentReasonDto } from './dto/punishment-reason.dto';
+import {
+  OptionalPunishmentReasonDto,
+  PunishmentReasonDto,
+} from './dto/punishment-reason.dto';
+import { BanPunishmentDto } from './dto/ban-punishment.dto';
 import { Request, Response } from 'express';
 import { StaticBearerTokenGuard } from 'src/shared/guards/static-bearer-token.guard';
 import { getRequestIp } from 'src/shared/utils/request-ip';
@@ -86,7 +90,12 @@ export class UsersController {
   @Patch('me/change-nickname')
   @UseGuards(AuthGuard)
   changeNickname(@Body() dto: ChangeNicknameDto, @Req() req: RequestType) {
-    return this.usersService.changeNickname(req.userId, dto);
+    return this.usersService.changeNickname(
+      req.userId,
+      dto,
+      undefined,
+      req.userId,
+    );
   }
 
   @Delete('me/steamId')
@@ -100,7 +109,10 @@ export class UsersController {
   async steamLogin(@Req() req: RequestType, @Res() res: Response) {
     const callbackUrl = `${req.protocol}://${req.get('host')}/api/users/steam/callback`;
     const accessToken = await this.usersService.createSteamLinkToken(req.userId);
-    const redirectUrl = this.usersService.getSteamLoginRedirectUrl(accessToken, callbackUrl);
+    const redirectUrl = this.usersService.getSteamLoginRedirectUrl(
+      accessToken,
+      callbackUrl,
+    );
 
     return res.redirect(redirectUrl);
   }
@@ -118,15 +130,9 @@ export class UsersController {
     return this.usersService.signUp(signUpDto);
   }
 
-  @Post('/sign-up/confirm')
+  @Post('/confirm-signup')
   confirmSignUp(@Body() confirmSignUpDto: ConfirmSignUpDto) {
     return this.usersService.confirmSignUp(confirmSignUpDto);
-  }
-
-  @Post('/change-password')
-  @UseGuards(AuthGuard)
-  changePassword(@Body() changePasswordDto: ChangePasswordDto, @Req() req: RequestType) {
-    return this.usersService.changePassword(changePasswordDto, req.userId);
   }
 
   @Post('/forgot-password')
@@ -139,18 +145,33 @@ export class UsersController {
     return this.usersService.resetPassword(resetPasswordDto);
   }
 
+  @Post('/change-password')
+  @UseGuards(AuthGuard)
+  changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() req: RequestType,
+  ) {
+    return this.usersService.changePassword(changePasswordDto, req.userId);
+  }
+
   @Post('/change-role')
   @UseGuards(AuthGuard)
   @Roles(['OWNER'])
-  changeUserRole(@Body() changeUserRoleDto: ChangeUserRoleDto) {
-    return this.usersService.changeUserRole(changeUserRoleDto);
+  changeUserRole(
+    @Body() changeUserRoleDto: ChangeUserRoleDto,
+    @Req() req: RequestType,
+  ) {
+    return this.usersService.changeUserRole(changeUserRoleDto, req.userId);
   }
 
   @Post('/change-is-mission-reviewer')
   @UseGuards(AuthGuard)
   @Roles(['OWNER'])
-  changeIsMissionReviewer(@Body() dto: ChangeIsMissionReviewerDto) {
-    return this.usersService.changeIsMissionReviewer(dto);
+  changeIsMissionReviewer(
+    @Body() dto: ChangeIsMissionReviewerDto,
+    @Req() req: RequestType,
+  ) {
+    return this.usersService.changeIsMissionReviewer(dto, req.userId);
   }
 
   @Post('/change-avatar')
@@ -163,14 +184,27 @@ export class UsersController {
   @Patch(':userId/nickname')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
-  changeUserNickname(@Param('userId') userId: string, @Body() dto: ChangeNicknameDto, @Req() req: RequestType) {
-    return this.usersService.changeNickname(userId, dto, req.role);
+  changeUserNickname(
+    @Param('userId') userId: string,
+    @Body() dto: ChangeNicknameDto,
+    @Req() req: RequestType,
+  ) {
+    return this.usersService.changeNickname(
+      userId,
+      dto,
+      req.role,
+      req.userId,
+    );
   }
 
   @Post(':userId/warnings')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
-  createWarning(@Param('userId') userId: string, @Body() dto: CreateUserWarningDto, @Req() req: RequestType) {
+  createWarning(
+    @Param('userId') userId: string,
+    @Body() dto: CreateUserWarningDto,
+    @Req() req: RequestType,
+  ) {
     return this.usersService.createWarning(userId, dto, req.userId, req.role);
   }
 
@@ -189,34 +223,65 @@ export class UsersController {
     @Body() dto: OptionalPunishmentReasonDto,
     @Req() req: RequestType,
   ) {
-    return this.usersService.removeWarning(warningId, dto, req.userId, req.role);
+    return this.usersService.removeWarning(
+      warningId,
+      dto,
+      req.userId,
+      req.role,
+    );
   }
 
   @Get(':userId/punishments')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
-  findPunishmentHistory(@Param('userId') userId: string, @Req() req: RequestType) {
+  findPunishmentHistory(
+    @Param('userId') userId: string,
+    @Req() req: RequestType,
+  ) {
     return this.usersService.findPunishmentHistory(userId, req.role);
+  }
+
+  @Get(':userId/history')
+  @UseGuards(AuthGuard)
+  findHistory(@Param('userId') userId: string) {
+    return this.usersService.findHistory(userId);
   }
 
   @Post('/ban/:userId/permanent')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN'])
-  permanentlyBanUser(@Param() paramDto: UnbanUserDto, @Body() dto: PunishmentReasonDto, @Req() req: RequestType) {
-    return this.usersService.permanentlyBanUser(paramDto, dto, req.userId, req.role);
+  permanentlyBanUser(
+    @Param() paramDto: UnbanUserDto,
+    @Body() dto: PunishmentReasonDto,
+    @Req() req: RequestType,
+  ) {
+    return this.usersService.permanentlyBanUser(
+      paramDto,
+      dto,
+      req.userId,
+      req.role,
+    );
   }
 
   @Post('/ban/:userId/:bannedUntil')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
-  banUser(@Param() paramDto: BanUserDto, @Body() dto: PunishmentReasonDto, @Req() req: RequestType) {
+  banUser(
+    @Param() paramDto: BanUserDto,
+    @Body() dto: BanPunishmentDto,
+    @Req() req: RequestType,
+  ) {
     return this.usersService.banUser(paramDto, dto, req.userId, req.role);
   }
 
   @Post('/unban/:userId')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
-  unbanUser(@Param() params: UnbanUserDto, @Body() dto: OptionalPunishmentReasonDto, @Req() req: RequestType) {
+  unbanUser(
+    @Param() params: UnbanUserDto,
+    @Body() dto: OptionalPunishmentReasonDto,
+    @Req() req: RequestType,
+  ) {
     return this.usersService.unbanUser(params, dto, req.userId, req.role);
   }
 

@@ -1,9 +1,18 @@
-import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { Request, Response } from 'express';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { UsersService } from 'src/modules/users/users.service';
+import {
+  PERMANENT_BAN_LOGIN_MESSAGE,
+  UserRestrictionsService,
+} from 'src/modules/users/user-restrictions.service';
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_DAYS,
@@ -34,6 +43,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly twoFactorService: TwoFactorService,
+    private readonly userRestrictionsService: UserRestrictionsService,
   ) {}
 
   private getSessionExpiresAt(createdAt: Date) {
@@ -87,11 +97,7 @@ export class AuthService {
     return userAgent.slice(0, 255);
   }
 
-  async createSession(
-    userId: string,
-    req: Request,
-    device?: string,
-  ) {
+  async createSession(userId: string, req: Request, device?: string) {
     const now = new Date();
     const expiresAt = this.getSessionExpiresAt(now);
     const ip = getRequestIp(req);
@@ -117,7 +123,11 @@ export class AuthService {
       path: '/api',
     });
     res.clearCookie(SESSION_COOKIE_NAME, baseOptions);
-    res.cookie(SESSION_COOKIE_NAME, sessionId, this.getCookieOptions(expiresAt));
+    res.cookie(
+      SESSION_COOKIE_NAME,
+      sessionId,
+      this.getCookieOptions(expiresAt),
+    );
   }
 
   clearSessionCookie(res: Response) {
@@ -137,7 +147,9 @@ export class AuthService {
     );
 
     if (await this.twoFactorService.isTwoFactorEnabled(user.id)) {
-      const twoFactorToken = await this.twoFactorService.createLoginToken(user.id);
+      const twoFactorToken = await this.twoFactorService.createLoginToken(
+        user.id,
+      );
 
       return {
         requiresTwoFactor: true,
@@ -158,7 +170,9 @@ export class AuthService {
     req: Request,
     res: Response,
   ) {
-    const userId = await this.twoFactorService.verifyLoginToken(dto.twoFactorToken);
+    const userId = await this.twoFactorService.verifyLoginToken(
+      dto.twoFactorToken,
+    );
     const verified = await this.twoFactorService.verifyUserCodeOrRecovery(
       userId,
       dto.code,
@@ -167,6 +181,17 @@ export class AuthService {
 
     if (!verified) {
       throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    const restrictions =
+      await this.userRestrictionsService.getUserRestrictions(userId);
+
+    if (!restrictions) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    if (this.userRestrictionsService.isPermanentBan(restrictions)) {
+      throw new UnauthorizedException(PERMANENT_BAN_LOGIN_MESSAGE);
     }
 
     const session = await this.createSession(userId, req, dto.device);
@@ -197,7 +222,9 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  private async resolveUserFromJwt(token: string): Promise<ResolvedAuthUser | null> {
+  private async resolveUserFromJwt(
+    token: string,
+  ): Promise<ResolvedAuthUser | null> {
     try {
       const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
         token,
@@ -214,10 +241,11 @@ export class AuthService {
           id: true,
           role: true,
           status: true,
+          bannedUntil: true,
         },
       });
 
-      if (!user || user.status === UserStatus.BANNED) {
+      if (!user || this.userRestrictionsService.isPermanentBan(user)) {
         return null;
       }
 
@@ -247,6 +275,7 @@ export class AuthService {
             id: true,
             role: true,
             status: true,
+            bannedUntil: true,
           },
         },
       },
@@ -256,7 +285,7 @@ export class AuthService {
       !session ||
       session.revokedAt ||
       session.expiresAt < new Date() ||
-      session.user.status === UserStatus.BANNED
+      this.userRestrictionsService.isPermanentBan(session.user)
     ) {
       return null;
     }
@@ -324,10 +353,14 @@ export class AuthService {
     );
   }
 
-  async resolveHandshakeUser(handshake: HandshakeLike): Promise<ResolvedAuthUser | null> {
+  async resolveHandshakeUser(
+    handshake: HandshakeLike,
+  ): Promise<ResolvedAuthUser | null> {
     const authHeader = handshake.headers?.authorization;
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      const jwtUser = await this.resolveUserFromJwt(authHeader.slice('Bearer '.length).trim());
+      const jwtUser = await this.resolveUserFromJwt(
+        authHeader.slice('Bearer '.length).trim(),
+      );
       if (jwtUser) {
         return jwtUser;
       }
@@ -360,7 +393,9 @@ export class AuthService {
   }
 
   async getActiveSessions(userId: string, req: Request) {
-    const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
+      | string
+      | undefined;
 
     const sessions = await this.prisma.userSession.findMany({
       where: {
@@ -391,7 +426,12 @@ export class AuthService {
     }));
   }
 
-  async revokeSessionById(userId: string, sessionId: string, req: Request, res: Response) {
+  async revokeSessionById(
+    userId: string,
+    sessionId: string,
+    req: Request,
+    res: Response,
+  ) {
     const session = await this.prisma.userSession.findUnique({
       where: { id: sessionId },
       select: {
@@ -416,7 +456,9 @@ export class AuthService {
       },
     });
 
-    const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
+      | string
+      | undefined;
     if (currentSessionId === sessionId) {
       this.clearSessionCookie(res);
     }
