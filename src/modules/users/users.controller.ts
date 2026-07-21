@@ -130,7 +130,7 @@ export class UsersController {
     return this.usersService.signUp(signUpDto);
   }
 
-  @Post('/confirm-signup')
+  @Post('/sign-up/confirm')
   confirmSignUp(@Body() confirmSignUpDto: ConfirmSignUpDto) {
     return this.usersService.confirmSignUp(confirmSignUpDto);
   }
