@@ -15,6 +15,7 @@ import { PboParserService } from "src/infrastructure/pbo-parser/pbo-parser.servi
 import { HeadquartersService } from "src/modules/headquarters/headquarters.service";
 import { ChangeMissionStateDto } from "./dto/change-mission-state.dto";
 import { OrderType } from "src/shared/enums/order-type.enum";
+import { hasAnyRole } from "src/shared/utils/user-roles";
 
 @Injectable()
 export class MissionsService {
@@ -22,6 +23,7 @@ export class MissionsService {
     id: true,
     nickname: true,
     avatar: true,
+    roles: true,
     squad: {
       select: {
         id: true,
@@ -90,16 +92,19 @@ export class MissionsService {
     return mission.authorId === userId || mission.coauthors.some((coauthor) => coauthor.id === userId);
   }
 
-  private canManageAnyMission(role: UserRole) {
-    return ([UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK] as UserRole[]).includes(role);
+  private canManageAnyMission(roles: UserRole[]) {
+    return hasAnyRole(roles, [UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
   }
 
-  private canChangeMissionVersionStatus(user: { role: UserRole; isMissionReviewer: boolean }) {
-    return user.isMissionReviewer || this.canManageAnyMission(user.role);
+  private canChangeMissionVersionStatus(user: { roles: UserRole[] }) {
+    return (
+      hasAnyRole(user.roles, [UserRole.MISSION_REVIEWER]) ||
+      this.canManageAnyMission(user.roles)
+    );
   }
 
-  private canArchiveAnyMission(role: UserRole) {
-    return ([UserRole.OWNER, UserRole.UVK] as UserRole[]).includes(role);
+  private canArchiveAnyMission(roles: UserRole[]) {
+    return hasAnyRole(roles, [UserRole.OWNER, UserRole.UVK]);
   }
 
   async findAllIslands() {
@@ -379,7 +384,7 @@ export class MissionsService {
   async updateMission(dto: UpdateMissionDto, missionId: string, authorId: string, image?: File) {
     const user = await this.prisma.user.findUnique({
       where: { id: authorId },
-      select: { id: true, role: true },
+      select: { id: true, roles: true },
     });
 
     if (!user) {
@@ -404,7 +409,7 @@ export class MissionsService {
       throw new NotFoundException('Mission not found');
     }
 
-    const canManageAnyMission = this.canManageAnyMission(user.role);
+    const canManageAnyMission = this.canManageAnyMission(user.roles);
 
     if (!this.canEditMission(mission, authorId) && !canManageAnyMission) {
       throw new ForbiddenException('You are not the author of this mission');
@@ -450,7 +455,7 @@ export class MissionsService {
     });
   }
 
-  async changeMissionState(dto: ChangeMissionStateDto, missionId: string, userId: string, role: UserRole) {
+  async changeMissionState(dto: ChangeMissionStateDto, missionId: string, userId: string, roles: UserRole[]) {
     const mission = await this.prisma.mission.findUnique({
       where: { id: missionId },
       select: {
@@ -468,7 +473,7 @@ export class MissionsService {
       throw new NotFoundException('Mission not found');
     }
 
-    if (!this.canEditMission(mission, userId) && !this.canArchiveAnyMission(role)) {
+    if (!this.canEditMission(mission, userId) && !this.canArchiveAnyMission(roles)) {
       throw new ForbiddenException('You are not authorized to archive this mission');
     }
 
@@ -491,14 +496,14 @@ export class MissionsService {
   async deleteMission(missionId: string, userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true },
+      select: { id: true, roles: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (!this.canManageAnyMission(user.role)) {
+    if (!this.canManageAnyMission(user.roles)) {
       throw new ForbiddenException(
         'Only owner, server admin or UVK can delete a mission',
       );
@@ -691,8 +696,7 @@ export class MissionsService {
       where: { id: userId },
       select: {
         id: true,
-        role: true,
-        isMissionReviewer: true,
+        roles: true,
       }
     });
 
@@ -739,9 +743,7 @@ export class MissionsService {
       throw new BadRequestException('Cannot update a version of an archived mission');
     }
 
-    const canChangeAnyMissionVersion =
-      user.isMissionReviewer ||
-      this.canManageAnyMission(user.role);
+    const canChangeAnyMissionVersion = this.canChangeMissionVersionStatus(user);
 
     if (!this.canEditMission(missionVersion.mission, userId) && !canChangeAnyMissionVersion) {
       throw new ForbiddenException('You are not the author of this mission');
@@ -930,7 +932,7 @@ export class MissionsService {
       where: { id: userId },
       select: {
         id: true,
-        role: true,
+        roles: true,
       },
     });
 
@@ -938,7 +940,7 @@ export class MissionsService {
       throw new NotFoundException('User not found');
     }
 
-    if (!this.canManageAnyMission(user.role)) {
+    if (!this.canManageAnyMission(user.roles)) {
       throw new ForbiddenException('Only owner, server admin or UVK can delete a mission version');
     }
 
@@ -995,8 +997,7 @@ export class MissionsService {
       where: { id: userId },
       select: {
         id: true,
-        role: true,
-        isMissionReviewer: true,
+        roles: true,
       }
     });
 

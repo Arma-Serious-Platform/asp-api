@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   Delete,
@@ -32,7 +33,6 @@ import { FileValidation } from 'src/shared/decorators/file.dectorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
-import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { CreateUserWarningDto } from './dto/create-user-warning.dto';
 import {
@@ -51,7 +51,7 @@ export class UsersController {
   @Get()
   @UseGuards(AuthGuard)
   find(@Query() dto: GetUsersDto, @Req() req: RequestType) {
-    return this.usersService.findAll(dto, req.role);
+    return this.usersService.findAll(dto, req.roles);
   }
 
   @Get('/whitelist')
@@ -154,7 +154,7 @@ export class UsersController {
     return this.usersService.changePassword(changePasswordDto, req.userId);
   }
 
-  @Post('/change-role')
+  @Put('/change-role')
   @UseGuards(AuthGuard)
   @Roles(['OWNER'])
   changeUserRole(
@@ -162,16 +162,6 @@ export class UsersController {
     @Req() req: RequestType,
   ) {
     return this.usersService.changeUserRole(changeUserRoleDto, req.userId);
-  }
-
-  @Post('/change-is-mission-reviewer')
-  @UseGuards(AuthGuard)
-  @Roles(['OWNER'])
-  changeIsMissionReviewer(
-    @Body() dto: ChangeIsMissionReviewerDto,
-    @Req() req: RequestType,
-  ) {
-    return this.usersService.changeIsMissionReviewer(dto, req.userId);
   }
 
   @Post('/change-avatar')
@@ -192,7 +182,7 @@ export class UsersController {
     return this.usersService.changeNickname(
       userId,
       dto,
-      req.role,
+      req.roles,
       req.userId,
     );
   }
@@ -205,14 +195,14 @@ export class UsersController {
     @Body() dto: CreateUserWarningDto,
     @Req() req: RequestType,
   ) {
-    return this.usersService.createWarning(userId, dto, req.userId, req.role);
+    return this.usersService.createWarning(userId, dto, req.userId, req.roles);
   }
 
   @Get(':userId/warnings')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])
   findWarnings(@Param('userId') userId: string, @Req() req: RequestType) {
-    return this.usersService.findWarnings(userId, req.role);
+    return this.usersService.findWarnings(userId, req.roles);
   }
 
   @Delete('warnings/:warningId')
@@ -227,7 +217,7 @@ export class UsersController {
       warningId,
       dto,
       req.userId,
-      req.role,
+      req.roles,
     );
   }
 
@@ -238,7 +228,7 @@ export class UsersController {
     @Param('userId') userId: string,
     @Req() req: RequestType,
   ) {
-    return this.usersService.findPunishmentHistory(userId, req.role);
+    return this.usersService.findPunishmentHistory(userId, req.roles);
   }
 
   @Get(':userId/history')
@@ -259,7 +249,7 @@ export class UsersController {
       paramDto,
       dto,
       req.userId,
-      req.role,
+      req.roles,
     );
   }
 
@@ -271,7 +261,7 @@ export class UsersController {
     @Body() dto: BanPunishmentDto,
     @Req() req: RequestType,
   ) {
-    return this.usersService.banUser(paramDto, dto, req.userId, req.role);
+    return this.usersService.banUser(paramDto, dto, req.userId, req.roles);
   }
 
   @Post('/unban/:userId')
@@ -282,7 +272,7 @@ export class UsersController {
     @Body() dto: OptionalPunishmentReasonDto,
     @Req() req: RequestType,
   ) {
-    return this.usersService.unbanUser(params, dto, req.userId, req.role);
+    return this.usersService.unbanUser(params, dto, req.userId, req.roles);
   }
 
   @Get(':id')

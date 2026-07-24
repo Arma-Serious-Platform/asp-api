@@ -61,7 +61,7 @@ export class MissionsController {
   @Patch(':id/state')
   @UseGuards(AuthGuard)
   changeState(@Param('id') id: string, @Body() dto: ChangeMissionStateDto, @Req() req: RequestType) {
-    return this.missionsService.changeMissionState(dto, id, req.userId, req.role);
+    return this.missionsService.changeMissionState(dto, id, req.userId, req.roles);
   }
 
   @Delete(':id')

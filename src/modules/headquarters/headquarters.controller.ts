@@ -63,7 +63,7 @@ export class HeadquartersController {
   @UseGuards(AuthGuard)
   @ApiOkResponse({ type: HeadquartersGamePlanResponseDto })
   unassignCommander(@Param('id') id: string, @Req() req: RequestType) {
-    return this.headquartersService.unassignCommander(id, req.userId, req.role);
+    return this.headquartersService.unassignCommander(id, req.userId, req.roles);
   }
 
   @Post('plans/:id/assign-hq-squad')
@@ -77,7 +77,7 @@ export class HeadquartersController {
   @UseGuards(AuthGuard)
   @ApiOkResponse({ type: HeadquartersGamePlanResponseDto })
   unassignHqSquad(@Param('id') id: string, @Req() req: RequestType) {
-    return this.headquartersService.unassignHqSquad(id, req.userId, req.role);
+    return this.headquartersService.unassignHqSquad(id, req.userId, req.roles);
   }
 
   @Patch('slots/:slotId')

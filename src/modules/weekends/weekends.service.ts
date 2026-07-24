@@ -13,7 +13,7 @@ export class WeekendsService {
   private readonly gameAdminSelect = {
     id: true,
     nickname: true,
-    role: true,
+    roles: true,
     avatarUrl: true,
     squad: {
       select: {
@@ -34,7 +34,7 @@ export class WeekendsService {
   private readonly missionAuthorSelect = {
     id: true,
     nickname: true,
-    role: true,
+    roles: true,
     squad: {
       select: {
         id: true,

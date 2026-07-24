@@ -37,7 +37,6 @@ import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
-import { ChangeIsMissionReviewerDto } from './dto/change-is-mission-reviewer.dto';
 import { ChangeNicknameDto } from './dto/change-nickname.dto';
 import { EmailTemplateService } from 'src/shared/services/email-template.service';
 import { CreateUserWarningDto } from './dto/create-user-warning.dto';
@@ -49,21 +48,17 @@ import { BanPunishmentDto } from './dto/ban-punishment.dto';
 import { TwoFactorService } from 'src/modules/auth/two-factor.service';
 import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
 import { UsersHistoryService } from './users-history.service';
+import {
+  hasAnyRole,
+  highestRole,
+  normalizeRoles,
+  ROLE_RANK,
+} from 'src/shared/utils/user-roles';
 
 @Injectable()
 export class UsersService {
   private static readonly STEAM_OPENID_ENDPOINT =
     'https://steamcommunity.com/openid/login';
-
-  private static readonly ROLE_RANK: Record<UserRole, number> = {
-    [UserRole.USER]: 0,
-    [UserRole.MINI_ADMIN]: 1,
-    [UserRole.GAME_ADMIN]: 2,
-    [UserRole.TECH_ADMIN]: 3,
-    [UserRole.UVK]: 4,
-    [UserRole.SERVER_ADMIN]: 5,
-    [UserRole.OWNER]: 6,
-  };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -93,8 +88,8 @@ export class UsersService {
     });
   };
 
-  private canSeeSensitiveUsersData(role: UserRole) {
-    return role === UserRole.OWNER || role === UserRole.SERVER_ADMIN;
+  private canSeeSensitiveUsersData(roles: UserRole[]) {
+    return hasAnyRole(roles, [UserRole.OWNER, UserRole.SERVER_ADMIN]);
   }
 
   private appendUserWhereAnd(
@@ -128,14 +123,20 @@ export class UsersService {
       .digest('hex');
   }
 
-  private ensureCanModerateTarget(targetRole: UserRole, actorRole: UserRole) {
-    if (targetRole === UserRole.OWNER) {
+  private ensureCanModerateTarget(
+    targetRoles: UserRole[],
+    actorRoles: UserRole[],
+  ) {
+    if (targetRoles.includes(UserRole.OWNER)) {
       throw new BadRequestException('You cannot moderate user with OWNER role');
     }
 
+    const actorHighest = highestRole(actorRoles);
+    const targetHighest = highestRole(targetRoles);
+
     if (
-      actorRole !== UserRole.OWNER &&
-      UsersService.ROLE_RANK[actorRole] <= UsersService.ROLE_RANK[targetRole]
+      actorHighest !== UserRole.OWNER &&
+      ROLE_RANK[actorHighest] <= ROLE_RANK[targetHighest]
     ) {
       throw new BadRequestException(
         'You cannot moderate user with your level of access',
@@ -319,7 +320,7 @@ export class UsersService {
   async changeNickname(
     userId: string,
     dto: ChangeNicknameDto,
-    actorRole?: UserRole,
+    actorRoles?: UserRole[],
     actorId?: string,
   ) {
     const nickname = dto.nickname.trim();
@@ -330,15 +331,15 @@ export class UsersService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, nickname: true, role: true },
+      select: { id: true, nickname: true, roles: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (actorRole) {
-      this.ensureCanModerateTarget(user.role, actorRole);
+    if (actorRoles) {
+      this.ensureCanModerateTarget(user.roles, actorRoles);
     }
 
     if (user.nickname === nickname) {
@@ -414,7 +415,7 @@ export class UsersService {
         nickname: true,
         steamId: true,
         status: true,
-        role: true,
+        roles: true,
         squadRole: true,
         specializations: {
           include: {
@@ -431,7 +432,6 @@ export class UsersService {
             name: 'asc',
           },
         },
-        isMissionReviewer: true,
         avatarUrl: true,
         bannedUntil: true,
         isMuted: true,
@@ -534,7 +534,7 @@ export class UsersService {
               select: {
                 id: true,
                 nickname: true,
-                role: true,
+                roles: true,
                 squadRole: true,
                 avatarUrl: true,
                 specializations: {
@@ -669,7 +669,7 @@ export class UsersService {
           data: {
             ...signUpDto,
             password: hashedPassword,
-            role: 'USER',
+            roles: [UserRole.USER],
             isEmailVerified: false,
             activationToken: token,
             activationTokenExpiresAt: expiresAt,
@@ -690,6 +690,12 @@ export class UsersService {
   }
 
   async changeUserRole(dto: ChangeUserRoleDto, actorId: string) {
+    const nextRoles = normalizeRoles(dto.roles);
+
+    if (nextRoles.includes(UserRole.OWNER)) {
+      throw new BadRequestException('You cannot assign OWNER role');
+    }
+
     const user = await this.prisma.user.findFirst({
       where: { id: dto.id },
     });
@@ -698,20 +704,26 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.role === dto.role) {
-      throw new BadRequestException('User already has this role');
-    }
-
-    if (user.role === 'OWNER') {
+    if (user.roles.includes(UserRole.OWNER)) {
       throw new BadRequestException(
         'You cannot change role of user with OWNER role',
       );
     }
 
+    const previousRoles = [...user.roles].sort();
+    const sortedNextRoles = [...nextRoles].sort();
+
+    if (
+      previousRoles.length === sortedNextRoles.length &&
+      previousRoles.every((role, index) => role === sortedNextRoles[index])
+    ) {
+      throw new BadRequestException('User already has these roles');
+    }
+
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: dto.id },
-        data: { role: dto.role },
+        data: { roles: nextRoles },
       });
 
       await this.usersHistoryService.append(tx, {
@@ -719,58 +731,14 @@ export class UsersService {
         actorId,
         type: UserHistoryEventType.ROLE_CHANGE,
         payload: {
-          oldRole: user.role,
-          newRole: dto.role,
+          oldRoles: user.roles,
+          newRoles: nextRoles,
         },
       });
     });
 
     return {
-      message: 'User role updated successfully',
-    };
-  }
-
-  async changeIsMissionReviewer(
-    dto: ChangeIsMissionReviewerDto,
-    actorId: string,
-  ) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: dto.userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.isMissionReviewer === dto.isMissionReviewer) {
-      return {
-        message: dto.isMissionReviewer
-          ? 'User is now a mission reviewer'
-          : 'User is no longer a mission reviewer',
-      };
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: dto.userId },
-        data: { isMissionReviewer: dto.isMissionReviewer },
-      });
-
-      await this.usersHistoryService.append(tx, {
-        userId: dto.userId,
-        actorId,
-        type: UserHistoryEventType.REVIEWER_CHANGE,
-        payload: {
-          oldValue: user.isMissionReviewer,
-          newValue: dto.isMissionReviewer,
-        },
-      });
-    });
-
-    return {
-      message: dto.isMissionReviewer
-        ? 'User is now a mission reviewer'
-        : 'User is no longer a mission reviewer',
+      message: 'User roles updated successfully',
     };
   }
 
@@ -778,7 +746,7 @@ export class UsersService {
     userId: string,
     dto: CreateUserWarningDto,
     adminId: string,
-    actorRole: UserRole,
+    actorRoles: UserRole[],
   ) {
     const reason = dto.reason.trim();
 
@@ -788,14 +756,14 @@ export class UsersService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true },
+      select: { id: true, roles: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    this.ensureCanModerateTarget(user.role, actorRole);
+    this.ensureCanModerateTarget(user.roles, actorRoles);
 
     return this.prisma.$transaction(async (tx) => {
       const warning = await tx.userWarning.create({
@@ -844,17 +812,17 @@ export class UsersService {
     });
   }
 
-  async findWarnings(userId: string, actorRole: UserRole) {
+  async findWarnings(userId: string, actorRoles: UserRole[]) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true },
+      select: { id: true, roles: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    this.ensureCanModerateTarget(user.role, actorRole);
+    this.ensureCanModerateTarget(user.roles, actorRoles);
 
     return this.prisma.userWarning.findMany({
       where: { userId, removedAt: null },
@@ -880,7 +848,7 @@ export class UsersService {
     warningId: string,
     dto: OptionalPunishmentReasonDto,
     adminId: string,
-    actorRole: UserRole,
+    actorRoles: UserRole[],
   ) {
     const warning = await this.prisma.userWarning.findUnique({
       where: { id: warningId },
@@ -888,7 +856,7 @@ export class UsersService {
         user: {
           select: {
             id: true,
-            role: true,
+            roles: true,
           },
         },
       },
@@ -902,7 +870,7 @@ export class UsersService {
       throw new BadRequestException('Warning is already removed');
     }
 
-    this.ensureCanModerateTarget(warning.user.role, actorRole);
+    this.ensureCanModerateTarget(warning.user.roles, actorRoles);
 
     const reason = dto.reason?.trim() || null;
 
@@ -954,17 +922,17 @@ export class UsersService {
     });
   }
 
-  async findPunishmentHistory(userId: string, actorRole: UserRole) {
+  async findPunishmentHistory(userId: string, actorRoles: UserRole[]) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true },
+      select: { id: true, roles: true },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    this.ensureCanModerateTarget(user.role, actorRole);
+    this.ensureCanModerateTarget(user.roles, actorRoles);
 
     return this.prisma.userPunishment.findMany({
       where: { userId },
@@ -1303,9 +1271,9 @@ export class UsersService {
     };
   }
 
-  async findAll(dto: GetUsersDto, userRole: UserRole) {
+  async findAll(dto: GetUsersDto, userRoles: UserRole[]) {
     const { search, take = 50, skip = 0 } = dto;
-    const canSeeSensitiveUsersData = this.canSeeSensitiveUsersData(userRole);
+    const canSeeSensitiveUsersData = this.canSeeSensitiveUsersData(userRoles);
 
     const options: Prisma.UserFindManyArgs = {};
 
@@ -1328,7 +1296,7 @@ export class UsersService {
     if (dto.role) {
       options.where = {
         ...options.where,
-        role: dto.role,
+        roles: { has: dto.role },
       };
     }
 
@@ -1358,18 +1326,17 @@ export class UsersService {
         UserRole.OWNER,
         UserRole.SERVER_ADMIN,
         UserRole.UVK,
+        UserRole.MISSION_REVIEWER,
       ];
       const canReviewMissionsWhere: Prisma.UserWhereInput =
         dto.canReviewMissions
           ? {
-              OR: [
-                { isMissionReviewer: true },
-                { role: { in: reviewerRoles } },
-              ],
+              roles: { hasSome: reviewerRoles },
             }
           : {
-              isMissionReviewer: false,
-              role: { notIn: reviewerRoles },
+              NOT: {
+                roles: { hasSome: reviewerRoles },
+              },
             };
 
       options.where = this.appendUserWhereAnd(
@@ -1498,7 +1465,7 @@ export class UsersService {
         id: true,
         nickname: true,
         status: true,
-        role: true,
+        roles: true,
         squadRole: true,
         bannedUntil: true,
         isMuted: true,
@@ -1531,7 +1498,6 @@ export class UsersService {
           },
         },
         steamId: true,
-        isMissionReviewer: true,
         discordUrl: true,
         youtubeUrl: true,
         twitchUrl: true,
@@ -1578,7 +1544,7 @@ export class UsersService {
     dto: BanUserDto,
     body: BanPunishmentDto,
     adminId: string,
-    role: UserRole,
+    actorRoles: UserRole[],
   ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
@@ -1588,7 +1554,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    this.ensureCanModerateTarget(user.role, role);
+    this.ensureCanModerateTarget(user.roles, actorRoles);
 
     if (user.status === 'BANNED') {
       throw new BadRequestException('User is already banned');
@@ -1652,7 +1618,7 @@ export class UsersService {
     dto: UnbanUserDto,
     body: PunishmentReasonDto,
     adminId: string,
-    role: UserRole,
+    actorRoles: UserRole[],
   ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
@@ -1662,7 +1628,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    this.ensureCanModerateTarget(user.role, role);
+    this.ensureCanModerateTarget(user.roles, actorRoles);
 
     if (user.status === 'BANNED') {
       throw new BadRequestException('User is already banned');
@@ -1713,7 +1679,7 @@ export class UsersService {
     dto: UnbanUserDto,
     body: OptionalPunishmentReasonDto,
     adminId: string,
-    role: UserRole,
+    actorRoles: UserRole[],
   ) {
     const user = await this.prisma.user.findFirst({
       where: { id: dto.userId },
@@ -1723,7 +1689,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    this.ensureCanModerateTarget(user.role, role);
+    this.ensureCanModerateTarget(user.roles, actorRoles);
 
     const reason = body.reason?.trim() || null;
 

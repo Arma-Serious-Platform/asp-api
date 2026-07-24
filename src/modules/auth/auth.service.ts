@@ -25,7 +25,7 @@ import { getRequestIp } from 'src/shared/utils/request-ip';
 
 export type ResolvedAuthUser = {
   userId: string;
-  role: UserRole;
+  roles: UserRole[];
 };
 
 type HandshakeLike = {
@@ -239,7 +239,7 @@ export class AuthService {
         where: { id: userId },
         select: {
           id: true,
-          role: true,
+          roles: true,
           status: true,
           bannedUntil: true,
         },
@@ -251,7 +251,7 @@ export class AuthService {
 
       return {
         userId: user.id,
-        role: user.role,
+        roles: user.roles,
       };
     } catch {
       return null;
@@ -273,7 +273,7 @@ export class AuthService {
         user: {
           select: {
             id: true,
-            role: true,
+            roles: true,
             status: true,
             bannedUntil: true,
           },
@@ -310,7 +310,7 @@ export class AuthService {
 
     return {
       userId: session.user.id,
-      role: session.user.role,
+      roles: session.user.roles,
     };
   }
 

@@ -19,6 +19,7 @@ import { CreateGamePlanCommentDto } from './dto/create-game-plan-comment.dto';
 import { UpdateGamePlanCommentDto } from './dto/update-game-plan-comment.dto';
 import { FindGamePlanCommentsDto } from './dto/find-game-plan-comments.dto';
 import { HeadquartersGateway } from './headquarters.gateway';
+import { hasAnyRole } from 'src/shared/utils/user-roles';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { Multer } from 'multer';
 import {
@@ -546,9 +547,9 @@ export class HeadquartersService {
     return updatedPlan;
   }
 
-  async unassignHqSquad(id: string, userId: string, role: UserRole) {
+  async unassignHqSquad(id: string, userId: string, roles: UserRole[]) {
     const gamePlan = await this.getGamePlanWithSide(id);
-    const isSuperAdmin = this.isSuperAdmin(role);
+    const isSuperAdmin = this.isSuperAdmin(roles);
 
     if (!gamePlan.hqSquadId) {
       throw new BadRequestException('HQ squad is not assigned to this plan');
@@ -585,10 +586,10 @@ export class HeadquartersService {
     return updatedPlan;
   }
 
-  async unassignCommander(id: string, userId: string, role: UserRole) {
+  async unassignCommander(id: string, userId: string, roles: UserRole[]) {
     const gamePlan = await this.getGamePlanWithSide(id);
 
-    const isSuperAdmin = this.isSuperAdmin(role);
+    const isSuperAdmin = this.isSuperAdmin(roles);
     const isCurrentCommander = gamePlan.gameCommanderId === userId;
 
     if (!isSuperAdmin) {
@@ -1029,9 +1030,8 @@ export class HeadquartersService {
       select: {
         id: true,
         nickname: true,
-        role: true,
+        roles: true,
         squadRole: true,
-        isMissionReviewer: true,
         avatar: {
           select: {
             id: true,
@@ -1077,8 +1077,7 @@ export class HeadquartersService {
       select: {
         id: true,
         nickname: true,
-        role: true,
-        isMissionReviewer: true,
+        roles: true,
         avatar: {
           select: {
             id: true,
@@ -1111,7 +1110,7 @@ export class HeadquartersService {
           select: {
             id: true,
             nickname: true,
-            role: true,
+            roles: true,
             squad: {
               select: {
                 id: true,
@@ -1266,13 +1265,8 @@ export class HeadquartersService {
     return user;
   }
 
-  private isSuperAdmin(role: UserRole) {
-    const superAdminRoles = new Set<UserRole>([
-      UserRole.OWNER,
-      UserRole.SERVER_ADMIN,
-      UserRole.UVK,
-    ]);
-    return superAdminRoles.has(role);
+  private isSuperAdmin(roles: UserRole[]) {
+    return hasAnyRole(roles, [UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
   }
 
   private readonly publishedWeekendPlanWhere = {

@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { UserRole } from "@prisma/client";
 
 class HeadquartersSquadShortDto {
   @ApiProperty({ example: '2a6d7b86-57b4-4ca4-8f87-6aab1fcd8c23' })
@@ -24,14 +25,11 @@ class HeadquartersCommanderDto {
   @ApiProperty({ example: 'CommanderNick' })
   nickname: string;
 
-  @ApiProperty({ example: 'USER' })
-  role: string;
+  @ApiProperty({ example: ['USER'], enum: UserRole, isArray: true })
+  roles: UserRole[];
 
   @ApiProperty({ example: 'LEADER', nullable: true })
   squadRole: string | null;
-
-  @ApiProperty({ example: false })
-  isMissionReviewer: boolean;
 
   @ApiProperty({ nullable: true })
   avatar?: {

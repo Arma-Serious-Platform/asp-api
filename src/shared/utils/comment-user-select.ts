@@ -1,8 +1,7 @@
 export const commentUserSelect = {
   id: true,
   nickname: true,
-  role: true,
-  isMissionReviewer: true,
+  roles: true,
   avatar: {
     select: {
       id: true,
@@ -25,5 +24,5 @@ export const commentUserSelect = {
 export const commentReplyUserSelect = {
   id: true,
   nickname: true,
-  role: true,
+  roles: true,
 } as const;

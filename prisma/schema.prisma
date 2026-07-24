@@ -91,9 +91,8 @@ model User {
   activationToken             String?
   activationTokenExpiresAt    DateTime?
   status                      UserStatus        @default(ACTIVE)
-  role                        UserRole          @default(USER)
+  roles                       UserRole[]        @default([USER])
   squadRole                   SquadRole         @default(MEMBER)
-  isMissionReviewer           Boolean           @default(false)
   resetPasswordToken          String?
   resetPasswordTokenExpiresAt DateTime?
   avatarUrl                   String?
@@ -592,6 +591,7 @@ enum UserRole {
   OWNER
   SERVER_ADMIN
   TECH_ADMIN
+  MISSION_REVIEWER
   UVK
   GAME_ADMIN
   MINI_ADMIN

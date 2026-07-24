@@ -60,7 +60,7 @@ export class SquadsService {
           select: {
             id: true,
             nickname: true,
-            role: true,
+            roles: true,
             squadRole: true,
             avatarUrl: true,
             specializations: {
@@ -158,7 +158,7 @@ export class SquadsService {
           select: {
             id: true,
             nickname: true,
-            role: true,
+            roles: true,
             squadRole: true,
             avatarUrl: true,
             status: true,
@@ -192,7 +192,7 @@ export class SquadsService {
           select: {
             id: true,
             nickname: true,
-            role: true,
+            roles: true,
             squadRole: true,
             avatarUrl: true,
             specializations: {

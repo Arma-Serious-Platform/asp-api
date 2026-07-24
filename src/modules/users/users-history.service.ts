@@ -47,9 +47,8 @@ export class UsersHistoryService {
           select: {
             id: true,
             nickname: true,
-            role: true,
+            roles: true,
             squadRole: true,
-            isMissionReviewer: true,
             squad: {
               select: {
                 tag: true,

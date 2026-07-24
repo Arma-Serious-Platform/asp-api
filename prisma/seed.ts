@@ -72,7 +72,7 @@ export const seed = async () => {
         nickname: ownerNickname,
         password: hashedPassword,
         isEmailVerified: true,
-        role: 'OWNER',
+        roles: ['OWNER'],
         status: 'ACTIVE'
       }
     });

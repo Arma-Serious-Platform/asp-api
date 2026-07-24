@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Roles } from 'src/shared/decorators/roles.decorator';
 import { AuthService } from 'src/modules/auth/auth.service';
+import { hasAnyRole } from 'src/shared/utils/user-roles';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -26,8 +27,12 @@ export class AuthGuard implements CanActivate {
     }
 
     request.userId = authUser.userId;
-    request.role = authUser.role;
+    request.roles = authUser.roles;
 
-    return !roles || !roles.length || roles.includes(authUser.role);
+    return (
+      !roles ||
+      !roles.length ||
+      hasAnyRole(authUser.roles, roles)
+    );
   }
 }
