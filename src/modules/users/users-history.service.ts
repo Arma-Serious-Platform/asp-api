@@ -40,7 +40,7 @@ export class UsersHistoryService {
 
     return this.prisma.userHistoryEvent.findMany({
       where: { userId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
         actor: {
