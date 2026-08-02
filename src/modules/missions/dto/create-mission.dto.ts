@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionType, Prisma } from "@prisma/client";
+import { MissionObjective, MissionType, Prisma } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from "class-validator";
 import { normalizeStringArray } from "src/utils/normalize-string-array";
@@ -20,6 +20,14 @@ export class CreateMissionDto {
   @IsEnum(MissionType)
   @IsOptional()
   missionType?: MissionType;
+
+  @ApiPropertyOptional({
+    enum: MissionObjective,
+    default: MissionObjective.ATTACK_DEFEND,
+  })
+  @IsEnum(MissionObjective)
+  @IsOptional()
+  missionObjective?: MissionObjective;
 
   @ApiProperty()
   @IsUUID()

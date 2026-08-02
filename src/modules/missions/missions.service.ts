@@ -5,7 +5,7 @@ import { ASP_BUCKET } from "src/infrastructure/minio/minio.lib";
 import { MinioService } from "src/infrastructure/minio/minio.service";
 import { resolveMissionVersionBucket } from "src/infrastructure/minio/mission-version-bucket";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
-import { MissionStatus, MissionType, Prisma, State, UserRole } from "@prisma/client";
+import { MissionGameSide, MissionObjective, MissionStatus, MissionType, Prisma, State, UserRole } from "@prisma/client";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UpdateMissionVersionDto } from "./dto/update-mission-version.dto";
@@ -54,6 +54,105 @@ export class MissionsService {
     return {
       [sideType]: slotsBySide[sideType] ?? [],
     } as Prisma.InputJsonObject;
+  }
+
+  private resolveFriendlySideInput(input: {
+    clearFriendlySide?: boolean;
+    attackSideType: MissionGameSide;
+    defenseSideType: MissionGameSide;
+    friendlySideType?: MissionGameSide | null;
+    friendlyTo?: MissionGameSide | null;
+    friendlySideName?: string | null;
+    friendlySideSlots?: number | null;
+    existing?: {
+      friendlySideType: MissionGameSide | null;
+      friendlyTo: MissionGameSide | null;
+      friendlySideName: string | null;
+      friendlySideSlots: number | null;
+    };
+  }): {
+    clear: boolean;
+    present: boolean;
+    friendlySideType?: MissionGameSide;
+    friendlyTo?: MissionGameSide;
+    friendlySideName?: string;
+    friendlySideSlots?: number;
+  } {
+    if (input.clearFriendlySide) {
+      return { clear: true, present: false };
+    }
+
+    const friendlySideType =
+      input.friendlySideType !== undefined
+        ? input.friendlySideType
+        : input.existing?.friendlySideType ?? null;
+    const friendlyTo =
+      input.friendlyTo !== undefined
+        ? input.friendlyTo
+        : input.existing?.friendlyTo ?? null;
+    const friendlySideName =
+      input.friendlySideName !== undefined
+        ? input.friendlySideName
+        : input.existing?.friendlySideName ?? null;
+    const friendlySideSlots =
+      input.friendlySideSlots !== undefined
+        ? input.friendlySideSlots
+        : input.existing?.friendlySideSlots ?? null;
+
+    const anyProvided =
+      input.friendlySideType != null ||
+      input.friendlyTo != null ||
+      (input.friendlySideName != null && input.friendlySideName !== '') ||
+      input.friendlySideSlots != null;
+
+    const anyExisting =
+      !!input.existing?.friendlySideType ||
+      !!input.existing?.friendlyTo ||
+      !!input.existing?.friendlySideName ||
+      input.existing?.friendlySideSlots != null;
+
+    if (!anyProvided && !anyExisting) {
+      return { clear: false, present: false };
+    }
+
+    if (
+      !friendlySideType ||
+      !friendlyTo ||
+      !friendlySideName ||
+      friendlySideSlots === null ||
+      friendlySideSlots === undefined
+    ) {
+      throw new BadRequestException(
+        'Friendly side requires friendlySideType, friendlyTo, friendlySideName and friendlySideSlots',
+      );
+    }
+
+    if (
+      friendlyTo !== input.attackSideType &&
+      friendlyTo !== input.defenseSideType
+    ) {
+      throw new BadRequestException(
+        'friendlyTo must match attackSideType or defenseSideType',
+      );
+    }
+
+    if (
+      friendlySideType === input.attackSideType ||
+      friendlySideType === input.defenseSideType
+    ) {
+      throw new BadRequestException(
+        'friendlySideType must be distinct from attack and defense side types',
+      );
+    }
+
+    return {
+      clear: false,
+      present: true,
+      friendlySideType,
+      friendlyTo,
+      friendlySideName,
+      friendlySideSlots,
+    };
   }
 
   private normalizeCoauthorIds(coauthorIds: string[] | undefined, authorId: string) {
@@ -120,7 +219,7 @@ export class MissionsService {
   }
 
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, minSlotsToPlay, status, reviewerId, missionType, state, islandId } = dto;
+    const { search, authorId, minSlots, maxSlots, minSlotsToPlay, status, reviewerId, missionType, missionObjective, state, islandId } = dto;
     const orderBy = dto.orderBy ?? MissionOrderBy.CREATED_AT;
     const orderType = dto.orderType ?? OrderType.DESC;
 
@@ -244,6 +343,7 @@ export class MissionsService {
         ...(authorId ? { OR: [{ authorId }, { coauthors: { some: { id: authorId } } }] } : {}),
         ...(missionIdConditions.length > 0 ? { AND: missionIdConditions } : {}),
         ...(missionType ? { missionType } : {}),
+        ...(missionObjective ? { missionObjective } : {}),
         ...(state ? { state } : {}),
         ...(islandId ? { islandId } : {}),
       },
@@ -263,13 +363,18 @@ export class MissionsService {
             id: true,
             attackSideName: true,
             defenseSideName: true,
+            friendlySideName: true,
             attackSideSlots: true,
             defenseSideSlots: true,
+            friendlySideSlots: true,
             minSlotsToPlay: true,
             missionAttackSlots: true,
             missionDefenceSlots: true,
+            missionFriendlySlots: true,
             attackSideType: true,
             defenseSideType: true,
+            friendlySideType: true,
+            friendlyTo: true,
             inGameTime: true,
             weather: true,
             reviewerId: true,
@@ -359,6 +464,7 @@ export class MissionsService {
         name: dto.name,
         ...(dto.description !== undefined && { description: dto.description }),
         missionType: dto.missionType ?? MissionType.SG,
+        missionObjective: dto.missionObjective ?? MissionObjective.ATTACK_DEFEND,
         authorId: authorId,
         imageId: fileId,
         islandId: dto.islandId,
@@ -434,6 +540,7 @@ export class MissionsService {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.missionType !== undefined && { missionType: dto.missionType }),
+        ...(dto.missionObjective !== undefined && { missionObjective: dto.missionObjective }),
         ...(dto.islandId !== undefined && { islandId: dto.islandId }),
         ...(newFileId !== null && { imageId: newFileId }),
         ...(coauthorIds !== undefined && {
@@ -583,6 +690,7 @@ export class MissionsService {
     userId: string,
     attackScreenshots: File[] = [],
     defenseScreenshots: File[] = [],
+    friendlyScreenshots: File[] = [],
   ) {
     if (!dto.file) {
       throw new BadRequestException("Mission file is required");
@@ -613,9 +721,22 @@ export class MissionsService {
       throw new ForbiddenException('You are not the author of this mission');
     }
 
+    const friendly = this.resolveFriendlySideInput({
+      attackSideType: dto.attackSideType,
+      defenseSideType: dto.defenseSideType,
+      friendlySideType: dto.friendlySideType,
+      friendlyTo: dto.friendlyTo,
+      friendlySideName: dto.friendlySideName,
+      friendlySideSlots: dto.friendlySideSlots,
+    });
+
     const slotsBySide = await this.pboParserService.parseMissionSlots(dto.file);
     const missionAttackSlots = this.buildMissionSideSlots(slotsBySide, dto.attackSideType);
     const missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, dto.defenseSideType);
+    const missionFriendlySlots =
+      friendly.present && friendly.friendlySideType
+        ? this.buildMissionSideSlots(slotsBySide, friendly.friendlySideType)
+        : undefined;
 
     const versionBucket = resolveMissionVersionBucket(
       MissionStatus.PENDING_APPROVAL,
@@ -627,6 +748,9 @@ export class MissionsService {
     );
     const uploadedDefenseScreenshots = await Promise.all(
       defenseScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
+    );
+    const uploadedFriendlyScreenshots = await Promise.all(
+      friendlyScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
     );
 
     return await this.prisma.missionVersion.create({
@@ -643,6 +767,13 @@ export class MissionsService {
         missionDefenceSlots,
         attackSideName: dto.attackSideName,
         defenseSideName: dto.defenseSideName,
+        ...(friendly.present && {
+          friendlySideType: friendly.friendlySideType,
+          friendlyTo: friendly.friendlyTo,
+          friendlySideName: friendly.friendlySideName,
+          friendlySideSlots: friendly.friendlySideSlots,
+          missionFriendlySlots,
+        }),
         ...(dto.inGameTime !== undefined && { inGameTime: new Date(dto.inGameTime) }),
         ...(dto.weather !== undefined && { weather: dto.weather }),
         ...(dto.changelog !== undefined && { changelog: dto.changelog }),
@@ -657,7 +788,11 @@ export class MissionsService {
             })),
           }
           : undefined,
-        uniformScreenshots: (uploadedAttackScreenshots.length > 0 || uploadedDefenseScreenshots.length > 0) ? {
+        uniformScreenshots: (
+          uploadedAttackScreenshots.length > 0 ||
+          uploadedDefenseScreenshots.length > 0 ||
+          uploadedFriendlyScreenshots.length > 0
+        ) ? {
           create: [
             ...uploadedAttackScreenshots.map((screenshot) => ({
               fileId: screenshot.id,
@@ -667,6 +802,12 @@ export class MissionsService {
               fileId: screenshot.id,
               side: dto.defenseSideType,
             })),
+            ...(friendly.present && friendly.friendlySideType
+              ? uploadedFriendlyScreenshots.map((screenshot) => ({
+                  fileId: screenshot.id,
+                  side: friendly.friendlySideType!,
+                }))
+              : []),
           ],
         } : undefined,
       },
@@ -691,6 +832,7 @@ export class MissionsService {
     file?: File,
     attackScreenshots: File[] = [],
     defenseScreenshots: File[] = [],
+    friendlyScreenshots: File[] = [],
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -758,8 +900,33 @@ export class MissionsService {
 
     if (file) {
       const slotsBySide = await this.pboParserService.parseMissionSlots(file);
-      updateDto.missionAttackSlots = this.buildMissionSideSlots(slotsBySide, dto.attackSideType ?? missionVersion.attackSideType);
-      updateDto.missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, dto.defenseSideType ?? missionVersion.defenseSideType);
+      const effectiveAttackSideType = dto.attackSideType ?? missionVersion.attackSideType;
+      const effectiveDefenseSideType = dto.defenseSideType ?? missionVersion.defenseSideType;
+      const friendlyForParse = this.resolveFriendlySideInput({
+        clearFriendlySide: dto.clearFriendlySide,
+        attackSideType: effectiveAttackSideType,
+        defenseSideType: effectiveDefenseSideType,
+        friendlySideType: dto.friendlySideType,
+        friendlyTo: dto.friendlyTo,
+        friendlySideName: dto.friendlySideName,
+        friendlySideSlots: dto.friendlySideSlots,
+        existing: {
+          friendlySideType: missionVersion.friendlySideType,
+          friendlyTo: missionVersion.friendlyTo,
+          friendlySideName: missionVersion.friendlySideName,
+          friendlySideSlots: missionVersion.friendlySideSlots,
+        },
+      });
+      updateDto.missionAttackSlots = this.buildMissionSideSlots(slotsBySide, effectiveAttackSideType);
+      updateDto.missionDefenceSlots = this.buildMissionSideSlots(slotsBySide, effectiveDefenseSideType);
+      if (friendlyForParse.clear) {
+        updateDto.missionFriendlySlots = Prisma.DbNull;
+      } else if (friendlyForParse.present && friendlyForParse.friendlySideType) {
+        updateDto.missionFriendlySlots = this.buildMissionSideSlots(
+          slotsBySide,
+          friendlyForParse.friendlySideType,
+        );
+      }
 
       const versionBucket = resolveMissionVersionBucket(
         MissionStatus.PENDING_APPROVAL,
@@ -809,6 +976,45 @@ export class MissionsService {
       updateDto.defenseSideType = dto.defenseSideType;
     }
 
+    const effectiveAttackSideType = dto.attackSideType ?? missionVersion.attackSideType;
+    const effectiveDefenseSideType = dto.defenseSideType ?? missionVersion.defenseSideType;
+
+    const friendly = this.resolveFriendlySideInput({
+      clearFriendlySide: dto.clearFriendlySide,
+      attackSideType: effectiveAttackSideType,
+      defenseSideType: effectiveDefenseSideType,
+      friendlySideType: dto.friendlySideType,
+      friendlyTo: dto.friendlyTo,
+      friendlySideName: dto.friendlySideName,
+      friendlySideSlots: dto.friendlySideSlots,
+      existing: {
+        friendlySideType: missionVersion.friendlySideType,
+        friendlyTo: missionVersion.friendlyTo,
+        friendlySideName: missionVersion.friendlySideName,
+        friendlySideSlots: missionVersion.friendlySideSlots,
+      },
+    });
+
+    if (friendly.clear) {
+      updateDto.friendlySideType = null;
+      updateDto.friendlyTo = null;
+      updateDto.friendlySideName = null;
+      updateDto.friendlySideSlots = null;
+      updateDto.missionFriendlySlots = Prisma.DbNull;
+    } else if (
+      friendly.present &&
+      (dto.clearFriendlySide ||
+        dto.friendlySideType !== undefined ||
+        dto.friendlyTo !== undefined ||
+        dto.friendlySideName !== undefined ||
+        dto.friendlySideSlots !== undefined)
+    ) {
+      updateDto.friendlySideType = friendly.friendlySideType;
+      updateDto.friendlyTo = friendly.friendlyTo;
+      updateDto.friendlySideName = friendly.friendlySideName;
+      updateDto.friendlySideSlots = friendly.friendlySideSlots;
+    }
+
     if (dto.inGameTime !== undefined) {
       updateDto.inGameTime = new Date(dto.inGameTime);
     }
@@ -833,12 +1039,14 @@ export class MissionsService {
       };
     }
 
-    const effectiveAttackSideType = dto.attackSideType ?? missionVersion.attackSideType;
-    const effectiveDefenseSideType = dto.defenseSideType ?? missionVersion.defenseSideType;
-
     const removeAttackIdsSet = new Set(dto.removeAttackScreenshotIds ?? []);
     const removeDefenseIdsSet = new Set(dto.removeDefenseScreenshotIds ?? []);
-    const removeIds = new Set([...removeAttackIdsSet, ...removeDefenseIdsSet]);
+    const removeFriendlyIdsSet = new Set(dto.removeFriendlyScreenshotIds ?? []);
+    const removeIds = new Set([
+      ...removeAttackIdsSet,
+      ...removeDefenseIdsSet,
+      ...removeFriendlyIdsSet,
+    ]);
 
     const screenshotsToRemove = missionVersion.uniformScreenshots.filter((screenshot) => removeIds.has(screenshot.id));
     const removeScreenshotsInput = screenshotsToRemove.length > 0 ? {
@@ -863,6 +1071,15 @@ export class MissionsService {
     );
     uploadedScreenshotFileIdsToRollback.push(...uploadedDefenseScreenshots.map((screenshot) => screenshot.id));
 
+    const uploadedFriendlyScreenshots = await Promise.all(
+      friendlyScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
+    );
+    uploadedScreenshotFileIdsToRollback.push(...uploadedFriendlyScreenshots.map((screenshot) => screenshot.id));
+
+    const effectiveFriendlySideType =
+      (friendly.present && friendly.friendlySideType) ||
+      missionVersion.friendlySideType;
+
     const createScreenshotsInput = [
       ...uploadedAttackScreenshots.map((screenshot) => ({
         fileId: screenshot.id,
@@ -872,6 +1089,12 @@ export class MissionsService {
         fileId: screenshot.id,
         side: effectiveDefenseSideType,
       })),
+      ...(effectiveFriendlySideType
+        ? uploadedFriendlyScreenshots.map((screenshot) => ({
+            fileId: screenshot.id,
+            side: effectiveFriendlySideType,
+          }))
+        : []),
     ];
 
     if (removeScreenshotsInput || createScreenshotsInput.length > 0) {

@@ -130,6 +130,11 @@ export class HeadquartersService {
           select: {
             missionAttackSlots: true,
             missionDefenceSlots: true,
+            missionFriendlySlots: true,
+            attackSideType: true,
+            defenseSideType: true,
+            friendlySideType: true,
+            friendlyTo: true,
           },
         },
       },
@@ -302,6 +307,11 @@ export class HeadquartersService {
           select: {
             missionAttackSlots: true,
             missionDefenceSlots: true,
+            missionFriendlySlots: true,
+            attackSideType: true,
+            defenseSideType: true,
+            friendlySideType: true,
+            friendlyTo: true,
           },
         },
       },
@@ -354,21 +364,36 @@ export class HeadquartersService {
       missionVersion: {
         missionAttackSlots: Prisma.JsonValue | null;
         missionDefenceSlots: Prisma.JsonValue | null;
+        missionFriendlySlots: Prisma.JsonValue | null;
+        attackSideType: MissionGameSide;
+        defenseSideType: MissionGameSide;
+        friendlySideType: MissionGameSide | null;
+        friendlyTo: MissionGameSide | null;
       };
     },
     sideId: string,
     gamePlanId: string,
   ): Prisma.GamePlanSlotCreateManyInput[] {
-    const missionSlotsForSide = this.getMissionSlotsForGameSide(game, sideId);
-    const hasMissionSlots = missionSlotsForSide.length > 0;
+    const primarySideType =
+      sideId === game.attackSideId
+        ? game.missionVersion.attackSideType
+        : sideId === game.defenseSideId
+          ? game.missionVersion.defenseSideType
+          : null;
 
-    if (hasMissionSlots) {
-      return missionSlotsForSide.map((slot) => {
+    const primarySlots = this.getMissionSlotsForGameSide(game, sideId);
+    const rows: Prisma.GamePlanSlotCreateManyInput[] = [];
+
+    const pushSlots = (
+      slots: ParsedMissionSlot[],
+      missionGameSide: MissionGameSide | null,
+    ) => {
+      for (const slot of slots) {
         const rawUnitName = slot.units?.[0]?.name;
         const parsed = rawUnitName
           ? parseSlotUnitDisplayName(rawUnitName)
           : null;
-        return {
+        rows.push({
           gamePlanId,
           slotNumber: slot.callsign ?? 'Unknown',
           ...(parsed
@@ -378,14 +403,38 @@ export class HeadquartersService {
               }
             : {}),
           ...(slot.count !== undefined ? { slotCount: slot.count } : {}),
-        };
-      });
+          ...(missionGameSide ? { missionGameSide } : {}),
+        });
+      }
+    };
+
+    if (primarySlots.length > 0) {
+      pushSlots(primarySlots, primarySideType);
+    } else {
+      for (const slotNumber of DEFAULT_CALLSIGNS) {
+        rows.push({
+          gamePlanId,
+          slotNumber,
+          ...(primarySideType ? { missionGameSide: primarySideType } : {}),
+        });
+      }
     }
 
-    return DEFAULT_CALLSIGNS.map((slotNumber) => ({
-      gamePlanId,
-      slotNumber,
-    }));
+    const { friendlySideType, friendlyTo, missionFriendlySlots } =
+      game.missionVersion;
+    if (
+      primarySideType &&
+      friendlySideType &&
+      friendlyTo &&
+      friendlyTo === primarySideType
+    ) {
+      const friendlySlots = this.extractSlotsArrayBySide(missionFriendlySlots);
+      if (friendlySlots.length > 0) {
+        pushSlots(friendlySlots, friendlySideType);
+      }
+    }
+
+    return rows;
   }
 
   private getMissionSlotsForGameSide(
@@ -986,6 +1035,7 @@ export class HeadquartersService {
             id: true,
             name: true,
             description: true,
+            missionObjective: true,
             image: {
               select: {
                 id: true,
@@ -1001,6 +1051,14 @@ export class HeadquartersService {
             status: true,
             attackSideType: true,
             defenseSideType: true,
+            friendlySideType: true,
+            friendlyTo: true,
+            attackSideName: true,
+            defenseSideName: true,
+            friendlySideName: true,
+            attackSideSlots: true,
+            defenseSideSlots: true,
+            friendlySideSlots: true,
           },
         },
         attackSide: {

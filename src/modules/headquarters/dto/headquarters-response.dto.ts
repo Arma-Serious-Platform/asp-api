@@ -63,6 +63,9 @@ export class HeadquartersSlotResponseDto {
   @ApiProperty({ example: 12, nullable: true })
   slotCount: number | null;
 
+  @ApiProperty({ example: 'BLUE', nullable: true })
+  missionGameSide: string | null;
+
   @ApiProperty({ example: 'Need experienced crew and comms discipline', nullable: true })
   comment: string | null;
 

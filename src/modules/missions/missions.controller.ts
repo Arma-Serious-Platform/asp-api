@@ -78,10 +78,17 @@ export class MissionsController {
       { name: 'file', maxCount: 1 },
       { name: 'attackScreenshots', maxCount: 20 },
       { name: 'defenseScreenshots', maxCount: 20 },
+      { name: 'friendlyScreenshots', maxCount: 20 },
     ]),
   )
   createVersion(
-    @UploadedFiles() files: { file?: File[], attackScreenshots?: File[], defenseScreenshots?: File[] },
+    @UploadedFiles()
+    files: {
+      file?: File[];
+      attackScreenshots?: File[];
+      defenseScreenshots?: File[];
+      friendlyScreenshots?: File[];
+    },
     @Body() createMissionVersionDto: CreateMissionVersionDto,
     @Param('id') id: string,
     @Req() req: RequestType,
@@ -89,6 +96,7 @@ export class MissionsController {
     this.validateFiles(files?.file ?? [], { required: true });
     this.validateFiles(files?.attackScreenshots ?? []);
     this.validateFiles(files?.defenseScreenshots ?? []);
+    this.validateFiles(files?.friendlyScreenshots ?? []);
 
     return this.missionsService.createMissionVersion(
       { ...createMissionVersionDto, file: files.file?.[0] },
@@ -96,6 +104,7 @@ export class MissionsController {
       req.userId,
       files.attackScreenshots ?? [],
       files.defenseScreenshots ?? [],
+      files.friendlyScreenshots ?? [],
     );
   }
 
@@ -106,10 +115,17 @@ export class MissionsController {
       { name: 'file', maxCount: 1 },
       { name: 'attackScreenshots', maxCount: 20 },
       { name: 'defenseScreenshots', maxCount: 20 },
+      { name: 'friendlyScreenshots', maxCount: 20 },
     ]),
   )
   updateVersion(
-    @UploadedFiles() files: { file?: File[], attackScreenshots?: File[], defenseScreenshots?: File[] },
+    @UploadedFiles()
+    files: {
+      file?: File[];
+      attackScreenshots?: File[];
+      defenseScreenshots?: File[];
+      friendlyScreenshots?: File[];
+    },
     @Body() dto: UpdateMissionVersionDto,
     @Param('versionId') versionId: string,
     @Req() req: RequestType,
@@ -117,6 +133,7 @@ export class MissionsController {
     this.validateFiles(files?.file ?? []);
     this.validateFiles(files?.attackScreenshots ?? []);
     this.validateFiles(files?.defenseScreenshots ?? []);
+    this.validateFiles(files?.friendlyScreenshots ?? []);
 
     return this.missionsService.updateMissionVersion(
       dto,
@@ -125,6 +142,7 @@ export class MissionsController {
       files.file?.[0],
       files.attackScreenshots ?? [],
       files.defenseScreenshots ?? [],
+      files.friendlyScreenshots ?? [],
     );
   }
 

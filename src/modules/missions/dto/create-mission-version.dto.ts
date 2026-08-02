@@ -1,7 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { MissionGameSide, Prisma } from "@prisma/client";
 import { Transform, Type } from "class-transformer";
-import { IsArray, IsDateString, IsDefined, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from "class-validator";
 import { CreateMissionWeaponryDto } from "./create-mission-weaponry.dto";
 import { normalizeObjectArray } from "src/utils/normalize-object-array";
 import { normalizeJsonValue } from "src/utils/normalize-json-value";
@@ -17,13 +26,13 @@ export class CreateMissionVersionDto {
   @IsNotEmpty()
   missionId: string;
 
-  @ApiProperty()
-  @IsString()
+  @ApiProperty({ enum: MissionGameSide })
+  @IsEnum(MissionGameSide)
   @IsNotEmpty()
   attackSideType: MissionGameSide;
 
-  @ApiProperty()
-  @IsString()
+  @ApiProperty({ enum: MissionGameSide })
+  @IsEnum(MissionGameSide)
   @IsNotEmpty()
   defenseSideType: MissionGameSide;
 
@@ -54,6 +63,27 @@ export class CreateMissionVersionDto {
   @IsString()
   @IsNotEmpty()
   defenseSideName: string;
+
+  @ApiPropertyOptional({ enum: MissionGameSide })
+  @IsOptional()
+  @IsEnum(MissionGameSide)
+  friendlySideType?: MissionGameSide;
+
+  @ApiPropertyOptional({ enum: MissionGameSide })
+  @IsOptional()
+  @IsEnum(MissionGameSide)
+  friendlyTo?: MissionGameSide;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  friendlySideName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  friendlySideSlots?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

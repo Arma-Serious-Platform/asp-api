@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionStatus, MissionType, State } from "@prisma/client";
+import { MissionObjective, MissionStatus, MissionType, State } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
+import { IsEnum, IsInt, IsOptional, IsUUID, Min } from "class-validator";
 import { PaginationDto } from "src/shared/dto/pagination.dto";
 import { OrderType } from "src/shared/enums/order-type.enum";
 
@@ -50,6 +50,11 @@ export class FindMissionsDto extends PaginationDto {
   @IsOptional()
   @IsEnum(MissionType)
   missionType?: MissionType;
+
+  @ApiPropertyOptional({ enum: MissionObjective })
+  @IsOptional()
+  @IsEnum(MissionObjective)
+  missionObjective?: MissionObjective;
 
   @ApiPropertyOptional({ enum: State })
   @IsOptional()

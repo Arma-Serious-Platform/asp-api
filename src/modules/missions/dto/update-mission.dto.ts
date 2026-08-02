@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { MissionType, Prisma } from "@prisma/client";
+import { MissionObjective, MissionType, Prisma } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsArray, IsEnum, IsOptional, IsString, IsUUID } from "class-validator";
 import { normalizeStringArray } from "src/utils/normalize-string-array";
@@ -20,6 +20,11 @@ export class UpdateMissionDto {
   @IsEnum(MissionType)
   @IsOptional()
   missionType?: MissionType;
+
+  @ApiPropertyOptional({ enum: MissionObjective })
+  @IsEnum(MissionObjective)
+  @IsOptional()
+  missionObjective?: MissionObjective;
 
   @ApiPropertyOptional()
   @IsUUID()
