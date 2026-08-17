@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from "@nestjs/common";
+import { Request } from "express";
 import { WeekendsService } from "./weekends.service";
 import { CreateWeekendDto, CreateGameDto } from "./dto/create-weekend.dto";
 import { UpdateWeekendDto } from "./dto/update-weekend.dto";
@@ -6,19 +7,25 @@ import { FindWeekendsDto } from "./dto/find-weekends.dto";
 import { UpdateGameDto } from "./dto/update-game.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { Roles } from "src/shared/decorators/roles.decorator";
+import { AuthService } from "src/modules/auth/auth.service";
 
 @Controller('weekends')
 export class WeekendsController {
-  constructor(private readonly weekendsService: WeekendsService) {}
+  constructor(
+    private readonly weekendsService: WeekendsService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Get()
-  findAll(@Query() findWeekendsDto: FindWeekendsDto) {
-    return this.weekendsService.findAll(findWeekendsDto);
+  async findAll(@Query() findWeekendsDto: FindWeekendsDto, @Req() req: Request) {
+    const authUser = await this.authService.resolveRequestUser(req);
+    return this.weekendsService.findAll(findWeekendsDto, authUser?.userId);
   }
 
   @Get(':id')
-  findById(@Param('id') id: string) {
-    return this.weekendsService.findById(id);
+  async findById(@Param('id') id: string, @Req() req: Request) {
+    const authUser = await this.authService.resolveRequestUser(req);
+    return this.weekendsService.findById(id, authUser?.userId);
   }
 
   @Post()

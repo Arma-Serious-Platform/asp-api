@@ -1181,6 +1181,9 @@ export class MissionsService {
       fileIdsToDeleteAfterUpdate.push(...screenshotsToRemove.map((screenshot) => screenshot.fileId));
     }
 
+    const previousFriendlyTo = missionVersion.friendlyTo;
+    const previousFriendlySideType = missionVersion.friendlySideType;
+
     try {
       const updated = await this.prisma.missionVersion.update({
         where: { id: missionVersionId },
@@ -1212,8 +1215,19 @@ export class MissionsService {
         await this.minioService.deleteFile(fileIdToDelete);
       }
 
-      if (file) {
-        await this.headquartersService.resetGamePlanSlotsForMissionVersion(missionVersionId);
+      const rebuildFriendlySlots =
+        previousFriendlyTo !== updated.friendlyTo ||
+        previousFriendlySideType !== updated.friendlySideType;
+
+      if (file || rebuildFriendlySlots) {
+        await this.headquartersService.syncGamePlanSlotsForMissionVersion(
+          missionVersionId,
+          {
+            syncSlotCounts: Boolean(file),
+            rebuildFriendlySlots,
+            previousFriendlySideType,
+          },
+        );
       }
 
       return updated;

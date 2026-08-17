@@ -60,6 +60,9 @@ export class HeadquartersSlotResponseDto {
   @ApiProperty({ example: '2x IFV, 1x logistics truck', nullable: true })
   weaponry: string | null;
 
+  @ApiProperty({ example: 0 })
+  position: number;
+
   @ApiProperty({ example: 12, nullable: true })
   slotCount: number | null;
 

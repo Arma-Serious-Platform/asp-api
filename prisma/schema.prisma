@@ -67,6 +67,7 @@ model GamePlanSlot {
   slotNumber      String
   name            String?
   weaponry        String?
+  position        Int              @default(0)
   slotCount       Int?
   missionGameSide MissionGameSide?
   assignedSquads  Squad[]          @relation("AssignedGamePlanSlots")

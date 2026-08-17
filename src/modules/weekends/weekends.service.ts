@@ -142,8 +142,41 @@ export class WeekendsService {
     private readonly headquartersService: HeadquartersService,
   ) { }
 
-  async findAll(dto: FindWeekendsDto) {
+  private readonly gamePlanIdSelect = {
+    id: true,
+    sideId: true,
+  } satisfies Prisma.GamePlanSelect;
+
+  private attachAccessiblePlanId<
+    T extends {
+      published: boolean;
+      games: Array<{ gamePlans: Array<{ id: string; sideId: string }> }>;
+    },
+  >(weekend: T, accessibleSideId: string | null) {
+    return {
+      ...weekend,
+      games: weekend.games.map((game) => {
+        const { gamePlans, ...rest } = game;
+        const planId =
+          weekend.published && accessibleSideId
+            ? (gamePlans.find((plan) => plan.sideId === accessibleSideId)?.id ??
+              null)
+            : null;
+
+        return {
+          ...rest,
+          planId,
+        };
+      }),
+    };
+  }
+
+  async findAll(dto: FindWeekendsDto, userId?: string) {
     const { search, skip = 0, take = 100, published } = dto;
+    const accessibleSideId =
+      await this.headquartersService.getAccessibleHeadquartersSideId(
+        userId ?? null,
+      );
 
     const where: Prisma.WeekendWhereInput = {
       ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
@@ -198,6 +231,9 @@ export class WeekendsService {
               admin: {
                 select: this.gameAdminSelect,
               },
+              gamePlans: {
+                select: this.gamePlanIdSelect,
+              },
             },
             orderBy: [{ position: 'asc' }, { date: 'asc' }],
           },
@@ -209,12 +245,19 @@ export class WeekendsService {
     ]);
 
     return {
-      data,
+      data: data.map((weekend) =>
+        this.attachAccessiblePlanId(weekend, accessibleSideId),
+      ),
       total,
     };
   }
 
-  async findById(id: string) {
+  async findById(id: string, userId?: string) {
+    const accessibleSideId =
+      await this.headquartersService.getAccessibleHeadquartersSideId(
+        userId ?? null,
+      );
+
     const weekend = await this.prisma.weekend.findUnique({
       where: { id },
       include: {
@@ -240,6 +283,9 @@ export class WeekendsService {
             admin: {
               select: this.gameAdminSelect,
             },
+            gamePlans: {
+              select: this.gamePlanIdSelect,
+            },
           },
           orderBy: [{ position: 'asc' }, { date: 'asc' }],
         },
@@ -250,7 +296,7 @@ export class WeekendsService {
       throw new NotFoundException('Weekend not found');
     }
 
-    return weekend;
+    return this.attachAccessiblePlanId(weekend, accessibleSideId);
   }
 
   async create(dto: CreateWeekendDto) {

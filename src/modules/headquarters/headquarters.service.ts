@@ -32,35 +32,22 @@ import {
 } from 'src/shared/utils/sync-comment-attachments';
 import { UserRestrictionsService } from '../users/user-restrictions.service';
 
-/** PBO slot unit names often look like: `1. Role@Callsign | gear | gear`. */
-function parseSlotUnitDisplayName(raw: string): {
-  name: string;
-  weaponry?: string;
-} {
-  let s = raw.trim();
-  if (!s) {
-    return { name: raw };
+/** In-game names may override the PBO group with `@A1-1` or `@[РЕЗЕРВ]А3-4`. */
+const IN_GAME_CALLSIGN_OVERRIDE =
+  /@(?:\[РЕЗЕРВ\])?\s*[AАaа]\s*(\d+)\s*-\s*(\d+)/u;
+
+function resolveSlotCallsign(
+  pboCallsign: string | undefined,
+  firstUnitName?: string,
+): string {
+  if (firstUnitName) {
+    const match = firstUnitName.match(IN_GAME_CALLSIGN_OVERRIDE);
+    if (match?.[1] && match[2]) {
+      return `Alpha ${match[1]}-${match[2]}`;
+    }
   }
 
-  s = s.replace(/^\d+\.\s*/, '');
-  s = s.replace(/\s*"@[^"]*"\s*/g, ' ');
-  s = s.replace(/\s*@[^|]+\s*/g, ' ');
-  s = s.replace(/\s+/g, ' ').trim();
-
-  const parts = s
-    .split('|')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length === 0) {
-    return { name: raw.trim() };
-  }
-  if (parts.length === 1) {
-    return { name: parts[0]! };
-  }
-  return {
-    name: parts[0]!,
-    weaponry: parts.slice(1).join(', '),
-  };
+  return pboCallsign ?? 'Unknown';
 }
 
 const DEFAULT_CALLSIGNS = [
@@ -104,6 +91,40 @@ type ParsedMissionSlot = {
   callsign?: string;
   count?: number;
   units?: ParsedMissionUnit[];
+};
+
+type MissionVersionSlotsSelect = {
+  missionAttackSlots: Prisma.JsonValue | null;
+  missionDefenceSlots: Prisma.JsonValue | null;
+  missionFriendlySlots: Prisma.JsonValue | null;
+  attackSideType: MissionGameSide;
+  defenseSideType: MissionGameSide;
+  friendlySideType: MissionGameSide | null;
+  friendlyTo: MissionGameSide | null;
+};
+
+type GameForSlotRows = {
+  id: string;
+  attackSideId: string;
+  defenseSideId: string;
+  missionVersion: MissionVersionSlotsSelect;
+};
+
+type ExistingGamePlanSlot = {
+  id: string;
+  slotNumber: string;
+  slotCount: number | null;
+  position: number;
+  missionGameSide: MissionGameSide | null;
+};
+
+type DesiredGamePlanSlot = Prisma.GamePlanSlotCreateManyInput & {
+  slotNumber: string;
+  position?: number;
+  missionGameSide?: MissionGameSide | null;
+  slotCount?: number | null;
+  name?: string | null;
+  weaponry?: string | null;
 };
 
 @Injectable()
@@ -278,10 +299,18 @@ export class HeadquartersService {
   }
 
   /**
-   * Rebuilds all HQ slot rows from the mission version JSON for every game that uses this version.
-   * Clears squad–slot links (implicit M2M); squads are not deleted.
+   * Syncs HQ slots from the current mission version for every game that uses it.
+   * Count-changed callsigns keep assignments; friendly alliance changes rebuild
+   * only friendly-tagged rows.
    */
-  async resetGamePlanSlotsForMissionVersion(missionVersionId: string) {
+  async syncGamePlanSlotsForMissionVersion(
+    missionVersionId: string,
+    options: {
+      syncSlotCounts?: boolean;
+      rebuildFriendlySlots?: boolean;
+      previousFriendlySideType?: MissionGameSide | null;
+    } = {},
+  ) {
     const games = await this.prisma.game.findMany({
       where: { missionVersionId },
       select: { id: true },
@@ -289,14 +318,40 @@ export class HeadquartersService {
 
     const affectedPlanIds: string[] = [];
     for (const game of games) {
-      const planIds = await this.rebuildGamePlanSlotsForGame(game.id);
+      const planIds = await this.syncGamePlanSlotsForGame(game.id, {
+        syncSlotCounts: options.syncSlotCounts ?? false,
+        rebuildFriendlySlots: options.rebuildFriendlySlots ?? false,
+        previousFriendlySideType: options.previousFriendlySideType,
+      });
       affectedPlanIds.push(...planIds);
     }
 
     await this.emitGamePlanUpdates(affectedPlanIds);
   }
 
-  private async rebuildGamePlanSlotsForGame(gameId: string): Promise<string[]> {
+  async getAccessibleHeadquartersSideId(
+    userId: string | null,
+  ): Promise<string | null> {
+    if (!userId) {
+      return null;
+    }
+
+    try {
+      return await this.getAllowedSideIdForUser(userId);
+    } catch (error) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  private async loadGameForSlotRows(gameId: string): Promise<GameForSlotRows> {
     const game = await this.prisma.game.findUnique({
       where: { id: gameId },
       select: {
@@ -321,6 +376,12 @@ export class HeadquartersService {
       throw new NotFoundException('Game not found');
     }
 
+    return game;
+  }
+
+  private async rebuildGamePlanSlotsForGame(gameId: string): Promise<string[]> {
+    const game = await this.loadGameForSlotRows(gameId);
+
     await this.ensureGamePlansForGame(gameId);
 
     const plans = await this.prisma.gamePlan.findMany({
@@ -343,6 +404,224 @@ export class HeadquartersService {
     }
 
     return affectedPlanIds;
+  }
+
+  private async syncGamePlanSlotsForGame(
+    gameId: string,
+    options: {
+      syncSlotCounts: boolean;
+      rebuildFriendlySlots: boolean;
+      previousFriendlySideType?: MissionGameSide | null;
+    },
+  ): Promise<string[]> {
+    if (!options.syncSlotCounts && !options.rebuildFriendlySlots) {
+      return [];
+    }
+
+    const game = await this.loadGameForSlotRows(gameId);
+    await this.ensureGamePlansForGame(gameId);
+
+    const plans = await this.prisma.gamePlan.findMany({
+      where: {
+        gameId: game.id,
+        side: { type: { in: [SideType.BLUE, SideType.RED] } },
+      },
+      select: {
+        id: true,
+        sideId: true,
+        slots: {
+          select: {
+            id: true,
+            slotNumber: true,
+            slotCount: true,
+            position: true,
+            missionGameSide: true,
+          },
+        },
+      },
+    });
+
+    const currentFriendlyType = game.missionVersion.friendlySideType;
+    const friendlyTypesToRebuild = new Set<MissionGameSide>();
+    if (options.rebuildFriendlySlots) {
+      if (options.previousFriendlySideType) {
+        friendlyTypesToRebuild.add(options.previousFriendlySideType);
+      }
+      if (currentFriendlyType) {
+        friendlyTypesToRebuild.add(currentFriendlyType);
+      }
+    }
+
+    const affectedPlanIds = new Set<string>();
+
+    if (options.rebuildFriendlySlots && friendlyTypesToRebuild.size > 0) {
+      await this.prisma.gamePlanSlot.deleteMany({
+        where: {
+          gamePlanId: { in: plans.map((plan) => plan.id) },
+          missionGameSide: { in: [...friendlyTypesToRebuild] },
+        },
+      });
+
+      for (const plan of plans) {
+        const desired = this.buildGamePlanSlotRows(game, plan.sideId, plan.id);
+        const friendlyRows = desired.filter(
+          (row) => row.missionGameSide === currentFriendlyType,
+        );
+
+        if (friendlyRows.length > 0) {
+          await this.prisma.gamePlanSlot.createMany({ data: friendlyRows });
+        }
+
+        affectedPlanIds.add(plan.id);
+      }
+    }
+
+    if (options.syncSlotCounts) {
+      for (const plan of plans) {
+        const desired = this.buildGamePlanSlotRows(game, plan.sideId, plan.id);
+        const desiredForSync = options.rebuildFriendlySlots
+          ? desired.filter(
+              (row) =>
+                row.missionGameSide == null ||
+                !friendlyTypesToRebuild.has(row.missionGameSide),
+            )
+          : desired;
+        const existingForSync = options.rebuildFriendlySlots
+          ? plan.slots.filter(
+              (slot) =>
+                slot.missionGameSide == null ||
+                !friendlyTypesToRebuild.has(slot.missionGameSide),
+            )
+          : plan.slots;
+
+        const changed = await this.syncSlotsForPlan(
+          existingForSync,
+          desiredForSync,
+        );
+        if (changed) {
+          affectedPlanIds.add(plan.id);
+        }
+      }
+    }
+
+    return [...affectedPlanIds];
+  }
+
+  private async syncSlotsForPlan(
+    existing: ExistingGamePlanSlot[],
+    desired: DesiredGamePlanSlot[],
+  ): Promise<boolean> {
+    const existingByKey = this.groupSlotsByKey(existing);
+    const desiredByKey = this.groupSlotsByKey(desired);
+
+    const idsToDelete: string[] = [];
+    const rowsToCreate: Prisma.GamePlanSlotCreateManyInput[] = [];
+    const updates: Array<{ id: string; data: Prisma.GamePlanSlotUpdateInput }> =
+      [];
+
+    const allKeys = new Set([
+      ...existingByKey.keys(),
+      ...desiredByKey.keys(),
+    ]);
+
+    for (const key of allKeys) {
+      const existingGroup = existingByKey.get(key) ?? [];
+      const desiredGroup = desiredByKey.get(key) ?? [];
+      const paired = Math.min(existingGroup.length, desiredGroup.length);
+
+      for (let i = 0; i < paired; i++) {
+        const current = existingGroup[i]!;
+        const next = desiredGroup[i]!;
+        const countChanged = !this.slotCountsEqual(
+          current.slotCount,
+          next.slotCount,
+        );
+        const positionChanged = current.position !== (next.position ?? 0);
+
+        if (!countChanged && !positionChanged) {
+          continue;
+        }
+
+        updates.push({
+          id: current.id,
+          data: {
+            position: next.position ?? 0,
+            ...(countChanged
+              ? {
+                  slotCount: next.slotCount ?? null,
+                  name: next.name ?? null,
+                  weaponry: null,
+                }
+              : {}),
+          },
+        });
+      }
+
+      for (let i = paired; i < existingGroup.length; i++) {
+        idsToDelete.push(existingGroup[i]!.id);
+      }
+
+      for (let i = paired; i < desiredGroup.length; i++) {
+        rowsToCreate.push(desiredGroup[i]!);
+      }
+    }
+
+    if (
+      idsToDelete.length === 0 &&
+      rowsToCreate.length === 0 &&
+      updates.length === 0
+    ) {
+      return false;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (idsToDelete.length > 0) {
+        await tx.gamePlanSlot.deleteMany({
+          where: { id: { in: idsToDelete } },
+        });
+      }
+
+      if (rowsToCreate.length > 0) {
+        await tx.gamePlanSlot.createMany({ data: rowsToCreate });
+      }
+
+      for (const update of updates) {
+        await tx.gamePlanSlot.update({
+          where: { id: update.id },
+          data: update.data,
+        });
+      }
+    });
+
+    return true;
+  }
+
+  private groupSlotsByKey<
+    T extends {
+      slotNumber: string;
+      missionGameSide?: MissionGameSide | null;
+    },
+  >(slots: T[]): Map<string, T[]> {
+    const grouped = new Map<string, T[]>();
+
+    for (const slot of slots) {
+      const key = `${slot.slotNumber}::${slot.missionGameSide ?? ''}`;
+      const list = grouped.get(key);
+      if (list) {
+        list.push(slot);
+      } else {
+        grouped.set(key, [slot]);
+      }
+    }
+
+    return grouped;
+  }
+
+  private slotCountsEqual(
+    a: number | null | undefined,
+    b: number | null | undefined,
+  ) {
+    return (a ?? null) === (b ?? null);
   }
 
   private async emitGamePlanUpdates(planIds: string[]) {
@@ -390,18 +669,11 @@ export class HeadquartersService {
     ) => {
       for (const slot of slots) {
         const rawUnitName = slot.units?.[0]?.name;
-        const parsed = rawUnitName
-          ? parseSlotUnitDisplayName(rawUnitName)
-          : null;
         rows.push({
           gamePlanId,
-          slotNumber: slot.callsign ?? 'Unknown',
-          ...(parsed
-            ? {
-                name: parsed.name,
-                ...(parsed.weaponry ? { weaponry: parsed.weaponry } : {}),
-              }
-            : {}),
+          slotNumber: resolveSlotCallsign(slot.callsign, rawUnitName),
+          position: rows.length,
+          ...(rawUnitName ? { name: rawUnitName } : {}),
           ...(slot.count !== undefined ? { slotCount: slot.count } : {}),
           ...(missionGameSide ? { missionGameSide } : {}),
         });
@@ -415,6 +687,7 @@ export class HeadquartersService {
         rows.push({
           gamePlanId,
           slotNumber,
+          position: rows.length,
           ...(primarySideType ? { missionGameSide: primarySideType } : {}),
         });
       }
@@ -1132,7 +1405,7 @@ export class HeadquartersService {
     slots: {
       include: this.slotInclude,
       orderBy: {
-        slotNumber: 'asc',
+        position: 'asc',
       },
     },
   } satisfies Prisma.GamePlanInclude;
