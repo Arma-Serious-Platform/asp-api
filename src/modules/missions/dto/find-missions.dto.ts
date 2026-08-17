@@ -7,6 +7,7 @@ import { OrderType } from "src/shared/enums/order-type.enum";
 
 export enum MissionOrderBy {
   CREATED_AT = 'createdAt',
+  LATEST_VERSION_UPDATED_AT = 'latestVersionUpdatedAt',
 }
 
 export class FindMissionsDto extends PaginationDto {

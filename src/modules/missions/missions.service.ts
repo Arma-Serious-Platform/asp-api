@@ -219,7 +219,21 @@ export class MissionsService {
   }
 
   async findAll(dto: FindMissionsDto) {
-    const { search, authorId, minSlots, maxSlots, minSlotsToPlay, status, reviewerId, missionType, missionObjective, state, islandId } = dto;
+    const {
+      search,
+      authorId,
+      minSlots,
+      maxSlots,
+      minSlotsToPlay,
+      status,
+      reviewerId,
+      missionType,
+      missionObjective,
+      state,
+      islandId,
+      take = 100,
+      skip = 0,
+    } = dto;
     const orderBy = dto.orderBy ?? MissionOrderBy.CREATED_AT;
     const orderType = dto.orderType ?? OrderType.DESC;
 
@@ -334,71 +348,132 @@ export class MissionsService {
       ...(missionIdsWithMinSlotsToPlay ? [{ id: { in: missionIdsWithMinSlotsToPlay } }] : []),
     ];
 
-    const options: Prisma.MissionFindManyArgs = {
-      orderBy: {
-        [orderBy]: orderType,
-      } as Prisma.MissionOrderByWithRelationInput,
-      where: {
-        name: { contains: search, mode: 'insensitive' },
-        ...(authorId ? { OR: [{ authorId }, { coauthors: { some: { id: authorId } } }] } : {}),
-        ...(missionIdConditions.length > 0 ? { AND: missionIdConditions } : {}),
-        ...(missionType ? { missionType } : {}),
-        ...(missionObjective ? { missionObjective } : {}),
-        ...(state ? { state } : {}),
-        ...(islandId ? { islandId } : {}),
-      },
-      include: {
-        image: true,
-        island: {
-          select :{
-            id: true,
-            name: true,
-            code: true,  
-          },
-        },
-        missionVersions: {
-          take: 1,
-          skip: 0,
-          select: {
-            id: true,
-            attackSideName: true,
-            defenseSideName: true,
-            friendlySideName: true,
-            attackSideSlots: true,
-            defenseSideSlots: true,
-            friendlySideSlots: true,
-            minSlotsToPlay: true,
-            missionAttackSlots: true,
-            missionDefenceSlots: true,
-            missionFriendlySlots: true,
-            attackSideType: true,
-            defenseSideType: true,
-            friendlySideType: true,
-            friendlyTo: true,
-            inGameTime: true,
-            weather: true,
-            reviewerId: true,
-            reviewer: {
-              select: this.missionAuthorSelect,
-            },
-            version: true,
-            status: true,
+    const where: Prisma.MissionWhereInput = {
+      name: { contains: search, mode: 'insensitive' },
+      ...(authorId ? { OR: [{ authorId }, { coauthors: { some: { id: authorId } } }] } : {}),
+      ...(missionIdConditions.length > 0 ? { AND: missionIdConditions } : []),
+      ...(missionType ? { missionType } : {}),
+      ...(missionObjective ? { missionObjective } : {}),
+      ...(state ? { state } : {}),
+      ...(islandId ? { islandId } : {}),
+    };
 
-            createdAt: true,
-            updatedAt: true
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
-        author: {
-          select: this.missionAuthorSelect,
-        },
-        coauthors: {
-          select: this.missionAuthorSelect,
+    const include = {
+      image: true,
+      island: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
         },
       },
+      missionVersions: {
+        take: 1,
+        skip: 0,
+        select: {
+          id: true,
+          attackSideName: true,
+          defenseSideName: true,
+          friendlySideName: true,
+          attackSideSlots: true,
+          defenseSideSlots: true,
+          friendlySideSlots: true,
+          minSlotsToPlay: true,
+          missionAttackSlots: true,
+          missionDefenceSlots: true,
+          missionFriendlySlots: true,
+          attackSideType: true,
+          defenseSideType: true,
+          friendlySideType: true,
+          friendlyTo: true,
+          inGameTime: true,
+          weather: true,
+          reviewerId: true,
+          reviewer: {
+            select: this.missionAuthorSelect,
+          },
+          version: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc' as const,
+        },
+      },
+      author: {
+        select: this.missionAuthorSelect,
+      },
+      coauthors: {
+        select: this.missionAuthorSelect,
+      },
+    };
+
+    if (orderBy === MissionOrderBy.LATEST_VERSION_UPDATED_AT) {
+      const matchingMissions = await this.prisma.mission.findMany({
+        where,
+        select: { id: true },
+      });
+      const matchingIds = matchingMissions.map((mission) => mission.id);
+      const total = matchingIds.length;
+
+      if (total === 0) {
+        return {
+          data: [],
+          total: 0,
+        };
+      }
+
+      const orderDirection = orderType === OrderType.ASC ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+      const orderedRows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT m.id
+        FROM "Mission" m
+        LEFT JOIN LATERAL (
+          SELECT mv."updatedAt" AS "updatedAt"
+          FROM "MissionVersion" mv
+          WHERE mv."missionId" = m.id
+          ORDER BY mv."createdAt" DESC, mv."id" DESC
+          LIMIT 1
+        ) latest ON true
+        WHERE m.id IN (${Prisma.join(matchingIds)})
+        ORDER BY latest."updatedAt" ${orderDirection} NULLS LAST, m."createdAt" DESC
+        LIMIT ${take}
+        OFFSET ${skip}
+      `;
+
+      const pageIds = orderedRows.map((row) => row.id);
+      if (pageIds.length === 0) {
+        return {
+          data: [],
+          total,
+        };
+      }
+
+      const data = await this.prisma.mission.findMany({
+        where: { id: { in: pageIds } },
+        include,
+      });
+
+      const missionsById = new Map(data.map((mission) => [mission.id, mission]));
+
+      return {
+        data: pageIds.flatMap((id) => {
+          const mission = missionsById.get(id);
+          return mission ? [mission] : [];
+        }),
+        total,
+      };
     }
+
+    const options: Prisma.MissionFindManyArgs = {
+      skip,
+      take,
+      orderBy: {
+        createdAt: orderType,
+      },
+      where,
+      include,
+    };
 
     const [total, data] = await this.prisma.$transaction([
       this.prisma.mission.count({ where: options.where }),
