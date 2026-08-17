@@ -51,12 +51,21 @@ export class WeekendsService {
     },
   } satisfies Prisma.UserSelect;
 
+  private readonly missionIslandSelect = {
+    id: true,
+    name: true,
+    code: true,
+  } satisfies Prisma.IslandSelect;
+
   private readonly missionSelectForWeekendGame = {
     name: true,
     description: true,
     missionType: true,
     missionObjective: true,
     image: true,
+    island: {
+      select: this.missionIslandSelect,
+    },
     author: {
       select: this.missionAuthorSelect,
     },
@@ -157,6 +166,9 @@ export class WeekendsService {
                       id: true,
                       url: true
                     }
+                  },
+                  island: {
+                    select: this.missionIslandSelect,
                   },
                   author: {
                     select: this.missionAuthorSelect,

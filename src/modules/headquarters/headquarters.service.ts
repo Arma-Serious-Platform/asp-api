@@ -1042,6 +1042,13 @@ export class HeadquartersService {
                 url: true,
               },
             },
+            island: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
           },
         },
         missionVersion: {
