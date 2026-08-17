@@ -988,7 +988,10 @@ export class UsersService {
 
     const user = await this.prisma.user.findFirst({
       where: {
-        OR: [{ email: emailOrNickname }, { nickname: emailOrNickname }],
+        OR: [
+          { email: { equals: emailOrNickname, mode: 'insensitive' } },
+          { nickname: emailOrNickname },
+        ],
       },
       select: {
         id: true,
@@ -1171,7 +1174,7 @@ export class UsersService {
 
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.prisma.user.findFirst({
-      where: { email: dto.email },
+      where: { email: { equals: dto.email, mode: 'insensitive' } },
     });
 
     if (!user) {
