@@ -18,6 +18,7 @@ import { AssignSlotSquadDto } from './dto/assign-slot-squad.dto';
 import { CreateGamePlanCommentDto } from './dto/create-game-plan-comment.dto';
 import { UpdateGamePlanCommentDto } from './dto/update-game-plan-comment.dto';
 import { FindGamePlanCommentsDto } from './dto/find-game-plan-comments.dto';
+import { FindGamePlansDto } from './dto/find-game-plans.dto';
 import { HeadquartersGateway } from './headquarters.gateway';
 import { hasAnyRole } from 'src/shared/utils/user-roles';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
@@ -766,6 +767,32 @@ export class HeadquartersService {
     return [];
   }
 
+  async findPlans(userId: string, dto: FindGamePlansDto) {
+    const sideId = await this.getAllowedSideIdForUser(userId);
+    const { skip = 0, take = 200 } = dto;
+    const where: Prisma.GamePlanWhereInput = {
+      sideId,
+      ...this.publishedWeekendPlanWhere,
+    };
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.gamePlan.count({ where }),
+      this.prisma.gamePlan.findMany({
+        where,
+        select: this.gamePlanListSelect,
+        skip,
+        take,
+        orderBy: {
+          game: {
+            date: 'desc',
+          },
+        },
+      }),
+    ]);
+
+    return { data, total };
+  }
+
   async findPlansByGame(gameId: string, userId: string) {
     const sideId = await this.getAllowedSideIdForUser(userId);
     return this.prisma.gamePlan.findMany({
@@ -1292,6 +1319,94 @@ export class HeadquartersService {
     },
   } satisfies Prisma.GamePlanSlotInclude;
 
+  /** Minimal projection for the plans list (no slots, no mission version). */
+  private readonly gamePlanListSelect = {
+    id: true,
+    gameId: true,
+    gameCommanderId: true,
+    hqSquadId: true,
+    side: {
+      select: {
+        id: true,
+        name: true,
+        type: true,
+      },
+    },
+    gameCommander: {
+      select: {
+        id: true,
+        nickname: true,
+        roles: true,
+        squadRole: true,
+        avatar: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
+        squad: {
+          select: {
+            id: true,
+            tag: true,
+            side: {
+              select: {
+                type: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    hqSquad: {
+      select: {
+        id: true,
+        name: true,
+        tag: true,
+      },
+    },
+    game: {
+      select: {
+        id: true,
+        date: true,
+        position: true,
+        mission: {
+          select: {
+            id: true,
+            name: true,
+            image: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  } satisfies Prisma.GamePlanSelect;
+
+  /** User projection for mission authors and the game admin (mirrors the weekends payload). */
+  private readonly gameUserSelect = {
+    id: true,
+    nickname: true,
+    roles: true,
+    avatarUrl: true,
+    squad: {
+      select: {
+        id: true,
+        name: true,
+        tag: true,
+        side: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.UserSelect;
+
   private readonly gamePlanInclude = {
     game: {
       include: {
@@ -1308,6 +1423,7 @@ export class HeadquartersService {
             id: true,
             name: true,
             description: true,
+            missionType: true,
             missionObjective: true,
             image: {
               select: {
@@ -1322,12 +1438,19 @@ export class HeadquartersService {
                 code: true,
               },
             },
+            author: {
+              select: this.gameUserSelect,
+            },
+            coauthors: {
+              select: this.gameUserSelect,
+            },
           },
         },
         missionVersion: {
           select: {
             id: true,
             version: true,
+            missionId: true,
             status: true,
             attackSideType: true,
             defenseSideType: true,
@@ -1339,7 +1462,33 @@ export class HeadquartersService {
             attackSideSlots: true,
             defenseSideSlots: true,
             friendlySideSlots: true,
+            inGameTime: true,
+            weather: true,
+            weaponry: true,
+            file: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+            uniformScreenshots: {
+              select: {
+                side: true,
+                file: {
+                  select: {
+                    id: true,
+                    url: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
           },
+        },
+        admin: {
+          select: this.gameUserSelect,
         },
         attackSide: {
           select: {

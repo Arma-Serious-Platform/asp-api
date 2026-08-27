@@ -24,7 +24,12 @@ import { AssignSlotSquadDto } from "./dto/assign-slot-squad.dto";
 import { CreateGamePlanCommentDto } from "./dto/create-game-plan-comment.dto";
 import { UpdateGamePlanCommentDto } from "./dto/update-game-plan-comment.dto";
 import { FindGamePlanCommentsDto } from "./dto/find-game-plan-comments.dto";
-import { HeadquartersGamePlanResponseDto, HeadquartersSlotResponseDto } from "./dto/headquarters-response.dto";
+import { FindGamePlansDto } from "./dto/find-game-plans.dto";
+import {
+  HeadquartersGamePlanListResponseDto,
+  HeadquartersGamePlanResponseDto,
+  HeadquartersSlotResponseDto,
+} from "./dto/headquarters-response.dto";
 import { validateAttachmentFiles } from "src/shared/utils/validate-attachments";
 
 @Controller('headquarters')
@@ -36,6 +41,13 @@ export class HeadquartersController {
   @ApiOkResponse({ type: HeadquartersGamePlanResponseDto, isArray: true })
   findPlansByGame(@Param('gameId') gameId: string, @Req() req: RequestType) {
     return this.headquartersService.findPlansByGame(gameId, req.userId);
+  }
+
+  @Get('plans')
+  @UseGuards(AuthGuard)
+  @ApiOkResponse({ type: HeadquartersGamePlanListResponseDto })
+  findPlans(@Query() dto: FindGamePlansDto, @Req() req: RequestType) {
+    return this.headquartersService.findPlans(req.userId, dto);
   }
 
   @Get('plans/:id')

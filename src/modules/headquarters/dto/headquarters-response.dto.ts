@@ -82,17 +82,6 @@ export class HeadquartersSlotResponseDto {
   wantedSquads: HeadquartersSquadShortDto[];
 }
 
-class HeadquartersGameShortDto {
-  @ApiProperty({ example: '36f32f12-dc69-4ad0-b0fb-d95d95bb4ce6' })
-  id: string;
-
-  @ApiProperty({ example: '2026-05-03T17:00:00.000Z' })
-  date: string;
-
-  @ApiProperty({ example: 1 })
-  position: number;
-}
-
 class HeadquartersSideShortDto {
   @ApiProperty({ example: '92fcf7a9-d154-4ad0-a1d8-500f49810006' })
   id: string;
@@ -102,6 +91,42 @@ class HeadquartersSideShortDto {
 
   @ApiProperty({ example: 'BLUE' })
   type: string;
+}
+
+/** Full game payload used by the plan details view (mission, mission version, admin, sides). */
+class HeadquartersGameDetailsDto {
+  @ApiProperty({ example: '36f32f12-dc69-4ad0-b0fb-d95d95bb4ce6' })
+  id: string;
+
+  @ApiProperty({ example: '2026-05-03T17:00:00.000Z' })
+  date: string;
+
+  @ApiProperty({ example: 1 })
+  position: number;
+
+  @ApiProperty({ example: '5a2fd0f7-4c39-4b52-9dcb-4f4a1c0f1a91' })
+  missionId: string;
+
+  @ApiProperty({ example: 'd6b5f0d1-8f6a-4a1f-9b2c-33f7e0b4b8a2' })
+  missionVersionId: string;
+
+  @ApiProperty({ example: '4c4d0611-9f81-4ffd-b4ce-c8fe8f7f3b8b', nullable: true })
+  adminId: string | null;
+
+  @ApiProperty({ description: 'Mission with image, island, author and coauthors' })
+  mission: Record<string, unknown>;
+
+  @ApiProperty({ description: 'Mission version with weaponry, file and uniform screenshots' })
+  missionVersion: Record<string, unknown>;
+
+  @ApiProperty({ nullable: true, description: 'Game admin user' })
+  admin?: Record<string, unknown> | null;
+
+  @ApiProperty({ type: HeadquartersSideShortDto })
+  attackSide: HeadquartersSideShortDto;
+
+  @ApiProperty({ type: HeadquartersSideShortDto })
+  defenseSide: HeadquartersSideShortDto;
 }
 
 export class HeadquartersGamePlanResponseDto {
@@ -126,8 +151,8 @@ export class HeadquartersGamePlanResponseDto {
   @ApiProperty({ type: HeadquartersSquadShortDto, nullable: true })
   hqSquad?: HeadquartersSquadShortDto | null;
 
-  @ApiProperty({ type: HeadquartersGameShortDto })
-  game: HeadquartersGameShortDto;
+  @ApiProperty({ type: HeadquartersGameDetailsDto })
+  game: HeadquartersGameDetailsDto;
 
   @ApiProperty({ type: HeadquartersSideShortDto })
   side: HeadquartersSideShortDto;
@@ -136,7 +161,57 @@ export class HeadquartersGamePlanResponseDto {
   slots: HeadquartersSlotResponseDto[];
 }
 
+class HeadquartersGamePlanListGameDto {
+  @ApiProperty({ example: '36f32f12-dc69-4ad0-b0fb-d95d95bb4ce6' })
+  id: string;
+
+  @ApiProperty({ example: '2026-05-03T17:00:00.000Z' })
+  date: string;
+
+  @ApiProperty({ example: 1 })
+  position: number;
+
+  @ApiProperty({ nullable: true })
+  mission?: {
+    id: string;
+    name: string;
+    image?: {
+      id: string;
+      url: string;
+    } | null;
+  } | null;
+}
+
+export class HeadquartersGamePlanListItemResponseDto {
+  @ApiProperty({ example: '6a74e1ae-bd8d-46ec-9956-2cf68ddf2bb8' })
+  id: string;
+
+  @ApiProperty({ example: '36f32f12-dc69-4ad0-b0fb-d95d95bb4ce6' })
+  gameId: string;
+
+  @ApiProperty({ example: '4c4d0611-9f81-4ffd-b4ce-c8fe8f7f3b8b', nullable: true })
+  gameCommanderId: string | null;
+
+  @ApiProperty({ example: '2a6d7b86-57b4-4ca4-8f87-6aab1fcd8c23', nullable: true })
+  hqSquadId: string | null;
+
+  @ApiProperty({ type: HeadquartersCommanderDto, nullable: true })
+  gameCommander?: HeadquartersCommanderDto | null;
+
+  @ApiProperty({ type: HeadquartersSquadShortDto, nullable: true })
+  hqSquad?: HeadquartersSquadShortDto | null;
+
+  @ApiProperty({ type: HeadquartersGamePlanListGameDto })
+  game: HeadquartersGamePlanListGameDto;
+
+  @ApiProperty({ type: HeadquartersSideShortDto })
+  side: HeadquartersSideShortDto;
+}
+
 export class HeadquartersGamePlanListResponseDto {
-  @ApiProperty({ type: [HeadquartersGamePlanResponseDto] })
-  data: HeadquartersGamePlanResponseDto[];
+  @ApiProperty({ type: [HeadquartersGamePlanListItemResponseDto] })
+  data: HeadquartersGamePlanListItemResponseDto[];
+
+  @ApiProperty({ example: 42 })
+  total: number;
 }
