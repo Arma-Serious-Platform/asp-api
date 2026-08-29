@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SignUpDto } from './dto/create-user.dto';
 
 import { Multer } from 'multer';
@@ -54,6 +55,16 @@ import {
   normalizeRoles,
   ROLE_RANK,
 } from 'src/shared/utils/user-roles';
+import {
+  buildWarningAutobanReason,
+  getWarningWindowStart,
+  isPermanentBan,
+  isWarningAutobanEnabled,
+  parseWarningAutobanConfig,
+  resolveAutobanBannedUntil,
+  shouldTriggerWarningAutoban,
+  type WarningAutobanConfig,
+} from './users-warning-autoban';
 
 @Injectable()
 export class UsersService {
@@ -67,6 +78,7 @@ export class UsersService {
     private readonly minioService: MinioService,
     private readonly twoFactorService: TwoFactorService,
     private readonly usersHistoryService: UsersHistoryService,
+    private readonly configService: ConfigService,
   ) {}
 
   private generateActivationToken(minutes = 10) {
@@ -765,6 +777,8 @@ export class UsersService {
 
     this.ensureCanModerateTarget(user.roles, actorRoles);
 
+    const autobanConfig = this.getWarningAutobanConfig();
+
     return this.prisma.$transaction(async (tx) => {
       const warning = await tx.userWarning.create({
         data: {
@@ -808,8 +822,116 @@ export class UsersService {
         },
       });
 
-      return warning;
+      const autoban = await this.applyWarningAutobanIfNeeded(tx, {
+        userId,
+        adminId,
+        config: autobanConfig,
+      });
+
+      return {
+        warning,
+        autobanApplied: autoban.applied,
+        ...(autoban.bannedUntil
+          ? { bannedUntil: autoban.bannedUntil.toISOString() }
+          : {}),
+      };
     });
+  }
+
+  private getWarningAutobanConfig(): WarningAutobanConfig {
+    return parseWarningAutobanConfig({
+      WARNING_AUTOBAN_ENABLED: this.configService.get(
+        'WARNING_AUTOBAN_ENABLED',
+      ),
+      WARNING_AUTOBAN_COUNT: this.configService.get('WARNING_AUTOBAN_COUNT'),
+      WARNING_AUTOBAN_WINDOW_DAYS: this.configService.get(
+        'WARNING_AUTOBAN_WINDOW_DAYS',
+      ),
+      WARNING_AUTOBAN_HOURS: this.configService.get('WARNING_AUTOBAN_HOURS'),
+    });
+  }
+
+  private async applyWarningAutobanIfNeeded(
+    tx: Prisma.TransactionClient,
+    params: {
+      userId: string;
+      adminId: string;
+      config: WarningAutobanConfig;
+    },
+  ): Promise<{ applied: boolean; bannedUntil?: Date }> {
+    const { userId, adminId, config } = params;
+
+    if (!isWarningAutobanEnabled(config)) {
+      return { applied: false };
+    }
+
+    const windowStart = getWarningWindowStart(config.warningWindowDays);
+    const warningCount = await tx.userWarning.count({
+      where: {
+        userId,
+        removedAt: null,
+        createdAt: { gte: windowStart },
+      },
+    });
+
+    if (!shouldTriggerWarningAutoban(warningCount, config)) {
+      return { applied: false };
+    }
+
+    const targetUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        status: true,
+        bannedUntil: true,
+      },
+    });
+
+    if (
+      !targetUser ||
+      isPermanentBan(targetUser.status, targetUser.bannedUntil)
+    ) {
+      return { applied: false };
+    }
+
+    const bannedUntil = resolveAutobanBannedUntil(
+      targetUser.bannedUntil,
+      config.autobanHours,
+    );
+    const autobanReason = buildWarningAutobanReason(config);
+
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        status: UserStatus.BANNED,
+        bannedUntil,
+      },
+    });
+
+    const punishment = await tx.userPunishment.create({
+      data: {
+        userId,
+        adminId,
+        type: UserPunishmentType.TEMP_BAN,
+        reason: autobanReason,
+        bannedUntil,
+        isMuted: false,
+      },
+    });
+
+    await this.usersHistoryService.append(tx, {
+      userId,
+      actorId: adminId,
+      type: UserHistoryEventType.TEMP_BAN,
+      payload: {
+        reason: autobanReason,
+        bannedUntil: bannedUntil.toISOString(),
+        punishmentId: punishment.id,
+        isMuted: false,
+        automatic: true,
+      },
+    });
+
+    return { applied: true, bannedUntil };
   }
 
   async findWarnings(userId: string, actorRoles: UserRole[]) {
