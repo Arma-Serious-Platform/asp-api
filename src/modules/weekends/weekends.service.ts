@@ -172,15 +172,61 @@ export class WeekendsService {
   }
 
   async findAll(dto: FindWeekendsDto, userId?: string) {
-    const { search, skip = 0, take = 100, published } = dto;
+    const {
+      search,
+      skip = 0,
+      take = 100,
+      published,
+      missionId,
+      hqSquadId,
+      adminId,
+      dateFrom,
+      dateTo,
+    } = dto;
     const accessibleSideId =
       await this.headquartersService.getAccessibleHeadquartersSideId(
         userId ?? null,
       );
 
+    const hasGameFilters = Boolean(
+      missionId || hqSquadId || adminId || dateFrom || dateTo,
+    );
+
+    const dateFilter: Prisma.DateTimeFilter | undefined =
+      dateFrom || dateTo
+        ? {
+            ...(dateFrom && { gte: new Date(dateFrom) }),
+            ...(dateTo && {
+              // Inclusive end-of-day for a calendar date string
+              lte: (() => {
+                const end = new Date(dateTo);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+                  end.setUTCHours(23, 59, 59, 999);
+                }
+                return end;
+              })(),
+            }),
+          }
+        : undefined;
+
     const where: Prisma.WeekendWhereInput = {
       ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
       ...(published !== undefined && { published }),
+      ...(hasGameFilters && {
+        games: {
+          some: {
+            ...(missionId && { missionId }),
+            ...(adminId && { adminId }),
+            ...(hqSquadId && {
+              OR: [
+                { attackHqSquadId: hqSquadId },
+                { defenseHqSquadId: hqSquadId },
+              ],
+            }),
+            ...(dateFilter && { date: dateFilter }),
+          },
+        },
+      }),
     };
 
     const [total, data] = await this.prisma.$transaction([
