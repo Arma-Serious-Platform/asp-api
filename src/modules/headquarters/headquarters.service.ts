@@ -330,6 +330,27 @@ export class HeadquartersService {
     await this.emitGamePlanUpdates(affectedPlanIds);
   }
 
+  /**
+   * Syncs HQ slots for a single game from its current mission version JSON.
+   * Use when a weekend game switches version but keeps the same mission.
+   */
+  async syncGamePlanSlotsForGameId(
+    gameId: string,
+    options: {
+      syncSlotCounts?: boolean;
+      rebuildFriendlySlots?: boolean;
+      previousFriendlySideType?: MissionGameSide | null;
+    } = {},
+  ) {
+    const planIds = await this.syncGamePlanSlotsForGame(gameId, {
+      syncSlotCounts: options.syncSlotCounts ?? false,
+      rebuildFriendlySlots: options.rebuildFriendlySlots ?? false,
+      previousFriendlySideType: options.previousFriendlySideType,
+    });
+
+    await this.emitGamePlanUpdates(planIds);
+  }
+
   async getAccessibleHeadquartersSideId(
     userId: string | null,
   ): Promise<string | null> {

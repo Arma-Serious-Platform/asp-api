@@ -507,10 +507,18 @@ export class WeekendsService {
       where: { id: gameId },
       select: {
         id: true,
+        missionId: true,
+        missionVersionId: true,
         attackSideId: true,
         defenseSideId: true,
         attackHqSquadId: true,
         defenseHqSquadId: true,
+        missionVersion: {
+          select: {
+            friendlySideType: true,
+            friendlyTo: true,
+          },
+        },
       },
     });
 
@@ -536,6 +544,14 @@ export class WeekendsService {
       (dto.attackHqSquadId !== undefined && dto.attackHqSquadId !== game.attackHqSquadId) ||
       (dto.defenseHqSquadId !== undefined && dto.defenseHqSquadId !== game.defenseHqSquadId);
 
+    const previousFriendlySideType = game.missionVersion.friendlySideType;
+    const previousFriendlyTo = game.missionVersion.friendlyTo;
+
+    let missionChanged = false;
+    let versionChangedSameMission = false;
+    let nextFriendlySideType = previousFriendlySideType;
+    let nextFriendlyTo = previousFriendlyTo;
+
     // Validate mission version belongs to mission when updating mission/version
     if (dto.missionVersionId !== undefined || dto.missionId !== undefined) {
       if (dto.missionId === undefined || dto.missionVersionId === undefined) {
@@ -545,7 +561,12 @@ export class WeekendsService {
       }
       const missionVersion = await this.prisma.missionVersion.findUnique({
         where: { id: dto.missionVersionId },
-        select: { id: true, missionId: true },
+        select: {
+          id: true,
+          missionId: true,
+          friendlySideType: true,
+          friendlyTo: true,
+        },
       });
       if (!missionVersion) {
         throw new BadRequestException(`Mission version not found: ${dto.missionVersionId}`);
@@ -555,6 +576,12 @@ export class WeekendsService {
           `Mission version ${dto.missionVersionId} does not belong to mission ${dto.missionId}`,
         );
       }
+
+      missionChanged = dto.missionId !== game.missionId;
+      versionChangedSameMission =
+        !missionChanged && dto.missionVersionId !== game.missionVersionId;
+      nextFriendlySideType = missionVersion.friendlySideType;
+      nextFriendlyTo = missionVersion.friendlyTo;
     }
 
     if (dto.attackSideId) {
@@ -672,8 +699,22 @@ export class WeekendsService {
       },
     });
 
-    if (sidesChanged) {
+    if (sidesChanged || missionChanged) {
       await this.headquartersService.resetGamePlansForGame(gameId);
+    } else if (versionChangedSameMission) {
+      const rebuildFriendlySlots =
+        previousFriendlyTo !== nextFriendlyTo ||
+        previousFriendlySideType !== nextFriendlySideType;
+
+      await this.headquartersService.syncGamePlanSlotsForGameId(gameId, {
+        syncSlotCounts: true,
+        rebuildFriendlySlots,
+        previousFriendlySideType,
+      });
+
+      if (hqSquadsChanged) {
+        await this.headquartersService.syncGamePlanHqSquadsFromGame(gameId);
+      }
     } else if (hqSquadsChanged) {
       await this.headquartersService.syncGamePlanHqSquadsFromGame(gameId);
     }

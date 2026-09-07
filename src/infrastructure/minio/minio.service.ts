@@ -31,13 +31,18 @@ export class MinioService {
     return buffer;
   }
 
-  private buildPublicUrl(bucket: ASP_BUCKET, objectName: string): string {
+  private buildPublicUrl(
+    bucket: ASP_BUCKET,
+    objectName: string,
+    cacheKey?: string,
+  ): string {
     const isLocal = process.env.MINIO_ENDPOINT === 'localhost';
     const host = process.env.MINIO_ENDPOINT || 'localhost';
     const port = process.env.MINIO_PORT || '9000';
     const proto = isLocal ? 'http' : 'https';
     const portPart = isLocal ? `:${port}` : '';
-    return `${proto}://${host}${portPart}/${bucket}/${objectName}`;
+    const base = `${proto}://${host}${portPart}/${bucket}/${objectName}`;
+    return cacheKey ? `${base}?v=${encodeURIComponent(cacheKey)}` : base;
   }
 
   private buildObjectName(file: Multer.File, id: string, extension: string, isWebpConversion: boolean): string {
@@ -125,9 +130,11 @@ export class MinioService {
       if (!extension) throw new Error('Unsupported file type');
 
       const objectName = this.buildObjectName(file, id, extension, isWebpConversion);
-      const url = this.buildPublicUrl(bucket, objectName);
+      const url = this.buildPublicUrl(bucket, objectName, id);
 
-      await this.minioClient.putObject(bucket, objectName, buffer);
+      await this.minioClient.putObject(bucket, objectName, buffer, buffer.length, {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      });
 
       const dbFile = await this.prisma.file.create({
         select: {
@@ -187,7 +194,7 @@ export class MinioService {
       where: { id: fileId },
       data: {
         bucket: targetBucket,
-        url: this.buildPublicUrl(targetBucket, file.filename),
+        url: this.buildPublicUrl(targetBucket, file.filename, file.id),
       },
       select: {
         id: true,
