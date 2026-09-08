@@ -1418,7 +1418,12 @@ export class UsersService {
       };
     }
 
-    if (dto.role) {
+    if (dto.roles?.length) {
+      options.where = {
+        ...options.where,
+        roles: { hasSome: dto.roles },
+      };
+    } else if (dto.role) {
       options.where = {
         ...options.where,
         roles: { has: dto.role },
@@ -1430,6 +1435,27 @@ export class UsersService {
         ...options.where,
         status: dto.status,
       };
+    }
+
+    if (dto.warningCount !== undefined) {
+      if (dto.warningCount === 0) {
+        options.where = this.appendUserWhereAnd(options.where, {
+          warnings: { none: { removedAt: null } },
+        });
+      } else {
+        const rows = await this.prisma.$queryRaw<Array<{ userId: string }>>`
+          SELECT "userId"
+          FROM "UserWarning"
+          WHERE "removedAt" IS NULL
+          GROUP BY "userId"
+          HAVING COUNT(*) = ${dto.warningCount}
+        `;
+        const userIds = rows.map((row) => row.userId);
+
+        options.where = this.appendUserWhereAnd(options.where, {
+          id: { in: userIds },
+        });
+      }
     }
 
     if (dto.hasSquad !== undefined) {
