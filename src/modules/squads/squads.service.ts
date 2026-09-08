@@ -6,7 +6,7 @@ import {
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { CreateSquadDto } from './dto/create-squad.dto';
 import { InviteToSquadDto } from './dto/invite-to-squad.dto';
-import { Prisma, SquadInviteStatus, SquadRole, UserHistoryEventType } from '@prisma/client';
+import { Prisma, SquadInviteStatus, SquadRole, UserHistoryEventType, NotificationGroup, NotificationType } from '@prisma/client';
 import { FindSquadsDto } from './dto/find-squads.dto';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
@@ -14,6 +14,7 @@ import { UpdateSquadDto } from './dto/update-squad.dto';
 import { KickFromSquadDto } from './dto/kick-from-squad.dto';
 import { UpdateMySquadDto } from './dto/update-my-squad.dto';
 import { UsersHistoryService } from '../users/users-history.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /** Prisma squad ids are UUIDs; only then include `id` in lookup to avoid invalid UUID queries. */
 const UUID_PARAM_RE = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -28,6 +29,7 @@ export class SquadsService {
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
     private readonly usersHistoryService: UsersHistoryService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   private async clampActiveCount(tx: Prisma.TransactionClient, squadId: string, activeCount?: number) {
@@ -601,7 +603,7 @@ export class SquadsService {
       throw new BadRequestException('You already have a pending request to this squad');
     }
 
-    return this.prisma.squadJoinRequest.create({
+    const joinRequest = await this.prisma.squadJoinRequest.create({
       data: {
         status: SquadInviteStatus.PENDING,
         user: {
@@ -612,6 +614,38 @@ export class SquadsService {
         },
       },
     });
+
+    const squadWithManagers = await this.prisma.squad.findUnique({
+      where: { id: squadId },
+      select: {
+        leaderId: true,
+        members: {
+          where: {
+            squadRole: SquadRole.SUBLEADER,
+          },
+          select: { id: true },
+        },
+      },
+    });
+
+    const recipientIds = [
+      ...(squadWithManagers?.leaderId ? [squadWithManagers.leaderId] : []),
+      ...(squadWithManagers?.members.map((member) => member.id) ?? []),
+    ];
+
+    await this.notificationsService.notify(this.prisma, {
+      recipientIds,
+      actorId: userId,
+      type: NotificationType.SQUAD_JOIN_REQUEST,
+      group: NotificationGroup.SQUAD,
+      targetId: squadId,
+      payload: {
+        joinRequestId: joinRequest.id,
+        requesterId: userId,
+      },
+    });
+
+    return joinRequest;
   }
 
   async getMyJoinRequests(userId: string) {
@@ -904,7 +938,7 @@ export class SquadsService {
       );
     }
 
-    return this.prisma.squadInvitation.create({
+    const invitation = await this.prisma.squadInvitation.create({
       data: {
         status: SquadInviteStatus.PENDING,
         squadRole: dto.squadRole ?? SquadRole.MEMBER,
@@ -916,6 +950,19 @@ export class SquadsService {
         },
       },
     });
+
+    await this.notificationsService.notify(this.prisma, {
+      recipientIds: [dto.userId],
+      actorId: leaderId,
+      type: NotificationType.SQUAD_INVITE,
+      group: NotificationGroup.SQUAD,
+      targetId: squad.id,
+      payload: {
+        invitationId: invitation.id,
+      },
+    });
+
+    return invitation;
   }
 
   async kickFromSquad(dto: KickFromSquadDto, leaderId: string) {

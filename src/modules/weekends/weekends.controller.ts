@@ -8,6 +8,7 @@ import { UpdateGameDto } from "./dto/update-game.dto";
 import { AuthGuard } from "src/shared/guards/auth.guard";
 import { Roles } from "src/shared/decorators/roles.decorator";
 import { AuthService } from "src/modules/auth/auth.service";
+import { RequestType } from "src/utils/types";
 
 @Controller('weekends')
 export class WeekendsController {
@@ -31,15 +32,19 @@ export class WeekendsController {
   @Post()
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
-  create(@Body() createWeekendDto: CreateWeekendDto) {
-    return this.weekendsService.create(createWeekendDto);
+  create(@Body() createWeekendDto: CreateWeekendDto, @Req() req: RequestType) {
+    return this.weekendsService.create(createWeekendDto, req.userId);
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
-  update(@Param('id') id: string, @Body() updateWeekendDto: UpdateWeekendDto) {
-    return this.weekendsService.update(id, updateWeekendDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateWeekendDto: UpdateWeekendDto,
+    @Req() req: RequestType,
+  ) {
+    return this.weekendsService.update(id, updateWeekendDto, req.userId);
   }
 
   @Delete(':id')

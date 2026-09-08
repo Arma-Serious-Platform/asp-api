@@ -5,9 +5,12 @@ import {
   UserHistoryEventType,
   UserPunishmentType,
   UserStatus,
+  NotificationGroup,
+  NotificationType,
 } from '@prisma/client';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { UsersHistoryService } from './users-history.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const AUTOMATIC_UNBAN_REASON = 'Термін тимчасового блокування завершився';
 const DEFAULT_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -21,6 +24,7 @@ export class UsersBanExpirationService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersHistoryService: UsersHistoryService,
+    private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
@@ -101,6 +105,17 @@ export class UsersBanExpirationService implements OnApplicationBootstrap {
             payload: {
               reason: AUTOMATIC_UNBAN_REASON,
               punishmentId: punishment.id,
+            },
+          });
+
+          await this.notificationsService.notify(tx, {
+            recipientIds: [user.id],
+            type: NotificationType.UNBAN,
+            group: NotificationGroup.PUNISHMENTS,
+            targetId: punishment.id,
+            payload: {
+              reason: AUTOMATIC_UNBAN_REASON,
+              automatic: true,
             },
           });
 

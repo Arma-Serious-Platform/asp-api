@@ -8,6 +8,7 @@ import { MinioModule } from 'src/infrastructure/minio/minio.module';
 import { UsersHistoryService } from './users-history.service';
 import { UsersBanExpirationService } from './users-ban-expiration.service';
 import { UserRestrictionsService } from './user-restrictions.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UserRestrictionsService } from './user-restrictions.service';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '3d' },
     }),
+    NotificationsModule,
   ],
   controllers: [UsersController],
   providers: [

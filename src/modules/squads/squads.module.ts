@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from '../users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { MinioModule } from 'src/infrastructure/minio/minio.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { MinioModule } from 'src/infrastructure/minio/minio.module';
     PrismaModule,
     UsersModule,
     MinioModule,
+    NotificationsModule,
   ],
   controllers: [SquadsController],
   providers: [SquadsService],

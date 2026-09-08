@@ -11,6 +11,8 @@ import { attachmentInclude, uploadAttachmentFiles } from "src/shared/utils/uploa
 import { commentReplyUserSelect, commentUserSelect } from "src/shared/utils/comment-user-select";
 import { parseRemovedAttachmentIds, syncAttachmentUpdates } from "src/shared/utils/sync-comment-attachments";
 import { UserRestrictionsService } from "../users/user-restrictions.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NotificationGroup, NotificationType } from "@prisma/client";
 
 @Injectable()
 export class MissionCommentsService {
@@ -20,6 +22,7 @@ export class MissionCommentsService {
     @Inject(forwardRef(() => MissionCommentsGateway))
     private readonly gateway: MissionCommentsGateway,
     private readonly userRestrictionsService: UserRestrictionsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private readonly commentInclude = {
@@ -45,6 +48,13 @@ export class MissionCommentsService {
 
     const mission = await this.prisma.mission.findUnique({
       where: { id: dto.missionId },
+      select: {
+        id: true,
+        authorId: true,
+        coauthors: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!mission) {
@@ -87,6 +97,22 @@ export class MissionCommentsService {
     });
 
     this.gateway.emitNewComment(dto.missionId, comment);
+
+    const recipientIds = [
+      ...(mission.authorId ? [mission.authorId] : []),
+      ...mission.coauthors.map((coauthor) => coauthor.id),
+    ];
+
+    await this.notificationsService.notify(this.prisma, {
+      recipientIds,
+      actorId: userId,
+      type: NotificationType.NEW_MISSION_COMMENT,
+      group: NotificationGroup.MISSIONS,
+      targetId: dto.missionId,
+      payload: {
+        commentId: comment.id,
+      },
+    });
 
     return comment;
   }

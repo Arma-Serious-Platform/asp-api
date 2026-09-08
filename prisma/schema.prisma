@@ -135,8 +135,42 @@ model User {
   twoFactorPendingSecret      String?
   twoFactorPendingSecretAt    DateTime?
   twoFactorRecoveryCodes      UserTwoFactorRecoveryCode[]
+  notificationsReceived       Notification[]           @relation("NotificationRecipients")
+  notificationsActed          Notification[]           @relation("NotificationActors")
+  notificationPreferences     NotificationPreference[]
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String
+  recipient   User             @relation("NotificationRecipients", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?            @relation("NotificationActors", fields: [actorId], references: [id], onDelete: SetNull)
+  type        NotificationType
+  group       NotificationGroup
+  targetId    String?
+  payload     Json             @default("{}")
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, readAt])
+  @@index([recipientId, group, readAt])
+}
+
+model NotificationPreference {
+  id        String            @id @default(uuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     NotificationGroup
+  enabled   Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([userId, group])
+  @@index([userId])
 }
 
 model UserTwoFactorRecoveryCode {
@@ -663,4 +697,27 @@ enum SquadRole {
   HQ
   SUBLEADER
   RECRUIT
+}
+
+enum NotificationGroup {
+  CHAT
+  HEADQUARTERS
+  SQUAD
+  MISSIONS
+  ANNOUNCEMENTS
+  PUNISHMENTS
+}
+
+enum NotificationType {
+  NEW_CHAT_MESSAGE
+  NEW_MISSION_COMMENT
+  NEW_PLAN_COMMENT
+  SQUAD_INVITE
+  SQUAD_JOIN_REQUEST
+  WARNING
+  WARNING_REMOVED
+  TEMP_BAN
+  PERMANENT_BAN
+  UNBAN
+  WEEKEND_PUBLISHED
 }

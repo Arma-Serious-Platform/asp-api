@@ -11,7 +11,7 @@ import { FindMessagesDto } from './dto/find-messages.dto';
 import { UpdateChatDto } from './dto/update-chat.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddChatMembersDto } from './dto/add-chat-members.dto';
-import { ChatType } from '@prisma/client';
+import { ChatType, NotificationGroup, NotificationType } from '@prisma/client';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { Multer } from 'multer';
 import {
@@ -23,6 +23,7 @@ import {
   syncAttachmentUpdates,
 } from 'src/shared/utils/sync-comment-attachments';
 import { UserRestrictionsService } from '../users/user-restrictions.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const chatInclude = {
   users: {
@@ -75,6 +76,7 @@ export class ChatsService {
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
     private readonly userRestrictionsService: UserRestrictionsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async reactivateChatUsers(chatId: string, userIds: string[]) {
@@ -264,7 +266,7 @@ export class ChatsService {
       attachmentFiles,
     );
 
-    return await this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: {
         content: dto.content,
         chatId: dto.chatId,
@@ -282,6 +284,29 @@ export class ChatsService {
       },
       include: messageInclude,
     });
+
+    const otherMembers = await this.prisma.chatUser.findMany({
+      where: {
+        chatId: dto.chatId,
+        leftAt: null,
+        userId: { not: userId },
+      },
+      select: { userId: true },
+    });
+
+    await this.notificationsService.notify(this.prisma, {
+      recipientIds: otherMembers.map((member) => member.userId),
+      actorId: userId,
+      type: NotificationType.NEW_CHAT_MESSAGE,
+      group: NotificationGroup.CHAT,
+      targetId: dto.chatId,
+      payload: {
+        messageId: message.id,
+        peerUserId: userId,
+      },
+    });
+
+    return message;
   }
 
   async findMessages(dto: FindMessagesDto, userId: string) {

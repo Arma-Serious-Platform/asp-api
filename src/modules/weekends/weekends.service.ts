@@ -4,8 +4,9 @@ import { CreateWeekendDto, CreateGameDto } from "./dto/create-weekend.dto";
 import { UpdateWeekendDto } from "./dto/update-weekend.dto";
 import { FindWeekendsDto } from "./dto/find-weekends.dto";
 import { UpdateGameDto } from "./dto/update-game.dto";
-import { Prisma } from "@prisma/client";
+import { NotificationGroup, NotificationType, Prisma } from "@prisma/client";
 import { HeadquartersService } from "../headquarters/headquarters.service";
+import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
 export class WeekendsService {
@@ -140,6 +141,7 @@ export class WeekendsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly headquartersService: HeadquartersService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   private readonly gamePlanIdSelect = {
@@ -346,7 +348,7 @@ export class WeekendsService {
     return this.attachAccessiblePlanId(weekend, accessibleSideId);
   }
 
-  async create(dto: CreateWeekendDto) {
+  async create(dto: CreateWeekendDto, actorId?: string) {
     if (!dto.games || dto.games.length === 0) {
       throw new BadRequestException('At least one game is required to create a weekend');
     }
@@ -470,10 +472,22 @@ export class WeekendsService {
 
     await Promise.all(weekend.games.map((game) => this.headquartersService.ensureGamePlansForGame(game.id)));
 
+    if (weekend.published) {
+      await this.notificationsService.notifyAllActiveUsers({
+        actorId,
+        type: NotificationType.WEEKEND_PUBLISHED,
+        group: NotificationGroup.ANNOUNCEMENTS,
+        targetId: weekend.id,
+        payload: {
+          name: weekend.name,
+        },
+      });
+    }
+
     return weekend;
   }
 
-  async update(id: string, dto: UpdateWeekendDto) {
+  async update(id: string, dto: UpdateWeekendDto, actorId?: string) {
     const weekend = await this.prisma.weekend.findUnique({
       where: { id },
     });
@@ -482,7 +496,9 @@ export class WeekendsService {
       throw new NotFoundException('Weekend not found');
     }
 
-    return await this.prisma.weekend.update({
+    const wasPublished = weekend.published;
+
+    const updated = await this.prisma.weekend.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
@@ -518,6 +534,20 @@ export class WeekendsService {
         },
       },
     });
+
+    if (!wasPublished && updated.published) {
+      await this.notificationsService.notifyAllActiveUsers({
+        actorId,
+        type: NotificationType.WEEKEND_PUBLISHED,
+        group: NotificationGroup.ANNOUNCEMENTS,
+        targetId: updated.id,
+        payload: {
+          name: updated.name,
+        },
+      });
+    }
+
+    return updated;
   }
 
   async delete(id: string) {

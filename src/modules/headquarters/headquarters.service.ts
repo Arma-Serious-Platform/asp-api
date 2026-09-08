@@ -7,6 +7,8 @@ import {
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import {
   MissionGameSide,
+  NotificationGroup,
+  NotificationType,
   Prisma,
   SideType,
   SquadRole,
@@ -32,6 +34,7 @@ import {
   syncAttachmentUpdates,
 } from 'src/shared/utils/sync-comment-attachments';
 import { UserRestrictionsService } from '../users/user-restrictions.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /** In-game names may override the PBO group with `@A1-1` or `@[РЕЗЕРВ]А3-4`. */
 const IN_GAME_CALLSIGN_OVERRIDE =
@@ -135,6 +138,7 @@ export class HeadquartersService {
     private readonly headquartersGateway: HeadquartersGateway,
     private readonly minioService: MinioService,
     private readonly userRestrictionsService: UserRestrictionsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async ensureGamePlansForGame(gameId: string, tx?: Prisma.TransactionClient) {
@@ -1188,6 +1192,20 @@ export class HeadquartersService {
     });
 
     this.headquartersGateway.emitCommentCreated(gamePlanId, comment);
+
+    if (gamePlan.side.leaderId) {
+      await this.notificationsService.notify(this.prisma, {
+        recipientIds: [gamePlan.side.leaderId],
+        actorId: userId,
+        type: NotificationType.NEW_PLAN_COMMENT,
+        group: NotificationGroup.HEADQUARTERS,
+        targetId: gamePlanId,
+        payload: {
+          commentId: comment.id,
+        },
+      });
+    }
+
     return comment;
   }
 
@@ -1655,6 +1673,11 @@ export class HeadquartersService {
         sideId: true,
         gameCommanderId: true,
         hqSquadId: true,
+        side: {
+          select: {
+            leaderId: true,
+          },
+        },
       },
     });
 

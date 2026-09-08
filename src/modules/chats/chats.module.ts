@@ -7,8 +7,10 @@ import { ChatsGateway } from "./chats.gateway";
 import { JwtModule } from "@nestjs/jwt";
 import { UsersModule } from "../users/users.module";
 
+import { NotificationsModule } from "../notifications/notifications.module";
+
 @Module({
-  imports: [PrismaModule, MinioModule, JwtModule, UsersModule],
+  imports: [PrismaModule, MinioModule, JwtModule, UsersModule, NotificationsModule],
   providers: [ChatsService, ChatsGateway],
   controllers: [ChatsController],
   exports: [ChatsService, ChatsGateway],

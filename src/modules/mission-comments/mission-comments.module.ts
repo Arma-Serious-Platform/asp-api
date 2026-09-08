@@ -7,8 +7,10 @@ import { MissionCommentsGateway } from "./mission-comments.gateway";
 import { JwtModule } from "@nestjs/jwt";
 import { UsersModule } from "../users/users.module";
 
+import { NotificationsModule } from "../notifications/notifications.module";
+
 @Module({
-  imports: [PrismaModule, MinioModule, JwtModule, UsersModule],
+  imports: [PrismaModule, MinioModule, JwtModule, UsersModule, NotificationsModule],
   providers: [MissionCommentsService, MissionCommentsGateway],
   controllers: [MissionCommentsController],
   exports: [MissionCommentsService, MissionCommentsGateway],

@@ -6,8 +6,10 @@ import { HeadquartersController } from "./headquarters.controller";
 import { HeadquartersGateway } from "./headquarters.gateway";
 import { UsersModule } from "../users/users.module";
 
+import { NotificationsModule } from "../notifications/notifications.module";
+
 @Module({
-  imports: [PrismaModule, MinioModule, UsersModule],
+  imports: [PrismaModule, MinioModule, UsersModule, NotificationsModule],
   providers: [HeadquartersService, HeadquartersGateway],
   controllers: [HeadquartersController],
   exports: [HeadquartersService, HeadquartersGateway],

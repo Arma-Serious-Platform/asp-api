@@ -31,6 +31,8 @@ import {
   UserPunishmentType,
   UserRole,
   UserStatus,
+  NotificationGroup,
+  NotificationType,
 } from '@prisma/client';
 import { UnbanUserDto } from './dto/unban-user.dto';
 import { GetUsersDto } from './dto/get-users.dto';
@@ -49,6 +51,7 @@ import { BanPunishmentDto } from './dto/ban-punishment.dto';
 import { TwoFactorService } from 'src/modules/auth/two-factor.service';
 import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
 import { UsersHistoryService } from './users-history.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   hasAnyRole,
   highestRole,
@@ -78,6 +81,7 @@ export class UsersService {
     private readonly minioService: MinioService,
     private readonly twoFactorService: TwoFactorService,
     private readonly usersHistoryService: UsersHistoryService,
+    private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -802,7 +806,7 @@ export class UsersService {
         },
       });
 
-      await tx.userPunishment.create({
+      const punishment = await tx.userPunishment.create({
         data: {
           userId,
           adminId,
@@ -816,6 +820,18 @@ export class UsersService {
         userId,
         actorId: adminId,
         type: UserHistoryEventType.WARNING,
+        payload: {
+          reason,
+          warningId: warning.id,
+        },
+      });
+
+      await this.notificationsService.notify(tx, {
+        recipientIds: [userId],
+        actorId: adminId,
+        type: NotificationType.WARNING,
+        group: NotificationGroup.PUNISHMENTS,
+        targetId: punishment.id,
         payload: {
           reason,
           warningId: warning.id,
@@ -931,6 +947,19 @@ export class UsersService {
       },
     });
 
+    await this.notificationsService.notify(tx, {
+      recipientIds: [userId],
+      actorId: adminId,
+      type: NotificationType.TEMP_BAN,
+      group: NotificationGroup.PUNISHMENTS,
+      targetId: punishment.id,
+      payload: {
+        reason: autobanReason,
+        bannedUntil: bannedUntil.toISOString(),
+        automatic: true,
+      },
+    });
+
     return { applied: true, bannedUntil };
   }
 
@@ -1020,7 +1049,7 @@ export class UsersService {
         },
       });
 
-      await tx.userPunishment.create({
+      const punishment = await tx.userPunishment.create({
         data: {
           userId: warning.userId,
           adminId,
@@ -1034,6 +1063,18 @@ export class UsersService {
         userId: warning.userId,
         actorId: adminId,
         type: UserHistoryEventType.WARNING_REMOVED,
+        payload: {
+          reason,
+          warningId,
+        },
+      });
+
+      await this.notificationsService.notify(tx, {
+        recipientIds: [warning.userId],
+        actorId: adminId,
+        type: NotificationType.WARNING_REMOVED,
+        group: NotificationGroup.PUNISHMENTS,
+        targetId: punishment.id,
         payload: {
           reason,
           warningId,
@@ -1760,6 +1801,19 @@ export class UsersService {
           isMuted,
         },
       });
+
+      await this.notificationsService.notify(tx, {
+        recipientIds: [dto.userId],
+        actorId: adminId,
+        type: NotificationType.TEMP_BAN,
+        group: NotificationGroup.PUNISHMENTS,
+        targetId: punishment.id,
+        payload: {
+          reason,
+          bannedUntil: bannedUntil.toISOString(),
+          isMuted,
+        },
+      });
     });
 
     return this.me(dto.userId);
@@ -1821,6 +1875,17 @@ export class UsersService {
           isMuted: false,
         },
       });
+
+      await this.notificationsService.notify(tx, {
+        recipientIds: [dto.userId],
+        actorId: adminId,
+        type: NotificationType.PERMANENT_BAN,
+        group: NotificationGroup.PUNISHMENTS,
+        targetId: punishment.id,
+        payload: {
+          reason,
+        },
+      });
     });
 
     return this.me(dto.userId);
@@ -1867,6 +1932,17 @@ export class UsersService {
         payload: {
           reason,
           punishmentId: punishment.id,
+        },
+      });
+
+      await this.notificationsService.notify(tx, {
+        recipientIds: [dto.userId],
+        actorId: adminId,
+        type: NotificationType.UNBAN,
+        group: NotificationGroup.PUNISHMENTS,
+        targetId: punishment.id,
+        payload: {
+          reason,
         },
       });
     });
