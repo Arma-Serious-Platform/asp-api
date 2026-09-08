@@ -1,7 +1,8 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsBoolean, IsUUID, IsDateString } from "class-validator";
+import { IsOptional, IsBoolean, IsUUID, IsDateString, IsArray } from "class-validator";
 import { Transform } from "class-transformer";
 import { PaginationDto } from "src/shared/dto/pagination.dto";
+import { normalizeStringArray } from "src/utils/normalize-string-array";
 
 export class FindWeekendsDto extends PaginationDto {
   @ApiPropertyOptional()
@@ -15,10 +16,15 @@ export class FindWeekendsDto extends PaginationDto {
   })
   published?: boolean;
 
-  @ApiPropertyOptional({ description: 'Filter weekends that have a game with this mission' })
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Filter weekends that have a game with any of these missions',
+  })
   @IsOptional()
-  @IsUUID()
-  missionId?: string;
+  @Transform(normalizeStringArray)
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  missionIds?: string[];
 
   @ApiPropertyOptional({
     description: 'Filter weekends that have a game with this HQ squad (attack or defense)',

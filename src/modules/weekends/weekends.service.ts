@@ -177,19 +177,20 @@ export class WeekendsService {
       skip = 0,
       take = 100,
       published,
-      missionId,
+      missionIds,
       hqSquadId,
       adminId,
       dateFrom,
       dateTo,
     } = dto;
+    const filteredMissionIds = missionIds?.filter(Boolean);
     const accessibleSideId =
       await this.headquartersService.getAccessibleHeadquartersSideId(
         userId ?? null,
       );
 
     const hasGameFilters = Boolean(
-      missionId || hqSquadId || adminId || dateFrom || dateTo,
+      filteredMissionIds?.length || hqSquadId || adminId || dateFrom || dateTo,
     );
 
     const dateFilter: Prisma.DateTimeFilter | undefined =
@@ -215,7 +216,7 @@ export class WeekendsService {
       ...(hasGameFilters && {
         games: {
           some: {
-            ...(missionId && { missionId }),
+            ...(filteredMissionIds?.length && { missionId: { in: filteredMissionIds } }),
             ...(adminId && { adminId }),
             ...(hqSquadId && {
               OR: [
