@@ -1215,6 +1215,8 @@ export class HeadquartersService {
       throw new NotFoundException('Comment not found');
     }
 
+    await this.getGamePlanWithSide(comment.gamePlanId);
+
     if (comment.userId !== userId) {
       throw new ForbiddenException('You can only update your own comments');
     }
@@ -1303,6 +1305,8 @@ export class HeadquartersService {
     if (!comment) {
       throw new NotFoundException('Comment not found');
     }
+
+    await this.getGamePlanWithSide(comment.gamePlanId);
 
     if (comment.userId !== userId) {
       throw new ForbiddenException('You can only delete your own comments');
@@ -1641,8 +1645,11 @@ export class HeadquartersService {
   } satisfies Prisma.GamePlanCommentInclude;
 
   private async getGamePlanWithSide(id: string) {
-    const gamePlan = await this.prisma.gamePlan.findUnique({
-      where: { id },
+    const gamePlan = await this.prisma.gamePlan.findFirst({
+      where: {
+        id,
+        ...this.publishedWeekendPlanWhere,
+      },
       select: {
         id: true,
         sideId: true,
@@ -1659,8 +1666,11 @@ export class HeadquartersService {
   }
 
   private async getSlotWithPlan(slotId: string) {
-    const slot = await this.prisma.gamePlanSlot.findUnique({
-      where: { id: slotId },
+    const slot = await this.prisma.gamePlanSlot.findFirst({
+      where: {
+        id: slotId,
+        gamePlan: this.publishedWeekendPlanWhere,
+      },
       include: {
         gamePlan: {
           select: {

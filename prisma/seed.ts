@@ -100,12 +100,12 @@ export const seed = async () => {
       await Promise.all([
         prisma.side.upsert({
           where: {
-            name: 'Blue Side',
+            name: 'Сторона 1',
             type: 'BLUE',
           },
           update: {},
           create: {
-            name: 'Blue Side',
+            name: 'Сторона 1',
             type: 'BLUE',
             serverId: server.id,
           }
@@ -113,12 +113,12 @@ export const seed = async () => {
 
         prisma.side.upsert({
           where: {
-            name: 'Red Side',
+            name: 'Сторона 2',
             type: 'RED',
           },
           update: {},
           create: {
-            name: 'Red Side',
+            name: 'Сторона 2',
             type: 'RED',
             serverId: server.id,
           }
