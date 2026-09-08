@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SignUpDto } from './dto/create-user.dto';
@@ -81,6 +83,7 @@ export class UsersService {
     private readonly minioService: MinioService,
     private readonly twoFactorService: TwoFactorService,
     private readonly usersHistoryService: UsersHistoryService,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
   ) {}

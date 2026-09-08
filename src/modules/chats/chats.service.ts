@@ -24,6 +24,7 @@ import {
 } from 'src/shared/utils/sync-comment-attachments';
 import { UserRestrictionsService } from '../users/user-restrictions.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { extractLexicalPlainText } from 'src/utils/extract-lexical-plain-text';
 
 const chatInclude = {
   users: {
@@ -303,6 +304,9 @@ export class ChatsService {
       payload: {
         messageId: message.id,
         peerUserId: userId,
+        preview:
+          extractLexicalPlainText(dto.content) ||
+          (uploadedAttachments.length > 0 ? 'Вкладення' : ''),
       },
     });
 

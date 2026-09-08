@@ -2,6 +2,9 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Inject,
+  forwardRef,
+  Optional,
 } from '@nestjs/common';
 import {
   NotificationGroup,
@@ -55,7 +58,9 @@ const actorSelect = {
 export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly gateway: NotificationsGateway,
+    @Optional()
+    @Inject(forwardRef(() => NotificationsGateway))
+    private readonly gateway?: NotificationsGateway,
   ) {}
 
   async notify(db: NotifyDb, params: NotifyParams) {
@@ -105,7 +110,7 @@ export class NotificationsService {
       })),
     });
 
-    this.gateway.emitToUsers(recipientIds, {
+    this.gateway?.emitToUsers(recipientIds, {
       group: params.group,
       type: params.type,
     });
@@ -170,7 +175,7 @@ export class NotificationsService {
             createdAt,
           })),
         });
-        this.gateway.emitToUsers(recipientIds, {
+        this.gateway?.emitToUsers(recipientIds, {
           group: params.group,
           type: params.type,
         });

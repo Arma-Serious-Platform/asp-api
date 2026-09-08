@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { PrismaModule } from 'src/infrastructure/prisma/prisma.module';
@@ -19,7 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '3d' },
     }),
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [UsersController],
   providers: [

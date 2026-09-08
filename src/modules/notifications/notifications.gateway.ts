@@ -4,7 +4,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { Namespace, Socket } from 'socket.io';
 import { NotificationGroup, NotificationType } from '@prisma/client';
 import { AuthService } from 'src/modules/auth/auth.service';
@@ -36,7 +36,10 @@ export class NotificationsGateway
   @WebSocketServer()
   server: Namespace;
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
+  ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
