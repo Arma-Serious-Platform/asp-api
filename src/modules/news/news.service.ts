@@ -85,6 +85,19 @@ export class NewsService {
     };
   }
 
+  async uploadContentMedia(file: Multer.File) {
+    const uploaded = await this.minioService.uploadFile(
+      ASP_BUCKET.NEWS_IMAGES,
+      file,
+    );
+
+    return {
+      id: uploaded.id,
+      url: uploaded.url,
+      filename: uploaded.filename,
+    };
+  }
+
   private async findMany(dto: FindNewsDto, forcePublished = false) {
     const skip = Number(dto.skip ?? 0);
     const take = Number(dto.take ?? 50);

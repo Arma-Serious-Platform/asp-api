@@ -9,11 +9,15 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+} from '@nestjs/platform-express';
 import { Multer } from 'multer';
 import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { Roles } from 'src/shared/decorators/roles.decorator';
@@ -38,6 +42,9 @@ export class NewsController {
     if (image.size > IMAGE_MAX_SIZE) {
       throw new BadRequestException('Image exceeds 10MB size limit');
     }
+    if (image.mimetype && !image.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
   }
 
   private pickFiles(files?: {
@@ -61,6 +68,18 @@ export class NewsController {
   @Roles([...NEWS_ROLES])
   findAdmin(@Query() dto: FindNewsDto) {
     return this.newsService.findAdmin(dto);
+  }
+
+  @Post('admin/media')
+  @UseGuards(AuthGuard)
+  @Roles([...NEWS_ROLES])
+  @UseInterceptors(FileInterceptor('file'))
+  uploadMedia(@UploadedFile() file?: Multer.File) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    this.validateImage(file);
+    return this.newsService.uploadContentMedia(file);
   }
 
   @Get('admin/:id')
