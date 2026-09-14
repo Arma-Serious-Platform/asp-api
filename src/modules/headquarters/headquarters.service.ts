@@ -807,11 +807,7 @@ export class HeadquartersService {
         select: this.gamePlanListSelect,
         skip,
         take,
-        orderBy: {
-          game: {
-            date: 'desc',
-          },
-        },
+        orderBy: [{ game: { date: 'desc' } }, { game: { position: 'asc' } }],
       }),
     ]);
 
