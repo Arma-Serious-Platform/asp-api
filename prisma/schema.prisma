@@ -23,6 +23,8 @@ model File {
   missionCommentAttachments MissionCommentAttachment[]
   messageAttachments MessageAttachment[]
   gamePlanCommentAttachments GamePlanCommentAttachment[]
+  newsImages News[] @relation("NewsImages")
+  newsAttachments NewsAttachment[]
 }
 
 model GamePlan {
@@ -138,6 +140,8 @@ model User {
   notificationsReceived       Notification[]           @relation("NotificationRecipients")
   notificationsActed          Notification[]           @relation("NotificationActors")
   notificationPreferences     NotificationPreference[]
+  authoredNews                News[]                   @relation("NewsAuthors")
+  editedNews                  News[]                   @relation("NewsEditors")
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
 }
@@ -720,4 +724,46 @@ enum NotificationType {
   PERMANENT_BAN
   UNBAN
   WEEKEND_PUBLISHED
+}
+
+enum NewsType {
+  INFO
+  TECH_UPDATE
+}
+
+model News {
+  id               String           @id @default(uuid())
+  title            String
+  shortDescription Json?
+  content          Json
+  published        Boolean          @default(false)
+  type             NewsType         @default(INFO)
+  date             DateTime         @default(now())
+  authorId         String
+  author           User             @relation("NewsAuthors", fields: [authorId], references: [id], onDelete: Cascade)
+  lastEditedById   String
+  lastEditedBy     User             @relation("NewsEditors", fields: [lastEditedById], references: [id], onDelete: Cascade)
+  imageId          String?
+  image            File?            @relation("NewsImages", fields: [imageId], references: [id], onDelete: SetNull)
+  attachments      NewsAttachment[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([published, date])
+  @@index([type, date])
+  @@index([authorId])
+}
+
+model NewsAttachment {
+  id           String   @id @default(uuid())
+  newsId       String
+  news         News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  originalName String
+  mimeType     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([newsId])
 }
