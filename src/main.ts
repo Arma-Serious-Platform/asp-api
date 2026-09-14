@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -7,12 +6,14 @@ import { seed } from 'prisma/seed';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { HttpErrorLoggingFilter } from './shared/filters/http-error-logging.filter';
-import * as cookieParser from 'cookie-parser';
+import { requestIdMiddleware } from './shared/middleware/request-id.middleware';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   await seed();
   const app = await NestFactory.create(AppModule);
   const { httpAdapter } = app.get(HttpAdapterHost);
+  app.use(requestIdMiddleware);
   app.useGlobalFilters(new HttpErrorLoggingFilter(httpAdapter));
   app.useWebSocketAdapter(new IoAdapter(app));
   app.use(cookieParser());
@@ -35,7 +36,8 @@ async function bootstrap() {
     origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id'],
   });
 
   const config = new DocumentBuilder()

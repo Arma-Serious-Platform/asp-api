@@ -6,7 +6,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
-import { Request } from 'express';
+import {
+  REQUEST_ID_HEADER,
+  RequestWithId,
+} from '../middleware/request-id.middleware';
 
 @Catch()
 export class HttpErrorLoggingFilter extends BaseExceptionFilter {
@@ -34,11 +37,13 @@ export class HttpErrorLoggingFilter extends BaseExceptionFilter {
     status: number,
     exception: unknown,
   ): void {
-    const request = host.switchToHttp().getRequest<Request>();
+    const request = host.switchToHttp().getRequest<RequestWithId>();
     const method = request.method;
     const url = request.originalUrl ?? request.url;
+    const requestId =
+      request.requestId ?? request.header(REQUEST_ID_HEADER) ?? '-';
     const message = this.resolveMessage(exception);
-    const context = `${method} ${url} ${status}`;
+    const context = `${requestId} ${method} ${url} ${status}`;
 
     if (status >= 500) {
       const stack = exception instanceof Error ? exception.stack : undefined;

@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { Multer } from 'multer';
 import { fileTypeFromBuffer } from 'file-type';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 import { v4 as uuid } from 'uuid';
 import { ASP_BUCKET } from './minio.lib';
 
