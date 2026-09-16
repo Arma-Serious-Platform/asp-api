@@ -56,6 +56,21 @@ export class MissionsService {
     } as Prisma.InputJsonObject;
   }
 
+  /** Full slot trees are for HQ plan seeding only — strip from API responses. */
+  private omitMissionSlotTrees<T extends object>(version: T) {
+    const {
+      missionAttackSlots: _missionAttackSlots,
+      missionDefenceSlots: _missionDefenceSlots,
+      missionFriendlySlots: _missionFriendlySlots,
+      ...rest
+    } = version as T & {
+      missionAttackSlots?: unknown;
+      missionDefenceSlots?: unknown;
+      missionFriendlySlots?: unknown;
+    };
+    return rest;
+  }
+
   private resolveFriendlySideInput(input: {
     clearFriendlySide?: boolean;
     attackSideType: MissionGameSide;
@@ -379,9 +394,6 @@ export class MissionsService {
           defenseSideSlots: true,
           friendlySideSlots: true,
           minSlotsToPlay: true,
-          missionAttackSlots: true,
-          missionDefenceSlots: true,
-          missionFriendlySlots: true,
           attackSideType: true,
           defenseSideType: true,
           friendlySideType: true,
@@ -487,7 +499,7 @@ export class MissionsService {
   }
 
   async findById(dto: FindMissionByIdDto) {
-    return await this.prisma.mission.findUnique({
+    const mission = await this.prisma.mission.findUnique({
       where: { id: dto.id },
       include: {
         image: true,
@@ -520,6 +532,15 @@ export class MissionsService {
         }
       },
     });
+
+    if (!mission) {
+      return mission;
+    }
+
+    return {
+      ...mission,
+      missionVersions: mission.missionVersions.map((version) => this.omitMissionSlotTrees(version)),
+    };
   }
 
   async createMission(dto: CreateMissionDto, authorId: string, image?: File) {
@@ -828,7 +849,7 @@ export class MissionsService {
       friendlyScreenshots.map((screenshot) => this.minioService.uploadFile(ASP_BUCKET.MISSION_IMAGES, screenshot)),
     );
 
-    return await this.prisma.missionVersion.create({
+    const created = await this.prisma.missionVersion.create({
       data: {
         fileId,
         version: dto.version,
@@ -898,6 +919,8 @@ export class MissionsService {
         },
       },
     });
+
+    return this.omitMissionSlotTrees(created);
   }
 
   async updateMissionVersion(
@@ -1230,7 +1253,7 @@ export class MissionsService {
         );
       }
 
-      return updated;
+      return this.omitMissionSlotTrees(updated);
     } catch (error) {
       for (const uploadedFileId of uploadedScreenshotFileIdsToRollback) {
         await this.minioService.deleteFile(uploadedFileId);
@@ -1346,7 +1369,7 @@ export class MissionsService {
     );
     await this.minioService.moveFileToBucket(version.fileId, targetBucket);
 
-    return await this.prisma.missionVersion.update({
+    const updated = await this.prisma.missionVersion.update({
       where: { id: versionId },
       data: {
         status: dto.status,
@@ -1359,5 +1382,7 @@ export class MissionsService {
         },
       },
     });
+
+    return this.omitMissionSlotTrees(updated);
   }
 }
