@@ -10,5 +10,6 @@ import { NotificationsModule } from "../notifications/notifications.module";
   imports: [PrismaModule, JwtModule, HeadquartersModule, NotificationsModule],
   providers: [WeekendsService],
   controllers: [WeekendsController],
+  exports: [WeekendsService],
 })
 export class WeekendsModule {}

@@ -19,6 +19,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NewsModule } from './modules/news/news.module';
+import { FeedModule } from './modules/feed/feed.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { NewsModule } from './modules/news/news.module';
     SpecializationsModule,
     NotificationsModule,
     NewsModule,
+    FeedModule,
   ],
   controllers: [AppController],
   providers: [AppService],
