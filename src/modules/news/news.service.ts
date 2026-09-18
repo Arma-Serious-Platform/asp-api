@@ -20,12 +20,14 @@ import { commentUserSelect } from 'src/shared/utils/comment-user-select';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { FindNewsDto } from './dto/find-news.dto';
+import { ChannelAnnouncementsService } from 'src/infrastructure/bots/channel-announcements.service';
 
 @Injectable()
 export class NewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
+    private readonly channelAnnouncements: ChannelAnnouncementsService,
   ) {}
 
   private readonly newsInclude = {
@@ -175,7 +177,7 @@ export class NewsService {
       attachmentFiles,
     );
 
-    return this.prisma.news.create({
+    const created = await this.prisma.news.create({
       data: {
         title: dto.title.trim(),
         shortDescription:
@@ -201,6 +203,12 @@ export class NewsService {
       },
       include: this.newsInclude,
     });
+
+    if (created.published) {
+      await this.channelAnnouncements.announceNews(created);
+    }
+
+    return created;
   }
 
   async update(
@@ -253,7 +261,9 @@ export class NewsService {
       }
     }
 
-    return this.prisma.news.update({
+    const wasPublished = existing.published;
+
+    const updated = await this.prisma.news.update({
       where: { id },
       data: {
         ...(dto.title !== undefined && { title: dto.title.trim() }),
@@ -280,6 +290,12 @@ export class NewsService {
       },
       include: this.newsInclude,
     });
+
+    if (!wasPublished && updated.published) {
+      await this.channelAnnouncements.announceNews(updated);
+    }
+
+    return updated;
   }
 
   async delete(id: string) {

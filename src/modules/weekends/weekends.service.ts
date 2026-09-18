@@ -7,6 +7,7 @@ import { UpdateGameDto } from "./dto/update-game.dto";
 import { NotificationGroup, NotificationType, Prisma } from "@prisma/client";
 import { HeadquartersService } from "../headquarters/headquarters.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { ChannelAnnouncementsService } from "src/infrastructure/bots/channel-announcements.service";
 
 @Injectable()
 export class WeekendsService {
@@ -139,6 +140,7 @@ export class WeekendsService {
     private readonly prisma: PrismaService,
     private readonly headquartersService: HeadquartersService,
     private readonly notificationsService: NotificationsService,
+    private readonly channelAnnouncements: ChannelAnnouncementsService,
   ) { }
 
   private readonly gamePlanIdSelect = {
@@ -479,6 +481,7 @@ export class WeekendsService {
           name: weekend.name,
         },
       });
+      await this.channelAnnouncements.announceWeekend(weekend);
     }
 
     return weekend;
@@ -542,6 +545,7 @@ export class WeekendsService {
           name: updated.name,
         },
       });
+      await this.channelAnnouncements.announceWeekend(updated);
     }
 
     return updated;
