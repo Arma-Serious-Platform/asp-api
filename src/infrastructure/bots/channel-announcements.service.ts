@@ -25,11 +25,11 @@ type WeekendGameAnnouncement = {
     defenseSideName?: string | null;
     attackSideType?: SideColor;
     defenseSideType?: SideColor;
+    attackSideSlots?: number | null;
+    defenseSideSlots?: number | null;
     friendlySideName?: string | null;
     friendlySideType?: SideColor;
   } | null;
-  attackSide?: { name?: string | null; type?: SideColor } | null;
-  defenseSide?: { name?: string | null; type?: SideColor } | null;
 };
 
 type WeekendAnnouncementPayload = {
@@ -85,11 +85,18 @@ export class ChannelAnnouncementsService {
     return mode === 'html' ? `<b>${safe}</b>` : `**${safe}**`;
   }
 
-  private link(url: string, mode: FormatMode) {
+  private newsLink(url: string, mode: FormatMode) {
     const safeUrl = mode === 'html' ? this.escapeHtml(url) : url;
     return mode === 'html'
       ? `🔗 <a href="${safeUrl}">${safeUrl}</a>`
       : `🔗 ${url}`;
+  }
+
+  private detailsLink(url: string, mode: FormatMode) {
+    const safeUrl = mode === 'html' ? this.escapeHtml(url) : url;
+    return mode === 'html'
+      ? `Детальніше: <a href="${safeUrl}">${safeUrl}</a>`
+      : `Детальніше: ${url}`;
   }
 
   /** Telegram/Discord plain text has no colors — use side-colored circle emojis. */
@@ -106,22 +113,14 @@ export class ChannelAnnouncementsService {
     }
   }
 
-  private coloredSideLabel(name: string, type: SideColor, mode: FormatMode) {
-    return `${this.sideEmoji(type)} ${this.formatText(name, mode)}`;
-  }
-
-  private formatFaction(
-    gameSideName: string,
-    gameSideType: SideColor,
-    squadSideName: string | null | undefined,
-    squadSideType: SideColor,
+  private formatGameSide(
+    name: string,
+    type: SideColor,
+    slots: number | null | undefined,
     mode: FormatMode,
   ) {
-    const gameLabel = this.coloredSideLabel(gameSideName, gameSideType, mode);
-    if (!squadSideName) {
-      return gameLabel;
-    }
-    return `${gameLabel} (${this.coloredSideLabel(squadSideName, squadSideType, mode)})`;
+    const slotsLabel = slots == null ? '—' : String(slots);
+    return `${this.sideEmoji(type)} ${this.formatText(name, mode)} (${slotsLabel})`;
   }
 
   private buildNewsLines(
@@ -133,7 +132,7 @@ export class ChannelAnnouncementsService {
     return [
       `📰 ${this.bold(title, mode)}`,
       shortDescription ? this.formatText(shortDescription, mode) : null,
-      this.link(link, mode),
+      this.newsLink(link, mode),
     ].filter(Boolean) as string[];
   }
 
@@ -148,30 +147,26 @@ export class ChannelAnnouncementsService {
         game.missionVersion?.mission?.name ||
         game.mission?.name ||
         `Гра ${index + 1}`;
-      const attackGameSide = game.missionVersion?.attackSideName || '—';
-      const defenseGameSide = game.missionVersion?.defenseSideName || '—';
-      const attack = this.formatFaction(
-        attackGameSide,
+      const attack = this.formatGameSide(
+        game.missionVersion?.attackSideName || '—',
         game.missionVersion?.attackSideType,
-        game.attackSide?.name,
-        game.attackSide?.type,
+        game.missionVersion?.attackSideSlots,
         mode,
       );
-      const defense = this.formatFaction(
-        defenseGameSide,
+      const defense = this.formatGameSide(
+        game.missionVersion?.defenseSideName || '—',
         game.missionVersion?.defenseSideType,
-        game.defenseSide?.name,
-        game.defenseSide?.type,
+        game.missionVersion?.defenseSideSlots,
         mode,
       );
 
-      return [`🎮 ${this.bold(missionName, mode)}`, `${attack}  ⚔️  ${defense}`].join('\n');
+      return [`🎮 ${this.bold(missionName, mode)}`, `${attack}  vs  ${defense}`].join('\n');
     });
 
     return [
       `📅 ${this.bold(weekend.name, mode)}`,
       gameBlocks.length > 0 ? gameBlocks.join('\n\n') : null,
-      this.link(link, mode),
+      this.detailsLink(link, mode),
     ].filter(Boolean) as string[];
   }
 
