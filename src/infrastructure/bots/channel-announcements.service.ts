@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BotNotification, BotNotificationType, NewsType, State } from '@prisma/client';
-import { extractLexicalPlainText } from 'src/utils/extract-lexical-plain-text';
+import { extractLexicalFormattedText } from 'src/utils/extract-lexical-formatted-text';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { TelegramService } from './telegram.service';
 import { DiscordService } from './discord.service';
@@ -104,6 +104,34 @@ export class ChannelAnnouncementsService {
     return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
   }
 
+  private buildTelegramNewsCaption(
+    title: string,
+    shortDescription: unknown,
+    link: string | null,
+  ) {
+    let descLimit = 800;
+    let caption = this.buildNewsLines(
+      title,
+      extractLexicalFormattedText(shortDescription, 'html', descLimit),
+      link,
+      'html',
+    ).join('\n\n');
+
+    while (caption.length > TELEGRAM_CAPTION_MAX && descLimit > 80) {
+      descLimit = Math.max(80, descLimit - 120);
+      caption = this.buildNewsLines(
+        title,
+        extractLexicalFormattedText(shortDescription, 'html', descLimit),
+        link,
+        'html',
+      ).join('\n\n');
+    }
+
+    return caption.length > TELEGRAM_CAPTION_MAX
+      ? this.truncate(caption, TELEGRAM_CAPTION_MAX)
+      : caption;
+  }
+
   private escapeHtml(text: string) {
     return text
       .replace(/&/g, '&amp;')
@@ -169,7 +197,8 @@ export class ChannelAnnouncementsService {
   ) {
     return [
       `📰 ${this.bold(title, mode)}`,
-      shortDescription ? this.formatText(shortDescription, mode) : null,
+      // shortDescription is already escaped/formatted for the target platform
+      shortDescription || null,
       link ? this.newsLink(link, mode) : null,
     ].filter(Boolean) as string[];
   }
@@ -264,20 +293,32 @@ export class ChannelAnnouncementsService {
         return;
       }
 
-      const shortDescription = extractLexicalPlainText(news.shortDescription, 800);
       const title = news.title?.trim() || 'Новина';
+      const discordDescription = extractLexicalFormattedText(
+        news.shortDescription,
+        'markdown',
+        800,
+      );
       const photoUrl = news.image?.url?.trim();
       const imageFile = photoUrl ? await this.downloadImage(photoUrl) : null;
 
       await Promise.all(
         targets.map(async (target) => {
           const link = this.resolveUrl(target.url, news.id);
-          const telegramText = this.buildNewsLines(title, shortDescription, link, 'html').join(
-            '\n\n',
+          const telegramCaption = this.buildTelegramNewsCaption(
+            title,
+            news.shortDescription,
+            link,
           );
+          const telegramText = this.buildNewsLines(
+            title,
+            extractLexicalFormattedText(news.shortDescription, 'html', 800),
+            link,
+            'html',
+          ).join('\n\n');
           const discordText = this.buildNewsLines(
             title,
-            shortDescription,
+            discordDescription,
             link,
             'markdown',
           ).join('\n\n');
@@ -287,19 +328,13 @@ export class ChannelAnnouncementsService {
           await Promise.all([
             telegram
               ? imageFile
-                ? this.telegram.sendPhotoFile(
-                    telegram,
-                    imageFile,
-                    this.truncate(telegramText, TELEGRAM_CAPTION_MAX),
-                    { parseMode: 'HTML' },
-                  )
+                ? this.telegram.sendPhotoFile(telegram, imageFile, telegramCaption, {
+                    parseMode: 'HTML',
+                  })
                 : photoUrl
-                  ? this.telegram.sendPhoto(
-                      telegram,
-                      photoUrl,
-                      this.truncate(telegramText, TELEGRAM_CAPTION_MAX),
-                      { parseMode: 'HTML' },
-                    )
+                  ? this.telegram.sendPhoto(telegram, photoUrl, telegramCaption, {
+                      parseMode: 'HTML',
+                    })
                   : this.telegram.sendMessage(telegram, telegramText, { parseMode: 'HTML' })
               : Promise.resolve(),
             discord
@@ -309,7 +344,7 @@ export class ChannelAnnouncementsService {
                     {
                       title: `📰 ${title}`,
                       description: [
-                        shortDescription || null,
+                        discordDescription || null,
                         link ? `Детальніше: ${link}` : null,
                       ]
                         .filter(Boolean)
@@ -323,7 +358,7 @@ export class ChannelAnnouncementsService {
                   ? this.discord.sendEmbed(discord, {
                       title: `📰 ${title}`,
                       description: [
-                        shortDescription || null,
+                        discordDescription || null,
                         link ? `Детальніше: ${link}` : null,
                       ]
                         .filter(Boolean)
@@ -375,6 +410,14 @@ export class ChannelAnnouncementsService {
     }
   }
 
+  private stripDiscordMentionsForTelegram(text: string) {
+    return text
+      .replace(/@(?:here|everyone|гравець)/gi, '')
+      .replace(/[^\S\n]{2,}/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .trim();
+  }
+
   async announceManual(target: DeliveryTarget, message: string) {
     const text = message.trim();
     if (!text) {
@@ -384,9 +427,10 @@ export class ChannelAnnouncementsService {
     const link = this.resolveUrl(target.url);
     const telegram = this.telegramCreds(target);
     const discord = this.discordCreds(target);
+    const telegramBody = this.stripDiscordMentionsForTelegram(text);
 
     const telegramText = [
-      this.escapeHtml(text),
+      telegramBody ? this.escapeHtml(telegramBody) : null,
       link ? this.detailsLink(link, 'html') : null,
     ]
       .filter(Boolean)
@@ -396,7 +440,7 @@ export class ChannelAnnouncementsService {
       .join('\n\n');
 
     await Promise.all([
-      telegram
+      telegram && telegramText
         ? this.telegram.sendMessage(telegram, telegramText, { parseMode: 'HTML' })
         : Promise.resolve(),
       discord ? this.discord.sendMessage(discord, discordText) : Promise.resolve(),
