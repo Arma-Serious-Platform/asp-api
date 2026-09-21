@@ -2,37 +2,36 @@ import { Injectable, Logger } from '@nestjs/common';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
+export type TelegramChannelCreds = {
+  token: string;
+  channelId: string;
+};
+
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
 
-  private get token() {
-    return process.env.TELEGRAM_BOT_TOKEN?.trim() || '';
-  }
-
-  private get chatId() {
-    return process.env.TELEGRAM_CHANNEL_ID?.trim() || '@virtual_tactical_games';
-  }
-
-  private get isConfigured() {
-    return Boolean(this.token && this.chatId);
-  }
-
-  private async callApi(method: string, body: Record<string, unknown> | FormData) {
-    if (!this.isConfigured) {
-      this.logger.debug(`Telegram skipped (${method}): bot token or channel id missing`);
+  private async callApi(
+    creds: TelegramChannelCreds,
+    method: string,
+    body: Record<string, unknown> | FormData,
+  ) {
+    const token = creds.token?.trim();
+    const channelId = creds.channelId?.trim();
+    if (!token || !channelId) {
+      this.logger.debug(`Telegram skipped (${method}): token or channel id missing`);
       return null;
     }
 
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
-    const response = await fetch(`${TELEGRAM_API}/bot${this.token}/${method}`, {
+    const response = await fetch(`${TELEGRAM_API}/bot${token}/${method}`, {
       method: 'POST',
       ...(isFormData
         ? { body }
         : {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              chat_id: this.chatId,
+              chat_id: channelId,
               ...(body as Record<string, unknown>),
             }),
           }),
@@ -52,9 +51,13 @@ export class TelegramService {
     return payload;
   }
 
-  async sendMessage(text: string, options?: { parseMode?: 'HTML' | 'Markdown' }) {
+  async sendMessage(
+    creds: TelegramChannelCreds,
+    text: string,
+    options?: { parseMode?: 'HTML' | 'Markdown' },
+  ) {
     try {
-      await this.callApi('sendMessage', {
+      await this.callApi(creds, 'sendMessage', {
         text,
         disable_web_page_preview: false,
         ...(options?.parseMode ? { parse_mode: options.parseMode } : {}),
@@ -66,9 +69,14 @@ export class TelegramService {
     }
   }
 
-  async sendPhoto(photoUrl: string, caption?: string, options?: { parseMode?: 'HTML' | 'Markdown' }) {
+  async sendPhoto(
+    creds: TelegramChannelCreds,
+    photoUrl: string,
+    caption?: string,
+    options?: { parseMode?: 'HTML' | 'Markdown' },
+  ) {
     try {
-      await this.callApi('sendPhoto', {
+      await this.callApi(creds, 'sendPhoto', {
         photo: photoUrl,
         ...(caption ? { caption } : {}),
         ...(options?.parseMode ? { parse_mode: options.parseMode } : {}),
@@ -81,13 +89,14 @@ export class TelegramService {
   }
 
   async sendPhotoFile(
+    creds: TelegramChannelCreds,
     file: { buffer: Buffer; filename: string; contentType?: string },
     caption?: string,
     options?: { parseMode?: 'HTML' | 'Markdown' },
   ) {
     try {
       const form = new FormData();
-      form.append('chat_id', this.chatId);
+      form.append('chat_id', creds.channelId.trim());
       form.append(
         'photo',
         new Blob([new Uint8Array(file.buffer)], { type: file.contentType || 'image/webp' }),
@@ -99,7 +108,7 @@ export class TelegramService {
       if (options?.parseMode) {
         form.append('parse_mode', options.parseMode);
       }
-      await this.callApi('sendPhoto', form);
+      await this.callApi(creds, 'sendPhoto', form);
     } catch (error) {
       this.logger.error(
         `Failed to send Telegram photo file: ${error instanceof Error ? error.message : error}`,

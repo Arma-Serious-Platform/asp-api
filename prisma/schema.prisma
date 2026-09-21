@@ -731,6 +731,12 @@ enum NewsType {
   TECH_UPDATE
 }
 
+enum BotNotificationType {
+  WEEKENDS
+  NEWS
+  MANUAL
+}
+
 model News {
   id               String           @id @default(uuid())
   title            String
@@ -766,4 +772,19 @@ model NewsAttachment {
   updatedAt    DateTime @updatedAt
 
   @@index([newsId])
+}
+model BotNotification {
+  id                String              @id @default(uuid())
+  name              String
+  type              BotNotificationType
+  telegramToken     String?
+  telegramChannelId String?
+  discordToken      String?
+  discordChannelId  String?
+  status            State               @default(ACTIVE)
+  url               String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([type, status])
 }

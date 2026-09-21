@@ -20,6 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NewsModule } from './modules/news/news.module';
 import { FeedModule } from './modules/feed/feed.module';
+import { BotNotificationsModule } from './modules/bot-notifications/bot-notifications.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { FeedModule } from './modules/feed/feed.module';
     NotificationsModule,
     NewsModule,
     FeedModule,
+    BotNotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

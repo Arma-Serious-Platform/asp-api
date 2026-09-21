@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { BotNotification, BotNotificationType, State } from '@prisma/client';
 import { extractLexicalPlainText } from 'src/utils/extract-lexical-plain-text';
+import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { TelegramService } from './telegram.service';
 import { DiscordService } from './discord.service';
 
 const TELEGRAM_CAPTION_MAX = 1024;
-const DEFAULT_NEWS_URL = 'https://vtg.in.ua/news/:id';
-const DEFAULT_WEEKENDS_URL = 'https://vtg.in.ua/weekends';
 
 type SideColor = 'BLUE' | 'RED' | 'GREEN' | string | null | undefined;
 
@@ -40,22 +40,45 @@ type WeekendAnnouncementPayload = {
 
 type FormatMode = 'html' | 'markdown';
 
+type DeliveryTarget = Pick<
+  BotNotification,
+  'id' | 'name' | 'url' | 'telegramToken' | 'telegramChannelId' | 'discordToken' | 'discordChannelId'
+>;
+
 @Injectable()
 export class ChannelAnnouncementsService {
   private readonly logger = new Logger(ChannelAnnouncementsService.name);
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
     private readonly discord: DiscordService,
   ) {}
 
-  private resolveNewsUrl(id: string) {
-    const template = process.env.NEWS_PUBLIC_URL?.trim() || DEFAULT_NEWS_URL;
-    return template.replace(':id', id);
+  private async findActiveTargets(type: BotNotificationType): Promise<DeliveryTarget[]> {
+    return this.prisma.botNotification.findMany({
+      where: { type, status: State.ACTIVE },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        telegramToken: true,
+        telegramChannelId: true,
+        discordToken: true,
+        discordChannelId: true,
+      },
+    });
   }
 
-  private resolveWeekendsUrl() {
-    return process.env.WEEKENDS_PUBLIC_URL?.trim() || DEFAULT_WEEKENDS_URL;
+  private resolveUrl(template: string | null | undefined, id?: string) {
+    const url = template?.trim();
+    if (!url) {
+      return null;
+    }
+    if (id && url.includes(':id')) {
+      return url.replace(':id', id);
+    }
+    return url;
   }
 
   private truncate(text: string, max: number) {
@@ -88,8 +111,8 @@ export class ChannelAnnouncementsService {
   private newsLink(url: string, mode: FormatMode) {
     const safeUrl = mode === 'html' ? this.escapeHtml(url) : url;
     return mode === 'html'
-      ? `🔗 <a href="${safeUrl}">${safeUrl}</a>`
-      : `🔗 ${url}`;
+      ? `Детальніше: <a href="${safeUrl}">${safeUrl}</a>`
+      : `Детальніше: ${url}`;
   }
 
   private detailsLink(url: string, mode: FormatMode) {
@@ -99,7 +122,6 @@ export class ChannelAnnouncementsService {
       : `Детальніше: ${url}`;
   }
 
-  /** Telegram/Discord plain text has no colors — use side-colored circle emojis. */
   private sideEmoji(type: SideColor) {
     switch (type) {
       case 'BLUE':
@@ -126,18 +148,21 @@ export class ChannelAnnouncementsService {
   private buildNewsLines(
     title: string,
     shortDescription: string,
-    link: string,
+    link: string | null,
     mode: FormatMode,
   ) {
     return [
       `📰 ${this.bold(title, mode)}`,
       shortDescription ? this.formatText(shortDescription, mode) : null,
-      this.newsLink(link, mode),
+      link ? this.newsLink(link, mode) : null,
     ].filter(Boolean) as string[];
   }
 
-  private buildWeekendLines(weekend: WeekendAnnouncementPayload, mode: FormatMode) {
-    const link = this.resolveWeekendsUrl();
+  private buildWeekendLines(
+    weekend: WeekendAnnouncementPayload,
+    link: string | null,
+    mode: FormatMode,
+  ) {
     const games = [...(weekend.games ?? [])].sort(
       (a, b) => (a.position ?? 0) - (b.position ?? 0),
     );
@@ -166,7 +191,7 @@ export class ChannelAnnouncementsService {
     return [
       `📅 ${this.bold(weekend.name, mode)}`,
       gameBlocks.length > 0 ? gameBlocks.join('\n\n') : null,
-      this.detailsLink(link, mode),
+      link ? this.detailsLink(link, mode) : null,
     ].filter(Boolean) as string[];
   }
 
@@ -202,56 +227,99 @@ export class ChannelAnnouncementsService {
     }
   }
 
+  private telegramCreds(target: DeliveryTarget) {
+    if (!target.telegramToken?.trim() || !target.telegramChannelId?.trim()) {
+      return null;
+    }
+    return { token: target.telegramToken, channelId: target.telegramChannelId };
+  }
+
+  private discordCreds(target: DeliveryTarget) {
+    if (!target.discordToken?.trim() || !target.discordChannelId?.trim()) {
+      return null;
+    }
+    return { token: target.discordToken, channelId: target.discordChannelId };
+  }
+
   async announceNews(news: NewsAnnouncementPayload) {
     try {
-      const link = this.resolveNewsUrl(news.id);
+      const targets = await this.findActiveTargets(BotNotificationType.NEWS);
+      if (!targets.length) {
+        return;
+      }
+
       const shortDescription = extractLexicalPlainText(news.shortDescription, 800);
       const title = news.title?.trim() || 'Новина';
       const photoUrl = news.image?.url?.trim();
       const imageFile = photoUrl ? await this.downloadImage(photoUrl) : null;
 
-      const telegramText = this.buildNewsLines(title, shortDescription, link, 'html').join(
-        '\n\n',
-      );
-      const discordText = this.buildNewsLines(title, shortDescription, link, 'markdown').join(
-        '\n\n',
-      );
+      await Promise.all(
+        targets.map(async (target) => {
+          const link = this.resolveUrl(target.url, news.id);
+          const telegramText = this.buildNewsLines(title, shortDescription, link, 'html').join(
+            '\n\n',
+          );
+          const discordText = this.buildNewsLines(
+            title,
+            shortDescription,
+            link,
+            'markdown',
+          ).join('\n\n');
+          const telegram = this.telegramCreds(target);
+          const discord = this.discordCreds(target);
 
-      await Promise.all([
-        imageFile
-          ? this.telegram.sendPhotoFile(
-              imageFile,
-              this.truncate(telegramText, TELEGRAM_CAPTION_MAX),
-              { parseMode: 'HTML' },
-            )
-          : photoUrl
-            ? this.telegram.sendPhoto(photoUrl, this.truncate(telegramText, TELEGRAM_CAPTION_MAX), {
-                parseMode: 'HTML',
-              })
-            : this.telegram.sendMessage(telegramText, { parseMode: 'HTML' }),
-        imageFile
-          ? this.discord.sendEmbedWithFile(
-              {
-                title: `📰 ${title}`,
-                description: [shortDescription || null, `🔗 ${link}`]
-                  .filter(Boolean)
-                  .join('\n\n'),
-                url: link,
-                imageFilename: imageFile.filename,
-              },
-              imageFile,
-            )
-          : photoUrl
-            ? this.discord.sendEmbed({
-                title: `📰 ${title}`,
-                description: [shortDescription || null, `🔗 ${link}`]
-                  .filter(Boolean)
-                  .join('\n\n'),
-                url: link,
-                image: { url: photoUrl },
-              })
-            : this.discord.sendMessage(discordText),
-      ]);
+          await Promise.all([
+            telegram
+              ? imageFile
+                ? this.telegram.sendPhotoFile(
+                    telegram,
+                    imageFile,
+                    this.truncate(telegramText, TELEGRAM_CAPTION_MAX),
+                    { parseMode: 'HTML' },
+                  )
+                : photoUrl
+                  ? this.telegram.sendPhoto(
+                      telegram,
+                      photoUrl,
+                      this.truncate(telegramText, TELEGRAM_CAPTION_MAX),
+                      { parseMode: 'HTML' },
+                    )
+                  : this.telegram.sendMessage(telegram, telegramText, { parseMode: 'HTML' })
+              : Promise.resolve(),
+            discord
+              ? imageFile
+                ? this.discord.sendEmbedWithFile(
+                    discord,
+                    {
+                      title: `📰 ${title}`,
+                      description: [
+                        shortDescription || null,
+                        link ? `Детальніше: ${link}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join('\n\n'),
+                      url: link ?? undefined,
+                      imageFilename: imageFile.filename,
+                    },
+                    imageFile,
+                  )
+                : photoUrl
+                  ? this.discord.sendEmbed(discord, {
+                      title: `📰 ${title}`,
+                      description: [
+                        shortDescription || null,
+                        link ? `Детальніше: ${link}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join('\n\n'),
+                      url: link ?? undefined,
+                      image: { url: photoUrl },
+                    })
+                  : this.discord.sendMessage(discord, discordText)
+              : Promise.resolve(),
+          ]);
+        }),
+      );
     } catch (error) {
       this.logger.error(
         `Failed to announce news ${news.id}: ${error instanceof Error ? error.message : error}`,
@@ -261,13 +329,27 @@ export class ChannelAnnouncementsService {
 
   async announceWeekend(weekend: WeekendAnnouncementPayload) {
     try {
-      const telegramText = this.buildWeekendLines(weekend, 'html').join('\n\n');
-      const discordText = this.buildWeekendLines(weekend, 'markdown').join('\n\n');
+      const targets = await this.findActiveTargets(BotNotificationType.WEEKENDS);
+      if (!targets.length) {
+        return;
+      }
 
-      await Promise.all([
-        this.telegram.sendMessage(telegramText, { parseMode: 'HTML' }),
-        this.discord.sendMessage(discordText),
-      ]);
+      await Promise.all(
+        targets.map(async (target) => {
+          const link = this.resolveUrl(target.url);
+          const telegramText = this.buildWeekendLines(weekend, link, 'html').join('\n\n');
+          const discordText = this.buildWeekendLines(weekend, link, 'markdown').join('\n\n');
+          const telegram = this.telegramCreds(target);
+          const discord = this.discordCreds(target);
+
+          await Promise.all([
+            telegram
+              ? this.telegram.sendMessage(telegram, telegramText, { parseMode: 'HTML' })
+              : Promise.resolve(),
+            discord ? this.discord.sendMessage(discord, discordText) : Promise.resolve(),
+          ]);
+        }),
+      );
     } catch (error) {
       this.logger.error(
         `Failed to announce weekend ${weekend.id}: ${
@@ -275,5 +357,33 @@ export class ChannelAnnouncementsService {
         }`,
       );
     }
+  }
+
+  async announceManual(target: DeliveryTarget, message: string) {
+    const text = message.trim();
+    if (!text) {
+      return;
+    }
+
+    const link = this.resolveUrl(target.url);
+    const telegram = this.telegramCreds(target);
+    const discord = this.discordCreds(target);
+
+    const telegramText = [
+      this.escapeHtml(text),
+      link ? this.detailsLink(link, 'html') : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    const discordText = [text, link ? this.detailsLink(link, 'markdown') : null]
+      .filter(Boolean)
+      .join('\n\n');
+
+    await Promise.all([
+      telegram
+        ? this.telegram.sendMessage(telegram, telegramText, { parseMode: 'HTML' })
+        : Promise.resolve(),
+      discord ? this.discord.sendMessage(discord, discordText) : Promise.resolve(),
+    ]);
   }
 }

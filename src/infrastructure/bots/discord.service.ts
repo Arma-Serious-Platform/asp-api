@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
+export type DiscordChannelCreds = {
+  token: string;
+  channelId: string;
+};
+
 export type DiscordEmbed = {
   title?: string;
   description?: string;
@@ -14,29 +19,19 @@ export type DiscordEmbed = {
 export class DiscordService {
   private readonly logger = new Logger(DiscordService.name);
 
-  private get token() {
-    return process.env.DISCORD_BOT_TOKEN?.trim() || '';
-  }
-
-  private get channelId() {
-    return process.env.DISCORD_CHANNEL_ID?.trim() || '';
-  }
-
-  private get isConfigured() {
-    return Boolean(this.token && this.channelId);
-  }
-
-  private async postMessage(body: Record<string, unknown> | FormData) {
-    if (!this.isConfigured) {
-      this.logger.debug('Discord skipped: bot token or channel id missing');
+  private async postMessage(creds: DiscordChannelCreds, body: Record<string, unknown> | FormData) {
+    const token = creds.token?.trim();
+    const channelId = creds.channelId?.trim();
+    if (!token || !channelId) {
+      this.logger.debug('Discord skipped: token or channel id missing');
       return null;
     }
 
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
-    const response = await fetch(`${DISCORD_API}/channels/${this.channelId}/messages`, {
+    const response = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
       method: 'POST',
       headers: {
-        Authorization: `Bot ${this.token}`,
+        Authorization: `Bot ${token}`,
         ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       },
       body: isFormData ? body : JSON.stringify(body),
@@ -52,9 +47,9 @@ export class DiscordService {
     return response.json().catch(() => null);
   }
 
-  async sendMessage(content: string) {
+  async sendMessage(creds: DiscordChannelCreds, content: string) {
     try {
-      await this.postMessage({ content });
+      await this.postMessage(creds, { content });
     } catch (error) {
       this.logger.error(
         `Failed to send Discord message: ${error instanceof Error ? error.message : error}`,
@@ -62,9 +57,9 @@ export class DiscordService {
     }
   }
 
-  async sendEmbed(embed: DiscordEmbed, content?: string) {
+  async sendEmbed(creds: DiscordChannelCreds, embed: DiscordEmbed, content?: string) {
     try {
-      await this.postMessage({
+      await this.postMessage(creds, {
         ...(content ? { content } : {}),
         embeds: [embed],
       });
@@ -76,6 +71,7 @@ export class DiscordService {
   }
 
   async sendEmbedWithFile(
+    creds: DiscordChannelCreds,
     embed: Omit<DiscordEmbed, 'image'> & { imageFilename: string },
     file: { buffer: Buffer; filename: string; contentType?: string },
     content?: string,
@@ -98,7 +94,7 @@ export class DiscordService {
         new Blob([new Uint8Array(file.buffer)], { type: file.contentType || 'image/webp' }),
         file.filename,
       );
-      await this.postMessage(form);
+      await this.postMessage(creds, form);
     } catch (error) {
       this.logger.error(
         `Failed to send Discord embed with file: ${
