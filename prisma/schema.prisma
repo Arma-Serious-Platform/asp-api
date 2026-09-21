@@ -709,6 +709,7 @@ enum NotificationGroup {
   SQUAD
   MISSIONS
   ANNOUNCEMENTS
+  NEWS
   PUNISHMENTS
 }
 
@@ -724,6 +725,7 @@ enum NotificationType {
   PERMANENT_BAN
   UNBAN
   WEEKEND_PUBLISHED
+  NEWS_PUBLISHED
 }
 
 enum NewsType {

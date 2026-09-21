@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { NewsType, Prisma } from '@prisma/client';
+import { NewsType, NotificationGroup, NotificationType, Prisma } from '@prisma/client';
 import { Multer } from 'multer';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
@@ -21,6 +21,7 @@ import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { FindNewsDto } from './dto/find-news.dto';
 import { ChannelAnnouncementsService } from 'src/infrastructure/bots/channel-announcements.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class NewsService {
@@ -28,6 +29,7 @@ export class NewsService {
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
     private readonly channelAnnouncements: ChannelAnnouncementsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private readonly newsInclude = {
@@ -100,7 +102,13 @@ export class NewsService {
     };
   }
 
-  private async findMany(dto: FindNewsDto, forcePublished = false) {
+  private async findMany(
+    dto: FindNewsDto,
+    forcePublished = false,
+    orderBy: Prisma.NewsOrderByWithRelationInput | Prisma.NewsOrderByWithRelationInput[] = {
+      date: 'desc',
+    },
+  ) {
     const skip = Number(dto.skip ?? 0);
     const take = Number(dto.take ?? 50);
     const where = this.buildWhere(dto, { forcePublished });
@@ -111,7 +119,7 @@ export class NewsService {
         where,
         skip,
         take,
-        orderBy: { date: 'desc' },
+        orderBy,
         include: this.newsInclude,
       }),
     ]);
@@ -124,7 +132,7 @@ export class NewsService {
   }
 
   findAdmin(dto: FindNewsDto) {
-    return this.findMany(dto, false);
+    return this.findMany(dto, false, [{ date: 'desc' }, { createdAt: 'desc' }]);
   }
 
   async findPublicById(id: string) {
@@ -205,6 +213,15 @@ export class NewsService {
     });
 
     if (created.published) {
+      await this.notificationsService.notifyAllActiveUsers({
+        actorId: authorId,
+        type: NotificationType.NEWS_PUBLISHED,
+        group: NotificationGroup.NEWS,
+        targetId: created.id,
+        payload: {
+          title: created.title,
+        },
+      });
       await this.channelAnnouncements.announceNews(created);
     }
 
@@ -292,6 +309,15 @@ export class NewsService {
     });
 
     if (!wasPublished && updated.published) {
+      await this.notificationsService.notifyAllActiveUsers({
+        actorId: editorId,
+        type: NotificationType.NEWS_PUBLISHED,
+        group: NotificationGroup.NEWS,
+        targetId: updated.id,
+        payload: {
+          title: updated.title,
+        },
+      });
       await this.channelAnnouncements.announceNews(updated);
     }
 
