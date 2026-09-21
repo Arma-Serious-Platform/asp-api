@@ -18,7 +18,9 @@ export class CreateBotNotificationDto {
   @IsString()
   telegramToken?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'Telegram chat/channel id, or "*" to send to every chat the bot can reach',
+  })
   @IsOptional()
   @IsString()
   telegramChannelId?: string | null;
