@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BotNotification, BotNotificationType, State } from '@prisma/client';
+import { BotNotification, BotNotificationType, NewsType, State } from '@prisma/client';
 import { extractLexicalPlainText } from 'src/utils/extract-lexical-plain-text';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { TelegramService } from './telegram.service';
@@ -7,11 +7,18 @@ import { DiscordService } from './discord.service';
 
 const TELEGRAM_CAPTION_MAX = 1024;
 
+const NEWS_BOT_TYPE_BY_NEWS: Record<NewsType, BotNotificationType> = {
+  [NewsType.INFO]: BotNotificationType.NEWS_INFO,
+  [NewsType.TECH_UPDATE]: BotNotificationType.NEWS_TECH_UPDATE,
+  [NewsType.WEBSITE_UPDATE]: BotNotificationType.NEWS_WEBSITE_UPDATE,
+};
+
 type SideColor = 'BLUE' | 'RED' | 'GREEN' | string | null | undefined;
 
 type NewsAnnouncementPayload = {
   id: string;
   title: string;
+  type: NewsType;
   shortDescription?: unknown;
   image?: { url?: string | null } | null;
 };
@@ -55,9 +62,14 @@ export class ChannelAnnouncementsService {
     private readonly discord: DiscordService,
   ) {}
 
-  private async findActiveTargets(type: BotNotificationType): Promise<DeliveryTarget[]> {
+  private async findActiveTargets(
+    type: BotNotificationType | BotNotificationType[],
+  ): Promise<DeliveryTarget[]> {
     return this.prisma.botNotification.findMany({
-      where: { type, status: State.ACTIVE },
+      where: {
+        type: Array.isArray(type) ? { in: type } : type,
+        status: State.ACTIVE,
+      },
       select: {
         id: true,
         name: true,
@@ -68,6 +80,10 @@ export class ChannelAnnouncementsService {
         discordChannelId: true,
       },
     });
+  }
+
+  private newsBotTypes(newsType: NewsType): BotNotificationType[] {
+    return [BotNotificationType.NEWS, NEWS_BOT_TYPE_BY_NEWS[newsType]];
   }
 
   private resolveUrl(template: string | null | undefined, id?: string) {
@@ -243,7 +259,7 @@ export class ChannelAnnouncementsService {
 
   async announceNews(news: NewsAnnouncementPayload) {
     try {
-      const targets = await this.findActiveTargets(BotNotificationType.NEWS);
+      const targets = await this.findActiveTargets(this.newsBotTypes(news.type));
       if (!targets.length) {
         return;
       }

@@ -729,11 +729,15 @@ enum NotificationType {
 enum NewsType {
   INFO
   TECH_UPDATE
+  WEBSITE_UPDATE
 }
 
 enum BotNotificationType {
   WEEKENDS
   NEWS
+  NEWS_INFO
+  NEWS_TECH_UPDATE
+  NEWS_WEBSITE_UPDATE
   MANUAL
 }
 

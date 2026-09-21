@@ -1,0 +1,7 @@
+-- AlterEnum
+ALTER TYPE "NewsType" ADD VALUE 'WEBSITE_UPDATE';
+
+-- AlterEnum
+ALTER TYPE "BotNotificationType" ADD VALUE 'NEWS_INFO';
+ALTER TYPE "BotNotificationType" ADD VALUE 'NEWS_TECH_UPDATE';
+ALTER TYPE "BotNotificationType" ADD VALUE 'NEWS_WEBSITE_UPDATE';
