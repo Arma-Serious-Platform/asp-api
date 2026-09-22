@@ -20,6 +20,7 @@ model File {
   MissionVersion MissionVersion[]
   missionVersionScreenshots MissionVersionScreenshot[]
   specializationIcons Specialization[] @relation("SpecializationIcon")
+  achievementIcons Achievement[] @relation("AchievementIcon")
   missionCommentAttachments MissionCommentAttachment[]
   messageAttachments MessageAttachment[]
   gamePlanCommentAttachments GamePlanCommentAttachment[]
@@ -122,6 +123,7 @@ model User {
   squadJoinRequests           SquadJoinRequest[]
   squad                       Squad?            @relation("SquadMembers", fields: [squadId], references: [id])
   specializations             Specialization[]  @relation("UserSpecializations")
+  achievements                Achievement[]     @relation("UserAchievements")
   games                       Game[]
   telegramUrl                 String?
   discordUrl                  String?
@@ -279,6 +281,17 @@ model Specialization {
   users     User[]   @relation("UserSpecializations")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  title       String   @unique
+  description String
+  iconId      String?
+  icon        File?    @relation("AchievementIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  users       User[]   @relation("UserAchievements")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Squad {

@@ -7,5 +7,6 @@ export enum ASP_BUCKET {
   MINI_MISSIONS = 'mini-missions',
   TESTING_MISSIONS = 'testing-missions',
   SPECIALIZATION_ICONS = 'specialization-icons',
+  ACHIEVEMENT_ICONS = 'achievement-icons',
   NEWS_IMAGES = 'news-images',
 }

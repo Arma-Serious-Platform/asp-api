@@ -451,6 +451,21 @@ export class UsersService {
             name: 'asc',
           },
         },
+        achievements: {
+          include: {
+            icon: {
+              select: {
+                id: true,
+                bucket: true,
+                filename: true,
+                url: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
         avatarUrl: true,
         bannedUntil: true,
         isMuted: true,
@@ -1677,6 +1692,21 @@ export class UsersService {
           },
           orderBy: {
             name: 'asc',
+          },
+        },
+        achievements: {
+          include: {
+            icon: {
+              select: {
+                id: true,
+                bucket: true,
+                filename: true,
+                url: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
           },
         },
         squad: {

@@ -15,6 +15,7 @@ import { HeadquartersModule } from './modules/headquarters/headquarters.module';
 import { IslandsModule } from './modules/islands/islands.module';
 import { RulesModule } from './modules/rules/rules.module';
 import { SpecializationsModule } from './modules/specializations/specializations.module';
+import { AchievementsModule } from './modules/achievements/achievements.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -55,6 +56,7 @@ import { BotNotificationsModule } from './modules/bot-notifications/bot-notifica
     IslandsModule,
     RulesModule,
     SpecializationsModule,
+    AchievementsModule,
     NotificationsModule,
     NewsModule,
     FeedModule,
