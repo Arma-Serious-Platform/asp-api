@@ -551,6 +551,33 @@ export class WeekendsService {
     return updated;
   }
 
+  async announce(
+    id: string,
+    channels: { telegram?: boolean; discord?: boolean } = {},
+  ) {
+    const weekend = await this.prisma.weekend.findUnique({
+      where: { id },
+      include: {
+        games: {
+          include: {
+            missionVersion: {
+              select: this.missionVersionSelectForWeekendGame,
+            },
+          },
+          orderBy: [{ position: 'asc' }, { date: 'asc' }],
+        },
+      },
+    });
+
+    if (!weekend) {
+      throw new NotFoundException('Weekend not found');
+    }
+
+    await this.channelAnnouncements.announceWeekend(weekend, channels);
+
+    return { id: weekend.id, announced: true };
+  }
+
   async delete(id: string) {
     const weekend = await this.prisma.weekend.findUnique({
       where: { id },

@@ -9,6 +9,7 @@ import { AuthGuard } from "src/shared/guards/auth.guard";
 import { Roles } from "src/shared/decorators/roles.decorator";
 import { AuthService } from "src/modules/auth/auth.service";
 import { RequestType } from "src/utils/types";
+import { AnnounceChannelsDto } from "src/shared/dto/announce-channels.dto";
 
 @Controller('weekends')
 export class WeekendsController {
@@ -45,6 +46,13 @@ export class WeekendsController {
     @Req() req: RequestType,
   ) {
     return this.weekendsService.update(id, updateWeekendDto, req.userId);
+  }
+
+  @Post(':id/announce')
+  @UseGuards(AuthGuard)
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
+  announce(@Param('id') id: string, @Body() dto: AnnounceChannelsDto) {
+    return this.weekendsService.announce(id, dto);
   }
 
   @Delete(':id')

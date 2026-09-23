@@ -27,6 +27,7 @@ import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { FindNewsDto } from './dto/find-news.dto';
 import { NewsService } from './news.service';
+import { AnnounceChannelsDto } from 'src/shared/dto/announce-channels.dto';
 
 const NEWS_ROLES = ['OWNER', 'SERVER_ADMIN', 'TECH_ADMIN', 'UVK'] as const;
 const IMAGE_MAX_SIZE = 10 * 1024 * 1024;
@@ -131,6 +132,13 @@ export class NewsController {
   ) {
     const { image, attachments } = this.pickFiles(files);
     return this.newsService.update(id, dto, req.userId, image, attachments);
+  }
+
+  @Post(':id/announce')
+  @UseGuards(AuthGuard)
+  @Roles([...NEWS_ROLES])
+  announce(@Param('id') id: string, @Body() dto: AnnounceChannelsDto) {
+    return this.newsService.announce(id, dto);
   }
 
   @Delete(':id')

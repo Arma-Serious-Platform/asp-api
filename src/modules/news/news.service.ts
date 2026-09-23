@@ -161,6 +161,15 @@ export class NewsService {
     return news;
   }
 
+  async announce(
+    id: string,
+    channels: { telegram?: boolean; discord?: boolean } = {},
+  ) {
+    const news = await this.findAdminById(id);
+    await this.channelAnnouncements.announceNews(news, channels);
+    return { id: news.id, announced: true };
+  }
+
   async create(
     dto: CreateNewsDto,
     authorId: string,

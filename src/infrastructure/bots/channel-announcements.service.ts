@@ -36,6 +36,7 @@ type WeekendGameAnnouncement = {
     defenseSideSlots?: number | null;
     friendlySideName?: string | null;
     friendlySideType?: SideColor;
+    friendlySideSlots?: number | null;
   } | null;
 };
 
@@ -46,6 +47,11 @@ type WeekendAnnouncementPayload = {
 };
 
 type FormatMode = 'html' | 'markdown';
+
+export type AnnounceChannelOptions = {
+  telegram?: boolean;
+  discord?: boolean;
+};
 
 type DeliveryTarget = Pick<
   BotNotification,
@@ -229,8 +235,25 @@ export class ChannelAnnouncementsService {
         game.missionVersion?.defenseSideSlots,
         mode,
       );
+      const hasAlliedSide =
+        !!game.missionVersion?.friendlySideName ||
+        !!game.missionVersion?.friendlySideType;
+      const allied = hasAlliedSide
+        ? this.formatGameSide(
+            game.missionVersion?.friendlySideName || '—',
+            game.missionVersion?.friendlySideType,
+            game.missionVersion?.friendlySideSlots,
+            mode,
+          )
+        : null;
 
-      return [`🎮 ${this.bold(missionName, mode)}`, `${attack}  vs  ${defense}`].join('\n');
+      return [
+        `🎮 ${this.bold(missionName, mode)}`,
+        `${attack}  vs  ${defense}`,
+        allied ? `+ ${allied}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
     });
 
     return [
@@ -286,8 +309,16 @@ export class ChannelAnnouncementsService {
     return { token: target.discordToken, channelId: target.discordChannelId };
   }
 
-  async announceNews(news: NewsAnnouncementPayload) {
+  private resolveChannels(options?: AnnounceChannelOptions) {
+    return {
+      telegram: options?.telegram !== false,
+      discord: options?.discord !== false,
+    };
+  }
+
+  async announceNews(news: NewsAnnouncementPayload, options?: AnnounceChannelOptions) {
     try {
+      const channels = this.resolveChannels(options);
       const targets = await this.findActiveTargets(this.newsBotTypes(news.type));
       if (!targets.length) {
         return;
@@ -322,8 +353,8 @@ export class ChannelAnnouncementsService {
             link,
             'markdown',
           ).join('\n\n');
-          const telegram = this.telegramCreds(target);
-          const discord = this.discordCreds(target);
+          const telegram = channels.telegram ? this.telegramCreds(target) : null;
+          const discord = channels.discord ? this.discordCreds(target) : null;
 
           await Promise.all([
             telegram
@@ -378,8 +409,9 @@ export class ChannelAnnouncementsService {
     }
   }
 
-  async announceWeekend(weekend: WeekendAnnouncementPayload) {
+  async announceWeekend(weekend: WeekendAnnouncementPayload, options?: AnnounceChannelOptions) {
     try {
+      const channels = this.resolveChannels(options);
       const targets = await this.findActiveTargets(BotNotificationType.WEEKENDS);
       if (!targets.length) {
         return;
@@ -390,14 +422,18 @@ export class ChannelAnnouncementsService {
           const link = this.resolveUrl(target.url);
           const telegramText = this.buildWeekendLines(weekend, link, 'html').join('\n\n');
           const discordText = this.buildWeekendLines(weekend, link, 'markdown').join('\n\n');
-          const telegram = this.telegramCreds(target);
-          const discord = this.discordCreds(target);
+          const telegram = channels.telegram ? this.telegramCreds(target) : null;
+          const discord = channels.discord ? this.discordCreds(target) : null;
 
           await Promise.all([
             telegram
               ? this.telegram.sendMessage(telegram, telegramText, { parseMode: 'HTML' })
               : Promise.resolve(),
-            discord ? this.discord.sendMessage(discord, discordText) : Promise.resolve(),
+            discord
+              ? this.discord.sendMessage(discord, discordText, {
+                  mention: DiscordService.WEEKEND_MENTION,
+                })
+              : Promise.resolve(),
           ]);
         }),
       );
@@ -412,7 +448,7 @@ export class ChannelAnnouncementsService {
 
   private stripDiscordMentionsForTelegram(text: string) {
     return text
-      .replace(/@(?:here|everyone|гравець)/gi, '')
+      .replace(/@(?:here|everyone|гравець|кз)/gi, '')
       .replace(/[^\S\n]{2,}/g, ' ')
       .replace(/ *\n */g, '\n')
       .trim();

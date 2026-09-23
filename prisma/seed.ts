@@ -1,13 +1,17 @@
- 
- 
- 
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { createHash } from 'crypto';
 import 'dotenv/config';
 import { ISLANDS } from './data/islands';
 
 const prisma = new PrismaClient();
+
+const BETA_TESTER_ACHIEVEMENT = {
+  title: 'Ох і наловив багів',
+  description: 'Прийняти участь у бета-тестування сайту VTG до 19.07.2026',
+  // Users created before this date (exclusive) receive the achievement.
+  createdBefore: new Date('2026-07-19T00:00:00.000Z'),
+};
 
 const DEFAULT_SPECIALIZATIONS = [
   'КС',
@@ -189,6 +193,68 @@ export const seed = async () => {
     }
   }
 
+  const seedBetaTesterAchievement = async () => {
+    let achievement = await prisma.achievement.findUnique({
+      where: {
+        title: BETA_TESTER_ACHIEVEMENT.title,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!achievement) {
+      achievement = await prisma.achievement.create({
+        data: {
+          title: BETA_TESTER_ACHIEVEMENT.title,
+          description: BETA_TESTER_ACHIEVEMENT.description,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      console.log(`Achievement "${BETA_TESTER_ACHIEVEMENT.title}" created`);
+    }
+
+    const eligibleUsers = await prisma.user.findMany({
+      where: {
+        createdAt: {
+          lt: BETA_TESTER_ACHIEVEMENT.createdBefore,
+        },
+        NOT: {
+          achievements: {
+            some: {
+              id: achievement.id,
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (eligibleUsers.length === 0) {
+      return;
+    }
+
+    await prisma.achievement.update({
+      where: {
+        id: achievement.id,
+      },
+      data: {
+        users: {
+          connect: eligibleUsers.map((user) => ({ id: user.id })),
+        },
+      },
+    });
+
+    console.log(
+      `Granted "${BETA_TESTER_ACHIEVEMENT.title}" to ${eligibleUsers.length} user(s) created before ${BETA_TESTER_ACHIEVEMENT.createdBefore.toISOString().slice(0, 10)}`,
+    );
+  };
+
   try {
     await Promise.all([
       seedUser(),
@@ -196,7 +262,8 @@ export const seed = async () => {
       seedIslands(),
       seedSpecializations(),
       cleanupPendingSquadRequestsForMembers(),
-    ])
+      seedBetaTesterAchievement(),
+    ]);
   } catch (error) {
     console.log('Error seeding database');
     console.error(error);

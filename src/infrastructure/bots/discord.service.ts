@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 const DISCORD_API = 'https://discord.com/api/v10';
+const EVERYONE_MENTION = '@everyone';
+const WEEKEND_MENTION = '@Гравець @КЗ';
 
 export type DiscordChannelCreds = {
   token: string;
@@ -15,9 +17,40 @@ export type DiscordEmbed = {
   image?: { url: string };
 };
 
+export type DiscordSendOptions = {
+  /** Prefix before message content. Defaults to @everyone. Pass null to skip. */
+  mention?: string | null;
+};
+
 @Injectable()
 export class DiscordService {
   private readonly logger = new Logger(DiscordService.name);
+
+  static readonly EVERYONE_MENTION = EVERYONE_MENTION;
+  static readonly WEEKEND_MENTION = WEEKEND_MENTION;
+
+  private withMentionPrefix(content?: string, mention: string | null = EVERYONE_MENTION) {
+    const text = content?.trim() ?? '';
+    if (mention === null || mention === '') {
+      return text;
+    }
+    if (!text) {
+      return mention;
+    }
+    if (text.startsWith(mention)) {
+      return text;
+    }
+    return `${mention}\n${text}`;
+  }
+
+  private allowedMentionsFor(mention: string | null) {
+    if (mention === EVERYONE_MENTION) {
+      return { parse: ['everyone'] };
+    }
+    // Role/user name prefixes (e.g. @Гравець) are plain text; roles/users parse
+    // covers real <@&id>/<@id> forms if present in content.
+    return { parse: ['roles', 'users'] };
+  }
 
   private async postMessage(creds: DiscordChannelCreds, body: Record<string, unknown> | FormData) {
     const token = creds.token?.trim();
@@ -47,9 +80,17 @@ export class DiscordService {
     return response.json().catch(() => null);
   }
 
-  async sendMessage(creds: DiscordChannelCreds, content: string) {
+  async sendMessage(
+    creds: DiscordChannelCreds,
+    content: string,
+    options?: DiscordSendOptions,
+  ) {
     try {
-      await this.postMessage(creds, { content });
+      const mention = options?.mention === undefined ? EVERYONE_MENTION : options.mention;
+      await this.postMessage(creds, {
+        content: this.withMentionPrefix(content, mention),
+        allowed_mentions: this.allowedMentionsFor(mention),
+      });
     } catch (error) {
       this.logger.error(
         `Failed to send Discord message: ${error instanceof Error ? error.message : error}`,
@@ -57,10 +98,17 @@ export class DiscordService {
     }
   }
 
-  async sendEmbed(creds: DiscordChannelCreds, embed: DiscordEmbed, content?: string) {
+  async sendEmbed(
+    creds: DiscordChannelCreds,
+    embed: DiscordEmbed,
+    content?: string,
+    options?: DiscordSendOptions,
+  ) {
     try {
+      const mention = options?.mention === undefined ? EVERYONE_MENTION : options.mention;
       await this.postMessage(creds, {
-        ...(content ? { content } : {}),
+        content: this.withMentionPrefix(content, mention),
+        allowed_mentions: this.allowedMentionsFor(mention),
         embeds: [embed],
       });
     } catch (error) {
@@ -75,11 +123,14 @@ export class DiscordService {
     embed: Omit<DiscordEmbed, 'image'> & { imageFilename: string },
     file: { buffer: Buffer; filename: string; contentType?: string },
     content?: string,
+    options?: DiscordSendOptions,
   ) {
     try {
+      const mention = options?.mention === undefined ? EVERYONE_MENTION : options.mention;
       const form = new FormData();
       const payload = {
-        ...(content ? { content } : {}),
+        content: this.withMentionPrefix(content, mention),
+        allowed_mentions: this.allowedMentionsFor(mention),
         embeds: [
           {
             ...embed,
