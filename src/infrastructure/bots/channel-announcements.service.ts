@@ -248,12 +248,9 @@ export class ChannelAnnouncementsService {
         : null;
 
       return [
-        `🎮 ${this.bold(missionName, mode)}`,
-        `${attack}  vs  ${defense}`,
-        allied ? `+ ${allied}` : null,
-      ]
-        .filter(Boolean)
-        .join('\n');
+        `${index + 1}. ${this.bold(missionName, mode)}`,
+        allied ? `${attack}  vs  ${defense}  +  ${allied}` : `${attack}  vs  ${defense}`,
+      ].join('\n');
     });
 
     return [
@@ -431,7 +428,7 @@ export class ChannelAnnouncementsService {
               : Promise.resolve(),
             discord
               ? this.discord.sendMessage(discord, discordText, {
-                  mention: DiscordService.WEEKEND_MENTION,
+                  mentionRoleNames: DiscordService.WEEKEND_ROLE_NAMES,
                 })
               : Promise.resolve(),
           ]);
