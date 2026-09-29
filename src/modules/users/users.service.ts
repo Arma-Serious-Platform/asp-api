@@ -70,6 +70,10 @@ import {
   shouldTriggerWarningAutoban,
   type WarningAutobanConfig,
 } from './users-warning-autoban';
+import {
+  JWT_ACCESS_TOKEN_TYPE,
+  JWT_REFRESH_TOKEN_TYPE,
+} from 'src/modules/auth/auth.constants';
 
 @Injectable()
 export class UsersService {
@@ -636,6 +640,11 @@ export class UsersService {
   }
 
   async confirmSignUp(dto: ConfirmSignUpDto) {
+    // An undefined token would turn the lookup below into `where: {}`.
+    if (!dto.token) {
+      throw new BadRequestException('Invalid token');
+    }
+
     const user = await this.prisma.user.findFirst({
       where: { activationToken: dto.token },
     });
@@ -1141,6 +1150,7 @@ export class UsersService {
     const token = await this.jwtService.signAsync(
       {
         userId: user.id,
+        tokenType: JWT_ACCESS_TOKEN_TYPE,
       },
       {
         secret: process.env.JWT_SECRET,
@@ -1151,6 +1161,7 @@ export class UsersService {
     const refreshToken = await this.jwtService.signAsync(
       {
         userId: user.id,
+        tokenType: JWT_REFRESH_TOKEN_TYPE,
       },
       {
         secret: process.env.JWT_SECRET,
@@ -1302,12 +1313,16 @@ export class UsersService {
 
   async refreshToken(dto: RefreshTokenDto) {
     try {
-      const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
-        dto.refreshToken,
-        {
-          secret: process.env.JWT_SECRET,
-        },
-      );
+      const { userId, tokenType } = await this.jwtService.verifyAsync<{
+        userId: string;
+        tokenType?: string;
+      }>(dto.refreshToken, {
+        secret: process.env.JWT_SECRET,
+      });
+
+      if (!userId || tokenType !== JWT_REFRESH_TOKEN_TYPE) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
       const userRecord = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -1393,6 +1408,11 @@ export class UsersService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
+    // An undefined token would turn the lookup below into `where: {}`.
+    if (!dto.token) {
+      throw new BadRequestException('Token is invalid');
+    }
+
     const user = await this.prisma.user.findFirst({
       where: { resetPasswordToken: dto.token },
     });

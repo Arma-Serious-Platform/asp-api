@@ -1,4 +1,3 @@
-import { Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { Prisma } from '@prisma/client';
@@ -45,7 +44,7 @@ export class CreateSquadDto {
 
   @ApiPropertyOptional()
   @Transform((value) => Number(value) || undefined)
-  @Optional()
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)

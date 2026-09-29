@@ -1,4 +1,3 @@
-import { Optional } from '@nestjs/common';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
 import { Transform } from 'class-transformer';
@@ -14,12 +13,12 @@ import { normalizeJsonValue } from 'src/utils/normalize-json-value';
 
 export class UpdateSquadDto {
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   name?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   tag?: string;
 
@@ -29,17 +28,17 @@ export class UpdateSquadDto {
   description?: Prisma.InputJsonValue;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   leaderId?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsUUID()
   sideId?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {
       return undefined;
@@ -56,7 +55,7 @@ export class UpdateSquadDto {
   recruiting?: boolean;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === '' || value === null || value === undefined) {
       return undefined;
@@ -68,27 +67,27 @@ export class UpdateSquadDto {
   activeCount?: number;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   telegramUrl?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   discordUrl?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   youtubeUrl?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   twitchUrl?: string;
 
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsString()
   tiktokUrl?: string;
 }

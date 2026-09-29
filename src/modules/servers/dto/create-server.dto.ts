@@ -1,9 +1,8 @@
-import { IsEnum, IsNotEmpty, IsNumber } from "class-validator";
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional } from "class-validator";
 
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsString } from "class-validator";
 import { ServerStatus } from "@prisma/client";
-import { Optional } from "@nestjs/common";
 import { Type } from "class-transformer";
 
 export class CreateServerDto {
@@ -14,18 +13,18 @@ export class CreateServerDto {
 
   @ApiPropertyOptional()
   @IsEnum(ServerStatus)
-  @Optional()
-  status: ServerStatus;
+  @IsOptional()
+  status?: ServerStatus;
 
   @ApiPropertyOptional()
   @IsString()
-  @Optional()
+  @IsOptional()
   ip?: string;
 
   @ApiPropertyOptional()
   @IsNumber()
   @Type(() => Number)
-  @Optional()
+  @IsOptional()
   port?: number;
 }
 

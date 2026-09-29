@@ -16,6 +16,7 @@ import {
   UserRestrictionsService,
 } from 'src/modules/users/user-restrictions.service';
 import {
+  JWT_ACCESS_TOKEN_TYPE,
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_DAYS,
   SESSION_TTL_DAYS,
@@ -229,12 +230,12 @@ export class AuthService {
     token: string,
   ): Promise<ResolvedAuthUser | null> {
     try {
-      const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
-        token,
-        { secret: process.env.JWT_SECRET },
-      );
+      const { userId, tokenType } = await this.jwtService.verifyAsync<{
+        userId: string;
+        tokenType?: string;
+      }>(token, { secret: process.env.JWT_SECRET });
 
-      if (!userId) {
+      if (!userId || tokenType !== JWT_ACCESS_TOKEN_TYPE) {
         return null;
       }
 
