@@ -8,6 +8,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { HttpErrorLoggingFilter } from './shared/filters/http-error-logging.filter';
 import { requestIdMiddleware } from './shared/middleware/request-id.middleware';
 import cookieParser from 'cookie-parser';
+import { PublicApiModule } from './modules/public-api/public-api.module';
 
 async function bootstrap() {
   await seed();
@@ -36,18 +37,49 @@ async function bootstrap() {
     origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Api-Key'],
     exposedHeaders: ['X-Request-Id'],
   });
 
-  const config = new DocumentBuilder()
-    .setTitle('Arma Serious Platform API')
-    .setDescription('The core ASP API service')
+  const theme = new SwaggerTheme();
+
+  const publicRateTtl = Number(process.env.PUBLIC_API_RATE_TTL ?? 60);
+  const publicRateLimit = Number(process.env.PUBLIC_API_RATE_LIMIT ?? 60);
+
+  const publicConfig = new DocumentBuilder()
+    .setTitle('ASP Public API')
+    .setDescription(
+      `Read-only integration API authenticated with an API key.\n\n` +
+        `Pass the key via the \`X-Api-Key\` header.\n\n` +
+        `Rate limit: ${publicRateLimit} requests per ${publicRateTtl} seconds per API key.`,
+    )
     .setVersion(process.env.npm_package_version ?? '0.0.1')
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'X-Api-Key',
+        in: 'header',
+      },
+      'X-Api-Key',
+    )
     .build();
 
+  const publicDocument = SwaggerModule.createDocument(app, publicConfig, {
+    include: [PublicApiModule],
+  });
+  SwaggerModule.setup('swagger/public', app, publicDocument, {
+    customCss: theme.getBuffer(SwaggerThemeNameEnum.DARK),
+    explorer: true,
+    jsonDocumentUrl: '/swagger/public/json',
+  });
+
   if (process.env.ENABLE_SWAGGER === 'true') {
-    const theme = new SwaggerTheme();
+    const config = new DocumentBuilder()
+      .setTitle('Arma Serious Platform API')
+      .setDescription('The core ASP API service')
+      .setVersion(process.env.npm_package_version ?? '0.0.1')
+      .build();
+
     const documentFactory = () => SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('swagger', app, documentFactory, {
       customCss: theme.getBuffer(SwaggerThemeNameEnum.DARK),

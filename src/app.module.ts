@@ -22,6 +22,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { NewsModule } from './modules/news/news.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { BotNotificationsModule } from './modules/bot-notifications/bot-notifications.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { PublicApiModule } from './modules/public-api/public-api.module';
 
 @Module({
   imports: [
@@ -61,6 +63,8 @@ import { BotNotificationsModule } from './modules/bot-notifications/bot-notifica
     NewsModule,
     FeedModule,
     BotNotificationsModule,
+    ApiKeysModule,
+    PublicApiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
