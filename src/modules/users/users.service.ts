@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -1727,7 +1728,10 @@ export class UsersService {
     });
   }
 
-  async findOne(idOrName: string) {
+  async findOne(
+    idOrName: string,
+    viewer: { userId?: string; roles?: UserRole[] } = {},
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { OR: [{ id: idOrName }, { nickname: idOrName }] },
       select: {
@@ -1794,13 +1798,32 @@ export class UsersService {
       return user;
     }
 
+    // SteamID is personal data: only the owner and admins may see it.
+    const canSeeSteamId =
+      viewer.userId === user.id ||
+      this.canSeeSensitiveUsersData(viewer.roles ?? []);
+
     return {
       ...user,
+      steamId: canSeeSteamId ? user.steamId : null,
       banReason: await this.resolveBanReason(user.id, user.status),
     };
   }
 
-  async findHistory(userId: string) {
+  async findHistory(userId: string, actorId: string, actorRoles: UserRole[]) {
+    // History includes punishments and admin names, like /warnings and
+    // /punishments: only the user and moderators may read it.
+    if (
+      userId !== actorId &&
+      !hasAnyRole(actorRoles, [
+        UserRole.OWNER,
+        UserRole.SERVER_ADMIN,
+        UserRole.GAME_ADMIN,
+      ])
+    ) {
+      throw new ForbiddenException('Access denied');
+    }
+
     const events = await this.usersHistoryService.findByUserId(userId);
 
     if (events === null) {

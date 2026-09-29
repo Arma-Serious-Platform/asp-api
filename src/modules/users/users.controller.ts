@@ -21,6 +21,7 @@ import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { ConfirmSignUpDto } from './dto/confirm-sign-up.dto';
 import { Roles } from 'src/shared/decorators/roles.decorator';
 import { AuthGuard } from 'src/shared/guards/auth.guard';
+import { OptionalAuthGuard } from 'src/shared/guards/optional-auth.guard';
 import { BanUserDto } from './dto/ban-user.dto';
 import { RequestType } from 'src/utils/types';
 import { UnbanUserDto } from './dto/unban-user.dto';
@@ -270,8 +271,11 @@ export class UsersController {
 
   @Get(':userId/history')
   @UseGuards(AuthGuard)
-  findHistory(@Param('userId') userId: string) {
-    return this.usersService.findHistory(userId);
+  findHistory(
+    @Param('userId') userId: string,
+    @Req() req: RequestType,
+  ) {
+    return this.usersService.findHistory(userId, req.userId, req.roles);
   }
 
   @Post('/ban/:userId/permanent')
@@ -313,8 +317,12 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') idOrName: string) {
-    return this.usersService.findOne(idOrName);
+  @UseGuards(OptionalAuthGuard)
+  findOne(@Param('id') idOrName: string, @Req() req: RequestType) {
+    return this.usersService.findOne(idOrName, {
+      userId: req.userId,
+      roles: req.roles,
+    });
   }
 
   @Delete(':id')
