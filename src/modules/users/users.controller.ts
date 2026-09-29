@@ -43,6 +43,7 @@ import { BanPunishmentDto } from './dto/ban-punishment.dto';
 import { Request, Response } from 'express';
 import { StaticBearerTokenGuard } from 'src/shared/guards/static-bearer-token.guard';
 import { getRequestIp } from 'src/shared/utils/request-ip';
+import { SESSION_COOKIE_NAME } from 'src/modules/auth/auth.constants';
 import { RateLimit } from 'src/shared/decorators/rate-limit.decorator';
 import { RateLimitGuard } from 'src/shared/guards/rate-limit.guard';
 import {
@@ -183,7 +184,11 @@ export class UsersController {
     @Body() changePasswordDto: ChangePasswordDto,
     @Req() req: RequestType,
   ) {
-    return this.usersService.changePassword(changePasswordDto, req.userId);
+    return this.usersService.changePassword(
+      changePasswordDto,
+      req.userId,
+      req.cookies?.[SESSION_COOKIE_NAME] as string | undefined,
+    );
   }
 
   @Put('/change-role')

@@ -80,6 +80,11 @@ import {
   STEAM_OPENID_ENDPOINT,
   verifySteamOpenIdResponse,
 } from './steam-openid';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import {
+  isJwtRevoked,
+  nextTokensValidAfter,
+} from 'src/modules/auth/jwt-revocation';
 
 @Injectable()
 export class UsersService {
@@ -95,7 +100,29 @@ export class UsersService {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  // Cuts off everything issued so far: JWTs (via tokensValidAfter), sessions
+  // and live sockets. The caller's own session can be kept.
+  private async revokeUserAccess(userId: string, exceptSessionId?: string) {
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { tokensValidAfter: nextTokensValidAfter() },
+      }),
+      this.prisma.userSession.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+          ...(exceptSessionId && { id: { not: exceptSessionId } }),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    this.realtime.disconnectUser(userId, { exceptSessionId });
+  }
 
   private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
@@ -1314,9 +1341,10 @@ export class UsersService {
 
   async refreshToken(dto: RefreshTokenDto) {
     try {
-      const { userId, tokenType } = await this.jwtService.verifyAsync<{
+      const { userId, tokenType, iat } = await this.jwtService.verifyAsync<{
         userId: string;
         tokenType?: string;
+        iat?: number;
       }>(dto.refreshToken, {
         secret: process.env.JWT_SECRET,
       });
@@ -1331,10 +1359,11 @@ export class UsersService {
           id: true,
           status: true,
           bannedUntil: true,
+          tokensValidAfter: true,
         },
       });
 
-      if (!userRecord) {
+      if (!userRecord || isJwtRevoked(iat, userRecord.tokensValidAfter)) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -1440,12 +1469,18 @@ export class UsersService {
       },
     });
 
+    await this.revokeUserAccess(user.id);
+
     return {
       message: 'Password changed successfully',
     };
   }
 
-  async changePassword(dto: ChangePasswordDto, userId: string) {
+  async changePassword(
+    dto: ChangePasswordDto,
+    userId: string,
+    currentSessionId?: string,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId },
       select: {
@@ -1470,6 +1505,9 @@ export class UsersService {
       where: { id: user.id },
       data: { password: hashedPassword },
     });
+
+    // Keep the session that made the change; sign out everywhere else.
+    await this.revokeUserAccess(user.id, currentSessionId);
 
     return {
       message: 'Password changed successfully',
@@ -1941,6 +1979,8 @@ export class UsersService {
         },
       });
     });
+
+    await this.revokeUserAccess(dto.userId);
 
     return this.me(dto.userId);
   }

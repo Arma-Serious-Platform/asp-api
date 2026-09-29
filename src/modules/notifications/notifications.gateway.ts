@@ -1,10 +1,12 @@
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
 import { Namespace, Socket } from 'socket.io';
 import { NotificationGroup, NotificationType } from '@prisma/client';
 import { AuthService } from 'src/modules/auth/auth.service';
@@ -31,7 +33,7 @@ const notificationsGatewayCors = {
 })
 @Injectable()
 export class NotificationsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server: Namespace;
@@ -39,7 +41,12 @@ export class NotificationsGateway
   constructor(
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  afterInit(namespace: Namespace) {
+    this.realtime.registerNamespace(namespace);
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {

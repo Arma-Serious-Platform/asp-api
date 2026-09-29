@@ -15,6 +15,7 @@ import { KickFromSquadDto } from './dto/kick-from-squad.dto';
 import { UpdateMySquadDto } from './dto/update-my-squad.dto';
 import { UsersHistoryService } from '../users/users-history.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
 
 /** Prisma squad ids are UUIDs; only then include `id` in lookup to avoid invalid UUID queries. */
 const UUID_PARAM_RE = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -30,6 +31,7 @@ export class SquadsService {
     private readonly minioService: MinioService,
     private readonly usersHistoryService: UsersHistoryService,
     private readonly notificationsService: NotificationsService,
+    private readonly realtime: RealtimeService,
   ) { }
 
   private async clampActiveCount(tx: Prisma.TransactionClient, squadId: string, activeCount?: number) {
@@ -373,7 +375,7 @@ export class SquadsService {
     }
 
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       let squad = await tx.squad.update({
         where: { id },
         data: {
@@ -424,6 +426,9 @@ export class SquadsService {
 
       return squad;
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async updateMySquad(userId: string, dto: UpdateMySquadDto, logo?: File) {
@@ -496,7 +501,7 @@ export class SquadsService {
       throw new BadRequestException('New leader must be a member of your squad');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updatedSquad = await tx.squad.update({
         where: { id: squad.id },
         data: { leaderId: newLeader.id },
@@ -518,6 +523,9 @@ export class SquadsService {
 
       return updatedSquad;
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async updateMemberRole(actorId: string, memberId: string, role: SquadRole) {
@@ -547,7 +555,7 @@ export class SquadsService {
       throw new BadRequestException('Only squad leader can assign subleader role');
     }
 
-    return this.prisma.user.update({
+    const result = await this.prisma.user.update({
       where: { id: member.id },
       data: { squadRole: role },
       select: {
@@ -556,6 +564,9 @@ export class SquadsService {
         squadRole: true,
       },
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async requestToJoinSquad(squadId: string, userId: string) {
@@ -894,6 +905,8 @@ export class SquadsService {
         where: { id },
       });
     });
+
+    this.realtime.squadMembershipChanged();
   }
 
   async inviteToSquad(dto: InviteToSquadDto, leaderId: string) {
@@ -993,7 +1006,7 @@ export class SquadsService {
       throw new BadRequestException('Subleader cannot kick another subleader');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: dto.userId },
         data: {
@@ -1037,6 +1050,9 @@ export class SquadsService {
 
       return deletedInvitations;
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async leaveFromSquad(userId: string, newLeaderId?: string) {
@@ -1113,6 +1129,8 @@ export class SquadsService {
         },
       });
     });
+
+    this.realtime.squadMembershipChanged();
   }
 
   async acceptInvitation(invitationId: string, userId: string) {

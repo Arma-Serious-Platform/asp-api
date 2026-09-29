@@ -11,10 +11,14 @@ import { UnassignSquadDto } from './dto/unassign-squad.dto';
 import { AssignLeaderDto } from './dto/assign-leader.dto';
 import { FindSidesDto } from './dto/find-sides.dto';
 import { Prisma } from '@prisma/client';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
 
 @Injectable()
 export class SidesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   async findAll(dto: FindSidesDto) {
     const { take = 50, skip = 0 } = dto;
@@ -116,23 +120,32 @@ export class SidesService {
   }
 
   async delete(id: string) {
-    return this.prisma.side.delete({
+    const result = await this.prisma.side.delete({
       where: { id },
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async assignSquad(dto: AssignSquadDto) {
-    return this.prisma.side.update({
+    const result = await this.prisma.side.update({
       where: { id: dto.sideId },
       data: { squads: { connect: { id: dto.squadId } } },
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async unassignSquad(dto: UnassignSquadDto) {
-    return this.prisma.side.update({
+    const result = await this.prisma.side.update({
       where: { id: dto.sideId },
       data: { squads: { disconnect: { id: dto.squadId } } },
     });
+
+    this.realtime.squadMembershipChanged();
+    return result;
   }
 
   async assignLeader(dto: AssignLeaderDto) {

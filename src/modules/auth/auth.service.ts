@@ -26,6 +26,9 @@ import { SessionLoginDto } from './dto/session-login.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { TwoFactorService } from './two-factor.service';
 import { getRequestIp } from 'src/shared/utils/request-ip';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { parseCookieHeader } from 'src/shared/utils/cookies';
+import { isJwtRevoked } from './jwt-revocation';
 
 export type ResolvedAuthUser = {
   userId: string;
@@ -49,6 +52,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly twoFactorService: TwoFactorService,
     private readonly userRestrictionsService: UserRestrictionsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   // UserSession.id is the raw session cookie value, so it must never leave the
@@ -226,6 +230,7 @@ export class AuthService {
           revokedAt: new Date(),
         },
       });
+      this.realtime.disconnectSession(sessionId);
     }
 
     this.clearSessionCookie(res);
@@ -237,9 +242,10 @@ export class AuthService {
     token: string,
   ): Promise<ResolvedAuthUser | null> {
     try {
-      const { userId, tokenType } = await this.jwtService.verifyAsync<{
+      const { userId, tokenType, iat } = await this.jwtService.verifyAsync<{
         userId: string;
         tokenType?: string;
+        iat?: number;
       }>(token, { secret: process.env.JWT_SECRET });
 
       if (!userId || tokenType !== JWT_ACCESS_TOKEN_TYPE) {
@@ -253,10 +259,15 @@ export class AuthService {
           roles: true,
           status: true,
           bannedUntil: true,
+          tokensValidAfter: true,
         },
       });
 
-      if (!user || this.userRestrictionsService.isPermanentBan(user)) {
+      if (
+        !user ||
+        this.userRestrictionsService.isPermanentBan(user) ||
+        isJwtRevoked(iat, user.tokensValidAfter)
+      ) {
         return null;
       }
 
@@ -344,26 +355,6 @@ export class AuthService {
     return null;
   }
 
-  private parseCookieHeader(cookieHeader?: string) {
-    if (!cookieHeader) {
-      return {} as Record<string, string>;
-    }
-
-    return Object.fromEntries(
-      cookieHeader.split(';').map((part) => {
-        const index = part.indexOf('=');
-        if (index === -1) {
-          return [part.trim(), ''];
-        }
-
-        const key = part.slice(0, index).trim();
-        const value = part.slice(index + 1).trim();
-
-        return [key, decodeURIComponent(value)];
-      }),
-    );
-  }
-
   async resolveHandshakeUser(
     handshake: HandshakeLike,
   ): Promise<ResolvedAuthUser | null> {
@@ -385,7 +376,7 @@ export class AuthService {
       }
     }
 
-    const cookies = this.parseCookieHeader(handshake.headers?.cookie);
+    const cookies = parseCookieHeader(handshake.headers?.cookie);
     const sessionId = cookies[SESSION_COOKIE_NAME];
     if (sessionId) {
       return this.resolveUserFromSession(sessionId);
@@ -475,6 +466,7 @@ export class AuthService {
         revokedAt: new Date(),
       },
     });
+    this.realtime.disconnectSession(session.id);
 
     const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
       | string

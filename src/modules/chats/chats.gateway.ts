@@ -4,11 +4,13 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Namespace, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { ChatsService } from './chats.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -30,7 +32,7 @@ const chatGatewayCors = {
   namespace: '/chat',
 })
 @Injectable()
-export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server: Namespace;
 
@@ -41,7 +43,12 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly authService: AuthService,
     private readonly prisma: PrismaService,
     private readonly chatsService: ChatsService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  afterInit(namespace: Namespace) {
+    this.realtime.registerNamespace(namespace);
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
