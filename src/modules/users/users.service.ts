@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -1810,20 +1809,7 @@ export class UsersService {
     };
   }
 
-  async findHistory(userId: string, actorId: string, actorRoles: UserRole[]) {
-    // History includes punishments and admin names, like /warnings and
-    // /punishments: only the user and moderators may read it.
-    if (
-      userId !== actorId &&
-      !hasAnyRole(actorRoles, [
-        UserRole.OWNER,
-        UserRole.SERVER_ADMIN,
-        UserRole.GAME_ADMIN,
-      ])
-    ) {
-      throw new ForbiddenException('Access denied');
-    }
-
+  async findHistory(userId: string) {
     const events = await this.usersHistoryService.findByUserId(userId);
 
     if (events === null) {

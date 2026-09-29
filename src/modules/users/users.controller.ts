@@ -271,11 +271,8 @@ export class UsersController {
 
   @Get(':userId/history')
   @UseGuards(AuthGuard)
-  findHistory(
-    @Param('userId') userId: string,
-    @Req() req: RequestType,
-  ) {
-    return this.usersService.findHistory(userId, req.userId, req.roles);
+  findHistory(@Param('userId') userId: string) {
+    return this.usersService.findHistory(userId);
   }
 
   @Post('/ban/:userId/permanent')
