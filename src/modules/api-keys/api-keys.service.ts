@@ -19,6 +19,22 @@ export class ApiKeysService {
       select: {
         id: true,
         nickname: true,
+        roles: true,
+        squadRole: true,
+        squad: {
+          select: {
+            id: true,
+            name: true,
+            tag: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        },
       },
     },
   } as const;
