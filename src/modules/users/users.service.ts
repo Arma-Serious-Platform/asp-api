@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   forwardRef,
@@ -74,11 +75,15 @@ import {
   JWT_ACCESS_TOKEN_TYPE,
   JWT_REFRESH_TOKEN_TYPE,
 } from 'src/modules/auth/auth.constants';
+import {
+  OPENID_NS,
+  STEAM_OPENID_ENDPOINT,
+  verifySteamOpenIdResponse,
+} from './steam-openid';
 
 @Injectable()
 export class UsersService {
-  private static readonly STEAM_OPENID_ENDPOINT =
-    'https://steamcommunity.com/openid/login';
+  private readonly logger = new Logger(UsersService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -216,7 +221,7 @@ export class UsersService {
 
   getSteamLoginRedirectUrl(accessToken: string, callbackUrl: string) {
     const params = new URLSearchParams({
-      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.ns': OPENID_NS,
       'openid.mode': 'checkid_setup',
       'openid.return_to': `${callbackUrl}?accessToken=${accessToken ?? ''}`,
       'openid.realm': `${new URL(callbackUrl).origin}/`,
@@ -224,11 +229,12 @@ export class UsersService {
       'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
     });
 
-    return `${UsersService.STEAM_OPENID_ENDPOINT}?${params.toString()}`;
+    return `${STEAM_OPENID_ENDPOINT}?${params.toString()}`;
   }
 
   async linkSteamFromCallback(
     query: Record<string, string | string[] | undefined>,
+    callbackUrl: string,
   ) {
     const accessToken = this.getSingleQueryValue(query.accessToken);
     if (!accessToken) {
@@ -254,7 +260,11 @@ export class UsersService {
       return;
     }
 
-    const steamId = this.extractAndVerifySteamId(query);
+    const steamId = await this.verifySteamLogin(
+      query,
+      callbackUrl,
+      accessToken,
+    );
 
     if (!steamId) {
       return;
@@ -301,26 +311,17 @@ export class UsersService {
     return Array.isArray(value) ? value[0] : value;
   }
 
-  private extractAndVerifySteamId(
+  private async verifySteamLogin(
     query: Record<string, string | string[] | undefined>,
+    callbackUrl: string,
+    accessToken: string,
   ) {
-    const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
-    if (!claimedId) {
+    try {
+      return await verifySteamOpenIdResponse(query, callbackUrl, accessToken);
+    } catch (error) {
+      this.logger.warn(`Steam OpenID verification failed: ${String(error)}`);
       return null;
     }
-
-    const marker = '/id/';
-    const markerIndex = claimedId.indexOf(marker);
-    if (markerIndex === -1) {
-      return null;
-    }
-
-    const steamId = claimedId.slice(markerIndex + marker.length).trim();
-    if (!steamId) {
-      return null;
-    }
-
-    return steamId;
   }
 
   async updateMe(userId: string, updateMeDto: UpdateMeDto) {

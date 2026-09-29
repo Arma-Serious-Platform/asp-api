@@ -48,6 +48,12 @@ import { getRequestIp } from 'src/shared/utils/request-ip';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // Must be built the same way when redirecting to Steam and when verifying
+  // the callback, because the OpenID return_to is checked against it.
+  private getSteamCallbackUrl(req: Request) {
+    return `${req.protocol}://${req.get('host')}/api/users/steam/callback`;
+  }
+
   @Get()
   @UseGuards(AuthGuard)
   find(@Query() dto: GetUsersDto, @Req() req: RequestType) {
@@ -107,7 +113,7 @@ export class UsersController {
   @Get('/steam-login')
   @UseGuards(AuthGuard)
   async steamLogin(@Req() req: RequestType, @Res() res: Response) {
-    const callbackUrl = `${req.protocol}://${req.get('host')}/api/users/steam/callback`;
+    const callbackUrl = this.getSteamCallbackUrl(req);
     const accessToken = await this.usersService.createSteamLinkToken(req.userId);
     const redirectUrl = this.usersService.getSteamLoginRedirectUrl(
       accessToken,
@@ -120,7 +126,10 @@ export class UsersController {
   @Get('/steam/callback')
   async steamCallback(@Req() req: Request, @Res() res: Response) {
     const query = req.query as Record<string, string | string[] | undefined>;
-    await this.usersService.linkSteamFromCallback(query);
+    await this.usersService.linkSteamFromCallback(
+      query,
+      this.getSteamCallbackUrl(req),
+    );
 
     return res.redirect(this.usersService.getFrontendSteamLinkedRedirectUrl());
   }
