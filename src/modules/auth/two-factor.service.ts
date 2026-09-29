@@ -90,16 +90,15 @@ export class TwoFactorService {
     return Boolean(user?.twoFactorEnabled);
   }
 
-  private assertVerifyAttemptsAllowed(userId: string) {
+  // Counts the attempt before any await, so parallel requests cannot all pass
+  // the check before the first failure is recorded. A success clears it.
+  private consumeVerifyAttempt(userId: string) {
     const now = Date.now();
-    const state = this.verifyAttempts.get(userId);
+    let state = this.verifyAttempts.get(userId);
 
     if (!state || state.resetAt <= now) {
-      this.verifyAttempts.set(userId, {
-        count: 0,
-        resetAt: now + TWO_FACTOR_VERIFY_WINDOW_MS,
-      });
-      return;
+      state = { count: 0, resetAt: now + TWO_FACTOR_VERIFY_WINDOW_MS };
+      this.verifyAttempts.set(userId, state);
     }
 
     if (state.count >= TWO_FACTOR_MAX_VERIFY_ATTEMPTS) {
@@ -107,22 +106,8 @@ export class TwoFactorService {
         'Too many failed verification attempts. Try again later.',
       );
     }
-  }
-
-  private recordFailedVerifyAttempt(userId: string) {
-    const now = Date.now();
-    const state = this.verifyAttempts.get(userId);
-
-    if (!state || state.resetAt <= now) {
-      this.verifyAttempts.set(userId, {
-        count: 1,
-        resetAt: now + TWO_FACTOR_VERIFY_WINDOW_MS,
-      });
-      return;
-    }
 
     state.count += 1;
-    this.verifyAttempts.set(userId, state);
   }
 
   private clearVerifyAttempts(userId: string) {
@@ -343,14 +328,13 @@ export class TwoFactorService {
       );
     }
 
-    this.assertVerifyAttemptsAllowed(userId);
+    this.consumeVerifyAttempt(userId);
 
     if (code) {
       const secret = await this.getUserSecret(userId);
       const isValid = await this.verifyTotpCode(secret, code);
 
       if (!isValid) {
-        this.recordFailedVerifyAttempt(userId);
         return false;
       }
 
@@ -382,7 +366,6 @@ export class TwoFactorService {
       return true;
     }
 
-    this.recordFailedVerifyAttempt(userId);
     return false;
   }
 }

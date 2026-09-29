@@ -5,12 +5,20 @@ import { SessionLoginDto } from './dto/session-login.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { RequestType } from 'src/utils/types';
+import { RateLimit } from 'src/shared/decorators/rate-limit.decorator';
+import { RateLimitGuard } from 'src/shared/guards/rate-limit.guard';
+import {
+  LOGIN_RATE_LIMITS,
+  TWO_FACTOR_VERIFY_RATE_LIMITS,
+} from './auth-rate-limits';
 
 @Controller('auth/session')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(LOGIN_RATE_LIMITS)
   login(
     @Body() dto: SessionLoginDto,
     @Req() req: Request,
@@ -20,6 +28,8 @@ export class AuthController {
   }
 
   @Post('verify-2fa')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(TWO_FACTOR_VERIFY_RATE_LIMITS)
   verifyTwoFactor(
     @Body() dto: VerifyTwoFactorDto,
     @Req() req: Request,

@@ -43,6 +43,16 @@ import { BanPunishmentDto } from './dto/ban-punishment.dto';
 import { Request, Response } from 'express';
 import { StaticBearerTokenGuard } from 'src/shared/guards/static-bearer-token.guard';
 import { getRequestIp } from 'src/shared/utils/request-ip';
+import { RateLimit } from 'src/shared/decorators/rate-limit.decorator';
+import { RateLimitGuard } from 'src/shared/guards/rate-limit.guard';
+import {
+  FORGOT_PASSWORD_RATE_LIMITS,
+  LOGIN_RATE_LIMITS,
+  PASSWORD_CONFIRMATION_RATE_LIMITS,
+  SIGN_UP_RATE_LIMITS,
+  TOKEN_REDEMPTION_RATE_LIMITS,
+  TWO_FACTOR_VERIFY_RATE_LIMITS,
+} from 'src/modules/auth/auth-rate-limits';
 
 @Controller('users')
 export class UsersController {
@@ -73,11 +83,15 @@ export class UsersController {
   }
 
   @Post('/login')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(LOGIN_RATE_LIMITS)
   login(@Body() loginUserDto: LoginUserDto, @Req() req: Request) {
     return this.usersService.login(loginUserDto, getRequestIp(req));
   }
 
   @Post('/login/verify-2fa')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(TWO_FACTOR_VERIFY_RATE_LIMITS)
   verifyTwoFactorLogin(@Body() dto: VerifyTwoFactorDto) {
     return this.usersService.verifyTwoFactorLogin(dto);
   }
@@ -135,27 +149,36 @@ export class UsersController {
   }
 
   @Post('/signup')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(SIGN_UP_RATE_LIMITS)
   create(@Body() signUpDto: SignUpDto) {
     return this.usersService.signUp(signUpDto);
   }
 
   @Post('/sign-up/confirm')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(TOKEN_REDEMPTION_RATE_LIMITS)
   confirmSignUp(@Body() confirmSignUpDto: ConfirmSignUpDto) {
     return this.usersService.confirmSignUp(confirmSignUpDto);
   }
 
   @Post('/forgot-password')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(FORGOT_PASSWORD_RATE_LIMITS)
   forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.usersService.forgotPassword(forgotPasswordDto);
   }
 
   @Post('/reset-password')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(TOKEN_REDEMPTION_RATE_LIMITS)
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.usersService.resetPassword(resetPasswordDto);
   }
 
   @Post('/change-password')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, RateLimitGuard)
+  @RateLimit(PASSWORD_CONFIRMATION_RATE_LIMITS)
   changePassword(
     @Body() changePasswordDto: ChangePasswordDto,
     @Req() req: RequestType,
