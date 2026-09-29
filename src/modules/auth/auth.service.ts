@@ -9,6 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import { Request, Response } from 'express';
+import { createHash } from 'node:crypto';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { UsersService } from 'src/modules/users/users.service';
 import {
@@ -49,6 +50,12 @@ export class AuthService {
     private readonly twoFactorService: TwoFactorService,
     private readonly userRestrictionsService: UserRestrictionsService,
   ) {}
+
+  // UserSession.id is the raw session cookie value, so it must never leave the
+  // server. Clients get this one-way derivative to list and revoke sessions.
+  private toPublicSessionId(sessionId: string) {
+    return createHash('sha256').update(sessionId).digest('base64url');
+  }
 
   private getSessionExpiresAt(createdAt: Date) {
     const ttlMs = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -426,26 +433,35 @@ export class AuthService {
 
     return sessions.map((session) => ({
       ...session,
+      id: this.toPublicSessionId(session.id),
       isCurrent: currentSessionId === session.id,
     }));
   }
 
   async revokeSessionById(
     userId: string,
-    sessionId: string,
+    publicSessionId: string,
     req: Request,
     res: Response,
   ) {
-    const session = await this.prisma.userSession.findUnique({
-      where: { id: sessionId },
+    const userSessions = await this.prisma.userSession.findMany({
+      where: {
+        userId,
+        expiresAt: {
+          gte: new Date(),
+        },
+      },
       select: {
         id: true,
-        userId: true,
         revokedAt: true,
       },
     });
 
-    if (!session || session.userId !== userId) {
+    const session = userSessions.find(
+      (item) => this.toPublicSessionId(item.id) === publicSessionId,
+    );
+
+    if (!session) {
       throw new NotFoundException('Session not found');
     }
 
@@ -454,7 +470,7 @@ export class AuthService {
     }
 
     await this.prisma.userSession.update({
-      where: { id: sessionId },
+      where: { id: session.id },
       data: {
         revokedAt: new Date(),
       },
@@ -463,7 +479,7 @@ export class AuthService {
     const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
       | string
       | undefined;
-    if (currentSessionId === sessionId) {
+    if (currentSessionId === session.id) {
       this.clearSessionCookie(res);
     }
 
