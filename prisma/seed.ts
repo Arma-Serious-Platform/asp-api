@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 const BETA_TESTER_ACHIEVEMENT = {
   title: 'Ох і наловив багів',
-  description: 'Прийняти участь у бета-тестування сайту VTG до 19.07.2026',
+  description: 'Прийняти участь у бета-тестуванні сайту VTG до 19.07.2026',
   // Users created before this date (exclusive) receive the achievement.
   createdBefore: new Date('2026-07-19T00:00:00.000Z'),
 };
