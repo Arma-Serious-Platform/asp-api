@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   forwardRef,
@@ -70,11 +71,24 @@ import {
   shouldTriggerWarningAutoban,
   type WarningAutobanConfig,
 } from './users-warning-autoban';
+import {
+  JWT_ACCESS_TOKEN_TYPE,
+  JWT_REFRESH_TOKEN_TYPE,
+} from 'src/modules/auth/auth.constants';
+import {
+  OPENID_NS,
+  STEAM_OPENID_ENDPOINT,
+  verifySteamOpenIdResponse,
+} from './steam-openid';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import {
+  isJwtRevoked,
+  nextTokensValidAfter,
+} from 'src/modules/auth/jwt-revocation';
 
 @Injectable()
 export class UsersService {
-  private static readonly STEAM_OPENID_ENDPOINT =
-    'https://steamcommunity.com/openid/login';
+  private readonly logger = new Logger(UsersService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -86,7 +100,29 @@ export class UsersService {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  // Cuts off everything issued so far: JWTs (via tokensValidAfter), sessions
+  // and live sockets. The caller's own session can be kept.
+  private async revokeUserAccess(userId: string, exceptSessionId?: string) {
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { tokensValidAfter: nextTokensValidAfter() },
+      }),
+      this.prisma.userSession.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+          ...(exceptSessionId && { id: { not: exceptSessionId } }),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    this.realtime.disconnectUser(userId, { exceptSessionId });
+  }
 
   private generateActivationToken(minutes = 10) {
     const token = randomBytes(32).toString('hex');
@@ -212,7 +248,7 @@ export class UsersService {
 
   getSteamLoginRedirectUrl(accessToken: string, callbackUrl: string) {
     const params = new URLSearchParams({
-      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.ns': OPENID_NS,
       'openid.mode': 'checkid_setup',
       'openid.return_to': `${callbackUrl}?accessToken=${accessToken ?? ''}`,
       'openid.realm': `${new URL(callbackUrl).origin}/`,
@@ -220,11 +256,12 @@ export class UsersService {
       'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
     });
 
-    return `${UsersService.STEAM_OPENID_ENDPOINT}?${params.toString()}`;
+    return `${STEAM_OPENID_ENDPOINT}?${params.toString()}`;
   }
 
   async linkSteamFromCallback(
     query: Record<string, string | string[] | undefined>,
+    callbackUrl: string,
   ) {
     const accessToken = this.getSingleQueryValue(query.accessToken);
     if (!accessToken) {
@@ -250,7 +287,11 @@ export class UsersService {
       return;
     }
 
-    const steamId = this.extractAndVerifySteamId(query);
+    const steamId = await this.verifySteamLogin(
+      query,
+      callbackUrl,
+      accessToken,
+    );
 
     if (!steamId) {
       return;
@@ -297,26 +338,17 @@ export class UsersService {
     return Array.isArray(value) ? value[0] : value;
   }
 
-  private extractAndVerifySteamId(
+  private async verifySteamLogin(
     query: Record<string, string | string[] | undefined>,
+    callbackUrl: string,
+    accessToken: string,
   ) {
-    const claimedId = this.getSingleQueryValue(query['openid.claimed_id']);
-    if (!claimedId) {
+    try {
+      return await verifySteamOpenIdResponse(query, callbackUrl, accessToken);
+    } catch (error) {
+      this.logger.warn(`Steam OpenID verification failed: ${String(error)}`);
       return null;
     }
-
-    const marker = '/id/';
-    const markerIndex = claimedId.indexOf(marker);
-    if (markerIndex === -1) {
-      return null;
-    }
-
-    const steamId = claimedId.slice(markerIndex + marker.length).trim();
-    if (!steamId) {
-      return null;
-    }
-
-    return steamId;
   }
 
   async updateMe(userId: string, updateMeDto: UpdateMeDto) {
@@ -636,6 +668,11 @@ export class UsersService {
   }
 
   async confirmSignUp(dto: ConfirmSignUpDto) {
+    // An undefined token would turn the lookup below into `where: {}`.
+    if (!dto.token) {
+      throw new BadRequestException('Invalid token');
+    }
+
     const user = await this.prisma.user.findFirst({
       where: { activationToken: dto.token },
     });
@@ -1141,6 +1178,7 @@ export class UsersService {
     const token = await this.jwtService.signAsync(
       {
         userId: user.id,
+        tokenType: JWT_ACCESS_TOKEN_TYPE,
       },
       {
         secret: process.env.JWT_SECRET,
@@ -1151,6 +1189,7 @@ export class UsersService {
     const refreshToken = await this.jwtService.signAsync(
       {
         userId: user.id,
+        tokenType: JWT_REFRESH_TOKEN_TYPE,
       },
       {
         secret: process.env.JWT_SECRET,
@@ -1302,12 +1341,17 @@ export class UsersService {
 
   async refreshToken(dto: RefreshTokenDto) {
     try {
-      const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
-        dto.refreshToken,
-        {
-          secret: process.env.JWT_SECRET,
-        },
-      );
+      const { userId, tokenType, iat } = await this.jwtService.verifyAsync<{
+        userId: string;
+        tokenType?: string;
+        iat?: number;
+      }>(dto.refreshToken, {
+        secret: process.env.JWT_SECRET,
+      });
+
+      if (!userId || tokenType !== JWT_REFRESH_TOKEN_TYPE) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
       const userRecord = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -1315,10 +1359,11 @@ export class UsersService {
           id: true,
           status: true,
           bannedUntil: true,
+          tokensValidAfter: true,
         },
       });
 
-      if (!userRecord) {
+      if (!userRecord || isJwtRevoked(iat, userRecord.tokensValidAfter)) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -1393,6 +1438,11 @@ export class UsersService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
+    // An undefined token would turn the lookup below into `where: {}`.
+    if (!dto.token) {
+      throw new BadRequestException('Token is invalid');
+    }
+
     const user = await this.prisma.user.findFirst({
       where: { resetPasswordToken: dto.token },
     });
@@ -1419,12 +1469,18 @@ export class UsersService {
       },
     });
 
+    await this.revokeUserAccess(user.id);
+
     return {
       message: 'Password changed successfully',
     };
   }
 
-  async changePassword(dto: ChangePasswordDto, userId: string) {
+  async changePassword(
+    dto: ChangePasswordDto,
+    userId: string,
+    currentSessionId?: string,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId },
       select: {
@@ -1449,6 +1505,9 @@ export class UsersService {
       where: { id: user.id },
       data: { password: hashedPassword },
     });
+
+    // Keep the session that made the change; sign out everywhere else.
+    await this.revokeUserAccess(user.id, currentSessionId);
 
     return {
       message: 'Password changed successfully',
@@ -1668,7 +1727,10 @@ export class UsersService {
     });
   }
 
-  async findOne(idOrName: string) {
+  async findOne(
+    idOrName: string,
+    viewer: { userId?: string; roles?: UserRole[] } = {},
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { OR: [{ id: idOrName }, { nickname: idOrName }] },
       select: {
@@ -1735,8 +1797,14 @@ export class UsersService {
       return user;
     }
 
+    // SteamID is personal data: only the owner and admins may see it.
+    const canSeeSteamId =
+      viewer.userId === user.id ||
+      this.canSeeSensitiveUsersData(viewer.roles ?? []);
+
     return {
       ...user,
+      steamId: canSeeSteamId ? user.steamId : null,
       banReason: await this.resolveBanReason(user.id, user.status),
     };
   }
@@ -1920,6 +1988,8 @@ export class UsersService {
         },
       });
     });
+
+    await this.revokeUserAccess(dto.userId);
 
     return this.me(dto.userId);
   }

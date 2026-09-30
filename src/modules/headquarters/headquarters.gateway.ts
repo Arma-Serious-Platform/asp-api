@@ -3,12 +3,14 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
 import { Injectable } from "@nestjs/common";
-import { Server, Socket } from "socket.io";
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { Namespace, Server, Socket } from "socket.io";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
 import { AuthService } from "src/modules/auth/auth.service";
 import { SideType, SquadRole } from "@prisma/client";
@@ -16,6 +18,8 @@ import { SideType, SquadRole } from "@prisma/client";
 interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
+
+const PLAN_ROOM_PREFIX = 'headquarters:plan:';
 
 const headquartersGatewayCors = {
   origin: process.env.FRONTEND_URL
@@ -29,14 +33,47 @@ const headquartersGatewayCors = {
   namespace: '/headquarters',
 })
 @Injectable()
-export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
   constructor(
     private readonly authService: AuthService,
     private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  afterInit(namespace: Namespace) {
+    this.realtime.registerNamespace(namespace);
+    this.realtime.onSquadMembershipChanged(() =>
+      this.revalidatePlanRooms(namespace),
+    );
+  }
+
+  // Plan rooms are joined after an access check, but squad/side/role changes
+  // can revoke that access later: drop sockets from rooms they may no longer see.
+  private async revalidatePlanRooms(namespace: Namespace) {
+    for (const socket of namespace.sockets.values()) {
+      const client = socket as AuthenticatedSocket;
+
+      for (const room of [...client.rooms]) {
+        if (!room.startsWith(PLAN_ROOM_PREFIX)) {
+          continue;
+        }
+
+        const error = client.userId
+          ? await this.getPlanAccessError(
+              client.userId,
+              room.slice(PLAN_ROOM_PREFIX.length),
+            )
+          : 'Unauthorized';
+
+        if (error) {
+          await client.leave(room);
+        }
+      }
+    }
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -70,9 +107,22 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
       return { error: 'Unauthorized' };
     }
 
+    const error = await this.getPlanAccessError(client.userId, data.gamePlanId);
+    if (error) {
+      return { error };
+    }
+
+    client.join(`${PLAN_ROOM_PREFIX}${data.gamePlanId}`);
+    return { success: true };
+  }
+
+  private async getPlanAccessError(
+    userId: string,
+    gamePlanId: string,
+  ): Promise<string | null> {
     const [user, gamePlan] = await Promise.all([
       this.prisma.user.findUnique({
-        where: { id: client.userId },
+        where: { id: userId },
         select: {
           id: true,
           squadRole: true,
@@ -90,7 +140,7 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
         },
       }),
       this.prisma.gamePlan.findUnique({
-        where: { id: data.gamePlanId },
+        where: { id: gamePlanId },
         select: {
           id: true,
           sideId: true,
@@ -99,16 +149,16 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
     ]);
 
     if (!user?.squad?.sideId) {
-      return { error: 'You are not a member of a squad' };
+      return 'You are not a member of a squad';
     }
 
     const allowedTypes = new Set<SideType>([SideType.BLUE, SideType.RED]);
     if (!allowedTypes.has(user.squad.side.type)) {
-      return { error: 'Your side is not eligible for headquarters plans' };
+      return 'Your side is not eligible for headquarters plans';
     }
 
     if (!gamePlan) {
-      return { error: 'Game plan not found' };
+      return 'Game plan not found';
     }
 
     const hasSquadPlanAccess =
@@ -117,15 +167,14 @@ export class HeadquartersGateway implements OnGatewayConnection, OnGatewayDiscon
       user.squadRole === SquadRole.HQ;
 
     if (!hasSquadPlanAccess) {
-      return { error: 'Your squad role does not allow headquarters plan access' };
+      return 'Your squad role does not allow headquarters plan access';
     }
 
     if (gamePlan.sideId !== user.squad.sideId) {
-      return { error: 'Forbidden for this side' };
+      return 'Forbidden for this side';
     }
 
-    client.join(`headquarters:plan:${data.gamePlanId}`);
-    return { success: true };
+    return null;
   }
 
   @SubscribeMessage('leave_game_plan')

@@ -1,25 +1,24 @@
-import { Optional } from "@nestjs/common";
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { ServerStatus } from "@prisma/client";
-import { IsEnum, IsNotEmpty, IsNumber, IsString } from "class-validator";
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class EditServerDto {
   @ApiPropertyOptional()
   @IsString()
-  @Optional()
+  @IsOptional()
   name?: string;
 
   @ApiPropertyOptional()
   @IsString()
-  @Optional()
+  @IsOptional()
   ip?: string;
 
   @ApiPropertyOptional()
   @IsNumber()
-  @Optional()
+  @IsOptional()
   port?: number;
 
   @IsEnum(ServerStatus)
-  @Optional()
+  @IsOptional()
   status?: ServerStatus;
 }

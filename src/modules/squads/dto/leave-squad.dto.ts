@@ -1,10 +1,9 @@
-import { Optional } from "@nestjs/common";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty, IsUUID } from "class-validator";
+import { IsNotEmpty, IsOptional, IsUUID } from "class-validator";
 
 export class LeaveSquadDto {
   @ApiPropertyOptional()
-  @Optional()
+  @IsOptional()
   @IsUUID()
-  newLeaderId: string;
+  newLeaderId?: string;
 }

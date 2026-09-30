@@ -5,11 +5,13 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Namespace, Server, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
 import { AuthService } from 'src/modules/auth/auth.service';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 
@@ -25,7 +27,7 @@ interface AuthenticatedSocket extends Socket {
 })
 @Injectable()
 export class MissionCommentsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server: Server;
@@ -33,7 +35,12 @@ export class MissionCommentsGateway
   constructor(
     private readonly authService: AuthService,
     private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  afterInit(namespace: Namespace) {
+    this.realtime.registerNamespace(namespace);
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {

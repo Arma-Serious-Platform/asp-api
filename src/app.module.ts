@@ -24,6 +24,7 @@ import { FeedModule } from './modules/feed/feed.module';
 import { BotNotificationsModule } from './modules/bot-notifications/bot-notifications.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
+import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PublicApiModule } from './modules/public-api/public-api.module';
       envFilePath: '.env',
     }),
     ScheduleModule.forRoot(),
+    RealtimeModule,
     AuthModule,
     MailerModule.forRoot({
       transport: {

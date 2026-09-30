@@ -88,6 +88,8 @@ model User {
   email                       String            @unique
   nickname                    String            @unique
   password                    String
+  /// JWTs issued before this moment are rejected (set on password change/reset and bans).
+  tokensValidAfter            DateTime?
   steamId                     String?           @unique
   GUID                        String?           @unique
   lastIp                      String?

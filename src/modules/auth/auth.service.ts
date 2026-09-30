@@ -9,6 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import { Request, Response } from 'express';
+import { createHash } from 'node:crypto';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { UsersService } from 'src/modules/users/users.service';
 import {
@@ -16,6 +17,7 @@ import {
   UserRestrictionsService,
 } from 'src/modules/users/user-restrictions.service';
 import {
+  JWT_ACCESS_TOKEN_TYPE,
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_DAYS,
   SESSION_TTL_DAYS,
@@ -24,6 +26,9 @@ import { SessionLoginDto } from './dto/session-login.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { TwoFactorService } from './two-factor.service';
 import { getRequestIp } from 'src/shared/utils/request-ip';
+import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { parseCookieHeader } from 'src/shared/utils/cookies';
+import { isJwtRevoked } from './jwt-revocation';
 
 export type ResolvedAuthUser = {
   userId: string;
@@ -47,7 +52,14 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly twoFactorService: TwoFactorService,
     private readonly userRestrictionsService: UserRestrictionsService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  // UserSession.id is the raw session cookie value, so it must never leave the
+  // server. Clients get this one-way derivative to list and revoke sessions.
+  private toPublicSessionId(sessionId: string) {
+    return createHash('sha256').update(sessionId).digest('base64url');
+  }
 
   private getSessionExpiresAt(createdAt: Date) {
     const ttlMs = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -218,6 +230,7 @@ export class AuthService {
           revokedAt: new Date(),
         },
       });
+      this.realtime.disconnectSession(sessionId);
     }
 
     this.clearSessionCookie(res);
@@ -229,12 +242,13 @@ export class AuthService {
     token: string,
   ): Promise<ResolvedAuthUser | null> {
     try {
-      const { userId } = await this.jwtService.verifyAsync<{ userId: string }>(
-        token,
-        { secret: process.env.JWT_SECRET },
-      );
+      const { userId, tokenType, iat } = await this.jwtService.verifyAsync<{
+        userId: string;
+        tokenType?: string;
+        iat?: number;
+      }>(token, { secret: process.env.JWT_SECRET });
 
-      if (!userId) {
+      if (!userId || tokenType !== JWT_ACCESS_TOKEN_TYPE) {
         return null;
       }
 
@@ -245,10 +259,15 @@ export class AuthService {
           roles: true,
           status: true,
           bannedUntil: true,
+          tokensValidAfter: true,
         },
       });
 
-      if (!user || this.userRestrictionsService.isPermanentBan(user)) {
+      if (
+        !user ||
+        this.userRestrictionsService.isPermanentBan(user) ||
+        isJwtRevoked(iat, user.tokensValidAfter)
+      ) {
         return null;
       }
 
@@ -336,26 +355,6 @@ export class AuthService {
     return null;
   }
 
-  private parseCookieHeader(cookieHeader?: string) {
-    if (!cookieHeader) {
-      return {} as Record<string, string>;
-    }
-
-    return Object.fromEntries(
-      cookieHeader.split(';').map((part) => {
-        const index = part.indexOf('=');
-        if (index === -1) {
-          return [part.trim(), ''];
-        }
-
-        const key = part.slice(0, index).trim();
-        const value = part.slice(index + 1).trim();
-
-        return [key, decodeURIComponent(value)];
-      }),
-    );
-  }
-
   async resolveHandshakeUser(
     handshake: HandshakeLike,
   ): Promise<ResolvedAuthUser | null> {
@@ -377,7 +376,7 @@ export class AuthService {
       }
     }
 
-    const cookies = this.parseCookieHeader(handshake.headers?.cookie);
+    const cookies = parseCookieHeader(handshake.headers?.cookie);
     const sessionId = cookies[SESSION_COOKIE_NAME];
     if (sessionId) {
       return this.resolveUserFromSession(sessionId);
@@ -425,26 +424,35 @@ export class AuthService {
 
     return sessions.map((session) => ({
       ...session,
+      id: this.toPublicSessionId(session.id),
       isCurrent: currentSessionId === session.id,
     }));
   }
 
   async revokeSessionById(
     userId: string,
-    sessionId: string,
+    publicSessionId: string,
     req: Request,
     res: Response,
   ) {
-    const session = await this.prisma.userSession.findUnique({
-      where: { id: sessionId },
+    const userSessions = await this.prisma.userSession.findMany({
+      where: {
+        userId,
+        expiresAt: {
+          gte: new Date(),
+        },
+      },
       select: {
         id: true,
-        userId: true,
         revokedAt: true,
       },
     });
 
-    if (!session || session.userId !== userId) {
+    const session = userSessions.find(
+      (item) => this.toPublicSessionId(item.id) === publicSessionId,
+    );
+
+    if (!session) {
       throw new NotFoundException('Session not found');
     }
 
@@ -453,16 +461,17 @@ export class AuthService {
     }
 
     await this.prisma.userSession.update({
-      where: { id: sessionId },
+      where: { id: session.id },
       data: {
         revokedAt: new Date(),
       },
     });
+    this.realtime.disconnectSession(session.id);
 
     const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
       | string
       | undefined;
-    if (currentSessionId === sessionId) {
+    if (currentSessionId === session.id) {
       this.clearSessionCookie(res);
     }
 
