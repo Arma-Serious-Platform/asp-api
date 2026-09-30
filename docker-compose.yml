@@ -67,19 +67,6 @@ services:
     volumes:
       - ../files/minio-data:/data
 
-  pbo-parser:
-    container_name: ${COMPOSE_PROJECT_NAME:-asp}-pbo-parser
-    platform: linux/amd64
-    image: agentos/pbo-parser:main
-    ports:
-      - ${PBO_PARSER_PORT?}:${PBO_PARSER_PORT?}
-    environment:
-      - PORT=${PBO_PARSER_PORT}
-      - CLEAR_TIMEOUT_MS=${PBO_CLEAR_TIMEOUT_MS:-60000}
-    networks:
-      - asp-network
-    restart: unless-stopped
-
 networks:
   asp-network:
     name: ${ASP_NETWORK:-asp-network}
