@@ -7,6 +7,10 @@ import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import { v4 as uuid } from 'uuid';
 import { ASP_BUCKET } from './minio.lib';
+import {
+  buildStorageHeaders,
+  resolveContentType,
+} from 'src/shared/utils/file-signature';
 
 @Injectable()
 export class MinioService {
@@ -132,8 +136,13 @@ export class MinioService {
       const objectName = this.buildObjectName(file, id, extension, isWebpConversion);
       const url = this.buildPublicUrl(bucket, objectName, id);
 
+      const contentType = isWebpConversion
+        ? 'image/webp'
+        : await resolveContentType(file);
+
       await this.minioClient.putObject(bucket, objectName, buffer, buffer.length, {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
+        ...buildStorageHeaders(contentType, file.originalname),
       });
 
       const dbFile = await this.prisma.file.create({
