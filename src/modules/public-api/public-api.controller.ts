@@ -11,6 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiKeyGuard } from 'src/shared/guards/api-key.guard';
 import { PublicApiThrottlerGuard } from 'src/shared/guards/public-api-throttler.guard';
 import { FindPublicListDto } from './dto/find-public-list.dto';
+import { FindPublicFeedDto } from './dto/find-public-feed.dto';
 import { FindPublicUsersDto } from './dto/find-public-users.dto';
 import { FindPublicWeekendsDto } from './dto/find-public-weekends.dto';
 import {
@@ -96,7 +97,7 @@ export class PublicApiController {
   @Get('feed')
   @ApiOperation({ summary: 'Merged news and weekends feed' })
   @ApiOkResponse({ description: 'Paginated feed items', type: PublicFeedListResponseDto })
-  findFeed(@Query() dto: FindPublicListDto) {
+  findFeed(@Query() dto: FindPublicFeedDto) {
     return this.publicApiService.findFeed(dto);
   }
 
