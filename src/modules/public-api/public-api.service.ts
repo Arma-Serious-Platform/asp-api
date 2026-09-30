@@ -209,7 +209,8 @@ export class PublicApiService {
     const search = dto.search?.trim();
 
     const where: Prisma.WeekendWhereInput = {
-      ...(dto.published !== undefined ? { published: dto.published } : {}),
+      // API consumers only ever see published weekends, never drafts.
+      published: true,
       ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     };
 
@@ -228,8 +229,8 @@ export class PublicApiService {
   }
 
   async findWeekendById(id: string) {
-    const weekend = await this.prisma.weekend.findUnique({
-      where: { id },
+    const weekend = await this.prisma.weekend.findFirst({
+      where: { id, published: true },
       include: this.weekendInclude,
     });
 
