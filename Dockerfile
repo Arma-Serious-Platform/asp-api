@@ -1,7 +1,6 @@
-# Use an official Node.js runtime as a parent image
-FROM node:22.20.0-slim
+# Base image with the system libraries Prisma needs at build and run time
+FROM node:22.20.0-slim AS base
 
-# Set the working directory inside the container
 WORKDIR /app
 
 # Install OpenSSL and libssl for runtime crypto needs
@@ -12,18 +11,28 @@ RUN apt-get update \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and yarn.lock
-COPY package.json yarn.lock ./
+# Build stage: all dependencies (including dev) to compile the app
+FROM base AS build
 
-# Install yarn and global tools, then install dependencies
-RUN npm install -g @nestjs/cli
+COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
-# Copy the rest of the application code
 COPY . .
-
-# Build the NestJS application
 RUN yarn build
+
+# Runtime stage: production dependencies and the compiled app only
+FROM base AS runtime
+
+COPY package.json yarn.lock ./
+COPY prisma ./prisma
+RUN yarn install --frozen-lockfile --production \
+  && yarn cache clean
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+
+# Run as the unprivileged user shipped with the Node image
+USER node
 
 # Expose the application port
 EXPOSE 3000
