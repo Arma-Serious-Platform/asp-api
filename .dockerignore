@@ -1,0 +1,13 @@
+# Secrets are passed to the container at runtime (docker-compose env_file),
+# never baked into image layers.
+.env
+.env.*
+!.env.example
+
+# Rebuilt inside the image
+node_modules
+dist
+
+# Not needed in the build context
+.git
+coverage

@@ -32,9 +32,6 @@ export class PublicUserDto {
   @ApiProperty({ example: ['USER'], enum: UserRole, isArray: true })
   roles: UserRole[];
 
-  @ApiProperty({ example: '76561198000000000', nullable: true })
-  steamId: string | null;
-
   @ApiProperty({ example: 'https://t.me/playerone', nullable: true })
   telegramUrl: string | null;
 

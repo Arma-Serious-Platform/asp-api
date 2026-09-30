@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { PAGINATION_MAX_TAKE } from 'src/shared/dto/pagination.dto';
 
 export class FindGamePlanCommentsDto {
   @ApiPropertyOptional({
@@ -23,5 +24,6 @@ export class FindGamePlanCommentsDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(PAGINATION_MAX_TAKE)
   take?: number = 100;
 }

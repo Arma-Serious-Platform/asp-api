@@ -23,6 +23,7 @@ import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { Roles } from 'src/shared/decorators/roles.decorator';
 import { RequestType } from 'src/utils/types';
 import { validateAttachmentFiles } from 'src/shared/utils/validate-attachments';
+import { isAllowedImageFile } from 'src/shared/utils/file-signature';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { FindNewsDto } from './dto/find-news.dto';
@@ -36,26 +37,26 @@ const IMAGE_MAX_SIZE = 10 * 1024 * 1024;
 export class NewsController {
   constructor(private readonly newsService: NewsService) {}
 
-  private validateImage(image?: Multer.File) {
+  private async validateImage(image?: Multer.File) {
     if (!image) {
       return;
     }
     if (image.size > IMAGE_MAX_SIZE) {
       throw new BadRequestException('Image exceeds 10MB size limit');
     }
-    if (image.mimetype && !image.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only image files are allowed');
+    if (!(await isAllowedImageFile(image))) {
+      throw new BadRequestException('Only JPEG, PNG, GIF and WebP images are allowed');
     }
   }
 
-  private pickFiles(files?: {
+  private async pickFiles(files?: {
     image?: Multer.File[];
     attachments?: Multer.File[];
   }) {
     const image = files?.image?.[0];
     const attachments = files?.attachments ?? [];
-    this.validateImage(image);
-    validateAttachmentFiles(attachments);
+    await this.validateImage(image);
+    await validateAttachmentFiles(attachments);
     return { image, attachments };
   }
 
@@ -75,11 +76,11 @@ export class NewsController {
   @UseGuards(AuthGuard)
   @Roles([...NEWS_ROLES])
   @UseInterceptors(FileInterceptor('file'))
-  uploadMedia(@UploadedFile() file?: Multer.File) {
+  async uploadMedia(@UploadedFile() file?: Multer.File) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    this.validateImage(file);
+    await this.validateImage(file);
     return this.newsService.uploadContentMedia(file);
   }
 
@@ -104,13 +105,13 @@ export class NewsController {
       { name: 'attachments', maxCount: 10 },
     ]),
   )
-  create(
+  async create(
     @UploadedFiles()
     files: { image?: Multer.File[]; attachments?: Multer.File[] },
     @Body() dto: CreateNewsDto,
     @Req() req: RequestType,
   ) {
-    const { image, attachments } = this.pickFiles(files);
+    const { image, attachments } = await this.pickFiles(files);
     return this.newsService.create(dto, req.userId, image, attachments);
   }
 
@@ -123,14 +124,14 @@ export class NewsController {
       { name: 'attachments', maxCount: 10 },
     ]),
   )
-  update(
+  async update(
     @Param('id') id: string,
     @UploadedFiles()
     files: { image?: Multer.File[]; attachments?: Multer.File[] },
     @Body() dto: UpdateNewsDto,
     @Req() req: RequestType,
   ) {
-    const { image, attachments } = this.pickFiles(files);
+    const { image, attachments } = await this.pickFiles(files);
     return this.newsService.update(id, dto, req.userId, image, attachments);
   }
 

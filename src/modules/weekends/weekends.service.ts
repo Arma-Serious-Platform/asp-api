@@ -172,7 +172,7 @@ export class WeekendsService {
     };
   }
 
-  async findAll(dto: FindWeekendsDto, userId?: string) {
+  async findAll(dto: FindWeekendsDto, userId?: string, includeUnpublished = false) {
     const {
       search,
       skip = 0,
@@ -213,7 +213,10 @@ export class WeekendsService {
 
     const where: Prisma.WeekendWhereInput = {
       ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
-      ...(published !== undefined && { published }),
+      // Only weekend managers may list drafts or filter by the published flag.
+      ...(includeUnpublished
+        ? published !== undefined && { published }
+        : { published: true }),
       ...(hasGameFilters && {
         games: {
           some: {
@@ -300,7 +303,7 @@ export class WeekendsService {
     };
   }
 
-  async findById(id: string, userId?: string) {
+  async findById(id: string, userId?: string, includeUnpublished = false) {
     const accessibleSideId =
       await this.headquartersService.getAccessibleHeadquartersSideId(
         userId ?? null,
@@ -340,7 +343,7 @@ export class WeekendsService {
       },
     });
 
-    if (!weekend) {
+    if (!weekend || (!weekend.published && !includeUnpublished)) {
       throw new NotFoundException('Weekend not found');
     }
 

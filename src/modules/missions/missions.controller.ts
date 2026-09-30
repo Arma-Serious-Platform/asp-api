@@ -7,6 +7,7 @@ import { Roles } from "src/shared/decorators/roles.decorator";
 import { CreateMissionDto } from "./dto/create-mission.dto";
 import { RequestType } from "src/utils/types";
 import { FileValidation } from "src/shared/decorators/file.dectorator";
+import { FileLike, isAllowedImageFile } from "src/shared/utils/file-signature";
 import { CreateMissionVersionDto } from "./dto/create-mission-version.dto";
 import { UpdateMissionDto } from "./dto/update-mission.dto";
 import { ChangeMissionVersionStatusDto } from "./dto/change-mission-version-status.dto";
@@ -17,7 +18,10 @@ import { ChangeMissionStateDto } from "./dto/change-mission-state.dto";
 export class MissionsController {
   constructor(private readonly missionsService: MissionsService) { }
 
-  private validateFiles(files: File[] = [], { required = false }: { required?: boolean } = {}) {
+  private async validateFiles(
+    files: File[] = [],
+    { required = false, images = false }: { required?: boolean; images?: boolean } = {},
+  ) {
     if (required && files.length === 0) {
       throw new BadRequestException('File is required');
     }
@@ -26,6 +30,15 @@ export class MissionsController {
     const exceeded = files.find((file) => file.size > maxSize);
     if (exceeded) {
       throw new BadRequestException(`File ${(exceeded as { originalname?: string }).originalname ?? 'unknown'} exceeds 10MB size limit`);
+    }
+
+    if (images) {
+      for (const file of files) {
+        // Handlers type uploads as DOM File; at runtime they are multer files.
+        if (!(await isAllowedImageFile(file as unknown as FileLike))) {
+          throw new BadRequestException('Screenshots must be JPEG, PNG, GIF or WebP images');
+        }
+      }
     }
   }
 
@@ -81,7 +94,7 @@ export class MissionsController {
       { name: 'friendlyScreenshots', maxCount: 20 },
     ]),
   )
-  createVersion(
+  async createVersion(
     @UploadedFiles()
     files: {
       file?: File[];
@@ -93,10 +106,10 @@ export class MissionsController {
     @Param('id') id: string,
     @Req() req: RequestType,
   ) {
-    this.validateFiles(files?.file ?? [], { required: true });
-    this.validateFiles(files?.attackScreenshots ?? []);
-    this.validateFiles(files?.defenseScreenshots ?? []);
-    this.validateFiles(files?.friendlyScreenshots ?? []);
+    await this.validateFiles(files?.file ?? [], { required: true });
+    await this.validateFiles(files?.attackScreenshots ?? [], { images: true });
+    await this.validateFiles(files?.defenseScreenshots ?? [], { images: true });
+    await this.validateFiles(files?.friendlyScreenshots ?? [], { images: true });
 
     return this.missionsService.createMissionVersion(
       { ...createMissionVersionDto, file: files.file?.[0] },
@@ -118,7 +131,7 @@ export class MissionsController {
       { name: 'friendlyScreenshots', maxCount: 20 },
     ]),
   )
-  updateVersion(
+  async updateVersion(
     @UploadedFiles()
     files: {
       file?: File[];
@@ -130,10 +143,10 @@ export class MissionsController {
     @Param('versionId') versionId: string,
     @Req() req: RequestType,
   ) {
-    this.validateFiles(files?.file ?? []);
-    this.validateFiles(files?.attackScreenshots ?? []);
-    this.validateFiles(files?.defenseScreenshots ?? []);
-    this.validateFiles(files?.friendlyScreenshots ?? []);
+    await this.validateFiles(files?.file ?? []);
+    await this.validateFiles(files?.attackScreenshots ?? [], { images: true });
+    await this.validateFiles(files?.defenseScreenshots ?? [], { images: true });
+    await this.validateFiles(files?.friendlyScreenshots ?? [], { images: true });
 
     return this.missionsService.updateMissionVersion(
       dto,
