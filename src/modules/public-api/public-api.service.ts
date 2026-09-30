@@ -25,7 +25,7 @@ export class PublicApiService {
     nickname: true,
     status: true,
     roles: true,
-    steamId: true,
+    // No steamId: it is visible only to the account owner and admins.
     telegramUrl: true,
     discordUrl: true,
     youtubeUrl: true,
