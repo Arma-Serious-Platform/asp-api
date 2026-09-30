@@ -79,7 +79,9 @@ export class AuthService {
       domain?: string;
     } = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      // Secure by default. NODE_ENV is not set in the Docker image, so it cannot
+      // be relied on; plain-HTTP setups opt out with SESSION_COOKIE_SECURE=false.
+      secure: process.env.SESSION_COOKIE_SECURE !== 'false',
       sameSite: 'lax',
       path: '/',
     };
