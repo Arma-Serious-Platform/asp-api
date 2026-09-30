@@ -10,6 +10,7 @@ import {
 } from "@nestjs/websockets";
 import { Injectable } from "@nestjs/common";
 import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { websocketGatewayOptions } from 'src/shared/utils/allowed-origins';
 import { Namespace, Server, Socket } from "socket.io";
 import { PrismaService } from "src/infrastructure/prisma/prisma.service";
 import { AuthService } from "src/modules/auth/auth.service";
@@ -21,15 +22,8 @@ interface AuthenticatedSocket extends Socket {
 
 const PLAN_ROOM_PREFIX = 'headquarters:plan:';
 
-const headquartersGatewayCors = {
-  origin: process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
-    : true,
-  credentials: true,
-};
-
 @WebSocketGateway({
-  cors: headquartersGatewayCors,
+  ...websocketGatewayOptions,
   namespace: '/headquarters',
 })
 @Injectable()

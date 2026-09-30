@@ -1,7 +1,8 @@
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import { corsOrigin, getAllowedOrigins } from './shared/utils/allowed-origins';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { seed } from 'prisma/seed';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
 import { IoAdapter } from '@nestjs/platform-socket.io';
@@ -28,12 +29,12 @@ async function bootstrap() {
     }),
   );
 
-  const corsOrigins = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
-    : true;
+  if (getAllowedOrigins().length === 0) {
+    Logger.warn('FRONTEND_URL is not set: cross-origin browser requests are rejected', 'CORS');
+  }
 
   app.enableCors({
-    origin: corsOrigins,
+    origin: corsOrigin,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Api-Key'],

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/websockets';
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { websocketGatewayOptions } from 'src/shared/utils/allowed-origins';
 import { Namespace, Socket } from 'socket.io';
 import { NotificationGroup, NotificationType } from '@prisma/client';
 import { AuthService } from 'src/modules/auth/auth.service';
@@ -20,15 +21,8 @@ export type NotificationSocketPayload = {
   type: NotificationType;
 };
 
-const notificationsGatewayCors = {
-  origin: process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
-    : true,
-  credentials: true,
-};
-
 @WebSocketGateway({
-  cors: notificationsGatewayCors,
+  ...websocketGatewayOptions,
   namespace: '/notifications',
 })
 @Injectable()

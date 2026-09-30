@@ -12,6 +12,7 @@ import {
 import { Namespace, Server, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
 import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { websocketGatewayOptions } from 'src/shared/utils/allowed-origins';
 import { AuthService } from 'src/modules/auth/auth.service';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 
@@ -20,9 +21,7 @@ interface AuthenticatedSocket extends Socket {
 }
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  ...websocketGatewayOptions,
   namespace: '/mission-comments',
 })
 @Injectable()
