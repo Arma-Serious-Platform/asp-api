@@ -25,6 +25,7 @@ import { BotNotificationsModule } from './modules/bot-notifications/bot-notifica
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
 import { RealtimeModule } from './infrastructure/realtime/realtime.module';
+import { UploadsModule } from './infrastructure/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RealtimeModule } from './infrastructure/realtime/realtime.module';
     }),
     ScheduleModule.forRoot(),
     RealtimeModule,
+    UploadsModule,
     AuthModule,
     MailerModule.forRoot({
       transport: {

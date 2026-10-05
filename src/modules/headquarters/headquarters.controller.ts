@@ -136,26 +136,26 @@ export class HeadquartersController {
   @Post('plans/:gamePlanId/comments')
   @UseGuards(AuthGuard)
   @UseInterceptors(FilesInterceptor('attachments', 10))
-  createComment(
+  async createComment(
     @Param('gamePlanId') gamePlanId: string,
     @UploadedFiles() attachments: Multer.File[],
     @Body() dto: CreateGamePlanCommentDto,
     @Req() req: RequestType,
   ) {
-    validateAttachmentFiles(attachments);
+    await validateAttachmentFiles(attachments);
     return this.headquartersService.createComment(gamePlanId, dto, req.userId, attachments);
   }
 
   @Patch('comments/:id')
   @UseGuards(AuthGuard)
   @UseInterceptors(FilesInterceptor('attachments', 10))
-  updateComment(
+  async updateComment(
     @Param('id') id: string,
     @UploadedFiles() attachments: Multer.File[],
     @Body() dto: UpdateGamePlanCommentDto,
     @Req() req: RequestType,
   ) {
-    validateAttachmentFiles(attachments);
+    await validateAttachmentFiles(attachments);
     return this.headquartersService.updateComment(id, dto, req.userId, attachments);
   }
 

@@ -1,5 +1,5 @@
 import { Multer } from 'multer';
-import { fileTypeFromBuffer } from 'file-type';
+import { resolveContentType } from './file-signature';
 import { MinioService } from 'src/infrastructure/minio/minio.service';
 import { ASP_BUCKET } from 'src/infrastructure/minio/minio.lib';
 
@@ -20,8 +20,8 @@ export const uploadAttachmentFiles = async (
   return Promise.all(
     files.map(async (file) => {
       const uploaded = await minioService.uploadFile(ASP_BUCKET.ATTACHMENTS, file);
-      const detectedMime = (await fileTypeFromBuffer(file.buffer))?.mime;
-      const mimeType = file.mimetype || detectedMime || null;
+      // Derived from the content; the MIME type sent by the client is not trusted.
+      const mimeType = await resolveContentType(file);
 
       return {
         fileId: uploaded.id,

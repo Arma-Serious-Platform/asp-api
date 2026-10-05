@@ -35,12 +35,12 @@ export class MissionCommentsController {
   @UseGuards(AuthGuard)
   @UseInterceptors(FilesInterceptor('attachments', 10))
   @ApiOkResponse({ description: 'Created mission comment', type: MissionCommentResponseDto })
-  create(
+  async create(
     @UploadedFiles() attachments: Multer.File[],
     @Body() dto: CreateMissionCommentDto,
     @Req() req: RequestType,
   ) {
-    validateAttachmentFiles(attachments);
+    await validateAttachmentFiles(attachments);
     return this.missionCommentsService.create(dto, req.userId, attachments);
   }
 
@@ -48,13 +48,13 @@ export class MissionCommentsController {
   @UseGuards(AuthGuard)
   @UseInterceptors(FilesInterceptor('attachments', 10))
   @ApiOkResponse({ description: 'Updated mission comment', type: MissionCommentResponseDto })
-  update(
+  async update(
     @Param('id') id: string,
     @UploadedFiles() attachments: Multer.File[],
     @Body() dto: UpdateMissionCommentDto,
     @Req() req: RequestType,
   ) {
-    validateAttachmentFiles(attachments);
+    await validateAttachmentFiles(attachments);
     return this.missionCommentsService.update(id, dto, req.userId, attachments);
   }
 

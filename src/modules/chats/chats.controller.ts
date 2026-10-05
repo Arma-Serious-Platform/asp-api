@@ -51,7 +51,7 @@ export class ChatsController {
     @Body() dto: Omit<SendMessageDto, 'chatId'> & Record<string, unknown>,
     @Req() req: RequestType,
   ) {
-    validateAttachmentFiles(attachments);
+    await validateAttachmentFiles(attachments);
 
     const rawContent = dto.content ?? dto;
     const content = normalizeJsonValue({ value: rawContent });
@@ -85,7 +85,7 @@ export class ChatsController {
     @Body() dto: UpdateMessageDto & Record<string, unknown>,
     @Req() req: RequestType,
   ) {
-    validateAttachmentFiles(attachments);
+    await validateAttachmentFiles(attachments);
 
     const rawContent = dto.content;
     const content = rawContent === undefined ? undefined : normalizeJsonValue({ value: rawContent });

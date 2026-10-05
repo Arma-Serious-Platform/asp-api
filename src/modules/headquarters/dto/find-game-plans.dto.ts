@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, Min } from "class-validator";
+import { IsInt, IsOptional, Max, Min } from "class-validator";
 
 export class FindGamePlansDto {
   @ApiPropertyOptional({ default: 0 })
@@ -15,5 +15,6 @@ export class FindGamePlansDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(200)
   take?: number = 200;
 }

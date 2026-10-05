@@ -11,6 +11,7 @@ import {
 import { Namespace, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
 import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
+import { websocketGatewayOptions } from 'src/shared/utils/allowed-origins';
 import { PrismaService } from 'src/infrastructure/prisma/prisma.service';
 import { ChatsService } from './chats.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -20,15 +21,8 @@ interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
 
-const chatGatewayCors = {
-  origin: process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
-    : true,
-  credentials: true,
-};
-
 @WebSocketGateway({
-  cors: chatGatewayCors,
+  ...websocketGatewayOptions,
   namespace: '/chat',
 })
 @Injectable()

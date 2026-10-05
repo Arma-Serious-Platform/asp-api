@@ -10,6 +10,11 @@ import { Roles } from "src/shared/decorators/roles.decorator";
 import { AuthService } from "src/modules/auth/auth.service";
 import { RequestType } from "src/utils/types";
 import { AnnounceChannelsDto } from "src/shared/dto/announce-channels.dto";
+import { UserRole } from "@prisma/client";
+import { hasAnyRole } from "src/shared/utils/user-roles";
+
+// Drafts (unpublished weekends) are visible only to those who manage them.
+const WEEKEND_MANAGER_ROLES: UserRole[] = [UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK];
 
 @Controller('weekends')
 export class WeekendsController {
@@ -21,13 +26,21 @@ export class WeekendsController {
   @Get()
   async findAll(@Query() findWeekendsDto: FindWeekendsDto, @Req() req: Request) {
     const authUser = await this.authService.resolveRequestUser(req);
-    return this.weekendsService.findAll(findWeekendsDto, authUser?.userId);
+    return this.weekendsService.findAll(
+      findWeekendsDto,
+      authUser?.userId,
+      hasAnyRole(authUser?.roles ?? [], WEEKEND_MANAGER_ROLES),
+    );
   }
 
   @Get(':id')
   async findById(@Param('id') id: string, @Req() req: Request) {
     const authUser = await this.authService.resolveRequestUser(req);
-    return this.weekendsService.findById(id, authUser?.userId);
+    return this.weekendsService.findById(
+      id,
+      authUser?.userId,
+      hasAnyRole(authUser?.roles ?? [], WEEKEND_MANAGER_ROLES),
+    );
   }
 
   @Post()

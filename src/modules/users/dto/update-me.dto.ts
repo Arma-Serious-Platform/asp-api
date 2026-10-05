@@ -1,17 +1,9 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEmail, IsOptional, IsString } from "class-validator";
+import { IsOptional, IsString } from "class-validator";
 
+// Only profile links. Email and nickname must not be editable here: the email
+// has no confirmation flow, and nicknames go through PATCH /users/me/change-nickname.
 export class UpdateMeDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  nickname: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsEmail()
-  email: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
