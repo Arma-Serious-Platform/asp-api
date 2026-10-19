@@ -20,6 +20,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        # db only runs with the "db" profile; deployments with an external DATABASE_URL skip it.
+        required: false
       minio:
         condition: service_started
     networks:
@@ -27,6 +29,7 @@ services:
     restart: unless-stopped
 
   db:
+    profiles: ["db"]
     container_name: ${COMPOSE_PROJECT_NAME:-asp}-db
     image: postgres:16
     ports:
