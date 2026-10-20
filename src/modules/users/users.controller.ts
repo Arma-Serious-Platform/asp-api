@@ -194,12 +194,16 @@ export class UsersController {
 
   @Put('/change-role')
   @UseGuards(AuthGuard)
-  @Roles(['OWNER'])
+  @Roles(['OWNER', 'SERVER_ADMIN', 'UVK'])
   changeUserRole(
     @Body() changeUserRoleDto: ChangeUserRoleDto,
     @Req() req: RequestType,
   ) {
-    return this.usersService.changeUserRole(changeUserRoleDto, req.userId);
+    return this.usersService.changeUserRole(
+      changeUserRoleDto,
+      req.userId,
+      req.roles,
+    );
   }
 
   @Post('/change-avatar')

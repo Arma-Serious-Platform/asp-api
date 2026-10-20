@@ -56,6 +56,7 @@ import { VerifyTwoFactorDto } from 'src/modules/auth/dto/verify-two-factor.dto';
 import { UsersHistoryService } from './users-history.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
+  assertCanChangeUserRoles,
   hasAnyRole,
   highestRole,
   normalizeRoles,
@@ -760,12 +761,12 @@ export class UsersService {
     await this.sendActivationToken(email, activationToken!);
   }
 
-  async changeUserRole(dto: ChangeUserRoleDto, actorId: string) {
+  async changeUserRole(
+    dto: ChangeUserRoleDto,
+    actorId: string,
+    actorRoles: UserRole[],
+  ) {
     const nextRoles = normalizeRoles(dto.roles);
-
-    if (nextRoles.includes(UserRole.OWNER)) {
-      throw new BadRequestException('You cannot assign OWNER role');
-    }
 
     const user = await this.prisma.user.findFirst({
       where: { id: dto.id },
@@ -775,11 +776,10 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.roles.includes(UserRole.OWNER)) {
-      throw new BadRequestException(
-        'You cannot change role of user with OWNER role',
-      );
-    }
+    assertCanChangeUserRoles(actorRoles, user.roles, nextRoles, {
+      actorId,
+      targetId: user.id,
+    });
 
     const previousRoles = [...user.roles].sort();
     const sortedNextRoles = [...nextRoles].sort();
