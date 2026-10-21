@@ -1,5 +1,5 @@
 # Base image with the system libraries Prisma needs at build and run time
-FROM node:22.20.0-slim AS base
+FROM node:22.23.4-slim AS base
 
 WORKDIR /app
 
