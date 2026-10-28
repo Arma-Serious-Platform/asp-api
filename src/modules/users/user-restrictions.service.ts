@@ -12,6 +12,14 @@ type RestrictionUser = {
   isMuted: boolean;
 };
 
+/**
+ * - `active`: no restrictions.
+ * - `temporarily_banned`: no access to the game server until `bannedUntil`;
+ *   the account itself keeps working.
+ * - `deleted`: permanently banned. Such an account is treated as removed.
+ */
+export type AccountState = 'active' | 'temporarily_banned' | 'deleted';
+
 @Injectable()
 export class UserRestrictionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,6 +37,19 @@ export class UserRestrictionsService {
       user.bannedUntil !== null &&
       user.bannedUntil > now
     );
+  }
+
+  getAccountState(
+    user: Pick<RestrictionUser, 'status' | 'bannedUntil'>,
+    now = new Date(),
+  ): AccountState {
+    if (this.isPermanentBan(user)) {
+      return 'deleted';
+    }
+
+    return this.isTemporaryBanActive(user, now)
+      ? 'temporarily_banned'
+      : 'active';
   }
 
   isCommunicationMuted(user: RestrictionUser, now = new Date()) {

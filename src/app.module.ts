@@ -26,6 +26,8 @@ import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
 import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 import { UploadsModule } from './infrastructure/uploads/uploads.module';
+import { AccessRevocationModule } from './infrastructure/access-revocation/access-revocation.module';
+import { OidcModule } from './modules/oidc/oidc.module';
 
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { UploadsModule } from './infrastructure/uploads/uploads.module';
     }),
     ScheduleModule.forRoot(),
     RealtimeModule,
+    AccessRevocationModule,
     UploadsModule,
     AuthModule,
     MailerModule.forRoot({
@@ -69,6 +72,7 @@ import { UploadsModule } from './infrastructure/uploads/uploads.module';
     BotNotificationsModule,
     ApiKeysModule,
     PublicApiModule,
+    OidcModule,
   ],
   controllers: [AppController],
   providers: [AppService],
