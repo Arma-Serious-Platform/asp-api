@@ -10,6 +10,7 @@ import { HttpErrorLoggingFilter } from './shared/filters/http-error-logging.filt
 import { requestIdMiddleware } from './shared/middleware/request-id.middleware';
 import cookieParser from 'cookie-parser';
 import { PublicApiModule } from './modules/public-api/public-api.module';
+import { mountOidcProvider } from './modules/oidc/oidc-mount';
 
 async function bootstrap() {
   await seed();
@@ -19,6 +20,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpErrorLoggingFilter(httpAdapter));
   app.useWebSocketAdapter(new IoAdapter(app));
   app.use(cookieParser());
+  mountOidcProvider(app);
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({

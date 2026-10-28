@@ -31,6 +31,44 @@ describe('UserRestrictionsService', () => {
     ).toBe(false);
   });
 
+  it('maps restrictions to the account state', () => {
+    const now = new Date('2026-10-28T12:00:00Z');
+
+    expect(
+      service.getAccountState(
+        { status: UserStatus.ACTIVE, bannedUntil: null },
+        now,
+      ),
+    ).toBe('active');
+    expect(
+      service.getAccountState(
+        {
+          status: UserStatus.BANNED,
+          bannedUntil: new Date('2026-10-29T12:00:00Z'),
+        },
+        now,
+      ),
+    ).toBe('temporarily_banned');
+    expect(
+      service.getAccountState(
+        { status: UserStatus.BANNED, bannedUntil: null },
+        now,
+      ),
+    ).toBe('deleted');
+  });
+
+  it('treats an expired temporary ban as active before the cron lifts it', () => {
+    expect(
+      service.getAccountState(
+        {
+          status: UserStatus.BANNED,
+          bannedUntil: new Date('2026-10-28T11:59:00Z'),
+        },
+        new Date('2026-10-28T12:00:00Z'),
+      ),
+    ).toBe('active');
+  });
+
   it('treats mute as inactive after bannedUntil expires', () => {
     expect(
       service.isCommunicationMuted({

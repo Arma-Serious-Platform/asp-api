@@ -86,6 +86,7 @@ import {
   isJwtRevoked,
   nextTokensValidAfter,
 } from 'src/modules/auth/jwt-revocation';
+import { AccessRevocationService } from 'src/infrastructure/access-revocation/access-revocation.service';
 
 @Injectable()
 export class UsersService {
@@ -102,10 +103,11 @@ export class UsersService {
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
     private readonly realtime: RealtimeService,
+    private readonly accessRevocation: AccessRevocationService,
   ) {}
 
-  // Cuts off everything issued so far: JWTs (via tokensValidAfter), sessions
-  // and live sockets. The caller's own session can be kept.
+  // Cuts off everything issued so far: JWTs (via tokensValidAfter), sessions,
+  // live sockets and connected apps. The caller's own session can be kept.
   private async revokeUserAccess(userId: string, exceptSessionId?: string) {
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -123,6 +125,11 @@ export class UsersService {
     ]);
 
     this.realtime.disconnectUser(userId, { exceptSessionId });
+    await this.accessRevocation.publish({
+      type: 'user',
+      userId,
+      exceptSessionId,
+    });
   }
 
   private generateActivationToken(minutes = 10) {
@@ -1829,6 +1836,9 @@ export class UsersService {
     await this.prisma.user.delete({
       where: { id },
     });
+
+    this.realtime.disconnectUser(id);
+    await this.accessRevocation.publish({ type: 'user', userId: id });
 
     return user;
   }

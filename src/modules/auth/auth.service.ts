@@ -29,10 +29,17 @@ import { getRequestIp } from 'src/shared/utils/request-ip';
 import { RealtimeService } from 'src/infrastructure/realtime/realtime.service';
 import { parseCookieHeader } from 'src/shared/utils/cookies';
 import { isJwtRevoked } from './jwt-revocation';
+import { AccessRevocationService } from 'src/infrastructure/access-revocation/access-revocation.service';
 
 export type ResolvedAuthUser = {
   userId: string;
   roles: UserRole[];
+};
+
+export type ResolvedSessionUser = ResolvedAuthUser & {
+  sessionId: string;
+  /** When the user logged in to create this session. */
+  loggedInAt: Date;
 };
 
 type HandshakeLike = {
@@ -53,6 +60,7 @@ export class AuthService {
     private readonly twoFactorService: TwoFactorService,
     private readonly userRestrictionsService: UserRestrictionsService,
     private readonly realtime: RealtimeService,
+    private readonly accessRevocation: AccessRevocationService,
   ) {}
 
   // UserSession.id is the raw session cookie value, so it must never leave the
@@ -157,6 +165,32 @@ export class AuthService {
     res.clearCookie(SESSION_COOKIE_NAME, baseOptions);
   }
 
+  // A login replaces the one already in this browser: once its cookie is
+  // overwritten that session is unreachable, so it ends together with the
+  // apps signed in through it instead of lingering in the sessions list.
+  private async endReplacedSession(req: Request, newSessionId: string) {
+    const previousSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
+      | string
+      | undefined;
+
+    if (!previousSessionId || previousSessionId === newSessionId) {
+      return;
+    }
+
+    const { count } = await this.prisma.userSession.updateMany({
+      where: { id: previousSessionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    if (count) {
+      this.realtime.disconnectSession(previousSessionId);
+      await this.accessRevocation.publish({
+        type: 'session',
+        sessionId: previousSessionId,
+      });
+    }
+  }
+
   async sessionLogin(dto: SessionLoginDto, req: Request, res: Response) {
     const user = await this.usersService.authenticateLoginUser(
       dto,
@@ -176,6 +210,7 @@ export class AuthService {
 
     const session = await this.createSession(user.id, req, dto.device);
     this.setSessionCookie(res, session.id, session.expiresAt);
+    await this.endReplacedSession(req, session.id);
 
     const me = await this.usersService.me(user.id);
 
@@ -213,6 +248,7 @@ export class AuthService {
 
     const session = await this.createSession(userId, req, dto.device);
     this.setSessionCookie(res, session.id, session.expiresAt);
+    await this.endReplacedSession(req, session.id);
 
     const me = await this.usersService.me(userId);
 
@@ -233,6 +269,7 @@ export class AuthService {
         },
       });
       this.realtime.disconnectSession(sessionId);
+      await this.accessRevocation.publish({ type: 'session', sessionId });
     }
 
     this.clearSessionCookie(res);
@@ -282,9 +319,15 @@ export class AuthService {
     }
   }
 
-  private async resolveUserFromSession(
+  /**
+   * The live session behind a cookie value. `touch: false` checks without
+   * counting as activity: an app using its tokens must not keep the browser
+   * session alive.
+   */
+  async resolveUserFromSession(
     sessionId: string,
-  ): Promise<ResolvedAuthUser | null> {
+    { touch = true }: { touch?: boolean } = {},
+  ): Promise<ResolvedSessionUser | null> {
     const session = await this.prisma.userSession.findUnique({
       where: { id: sessionId },
       select: {
@@ -317,7 +360,7 @@ export class AuthService {
     const nextExpiresAt = this.getSessionExpiresAt(session.createdAt);
     const now = new Date();
 
-    if (nextExpiresAt > session.expiresAt) {
+    if (touch && nextExpiresAt > session.expiresAt) {
       await this.prisma.userSession.update({
         where: { id: session.id },
         data: {
@@ -325,7 +368,10 @@ export class AuthService {
           lastActiveAt: now,
         },
       });
-    } else if (session.lastActiveAt < new Date(now.getTime() - 60_000)) {
+    } else if (
+      touch &&
+      session.lastActiveAt < new Date(now.getTime() - 60_000)
+    ) {
       await this.prisma.userSession.update({
         where: { id: session.id },
         data: { lastActiveAt: now },
@@ -335,6 +381,8 @@ export class AuthService {
     return {
       userId: session.user.id,
       roles: session.user.roles,
+      sessionId: session.id,
+      loggedInAt: session.createdAt,
     };
   }
 
@@ -469,6 +517,10 @@ export class AuthService {
       },
     });
     this.realtime.disconnectSession(session.id);
+    await this.accessRevocation.publish({
+      type: 'session',
+      sessionId: session.id,
+    });
 
     const currentSessionId = req.cookies?.[SESSION_COOKIE_NAME] as
       | string

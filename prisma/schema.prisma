@@ -147,6 +147,8 @@ model User {
   authoredNews                News[]                   @relation("NewsAuthors")
   editedNews                  News[]                   @relation("NewsEditors")
   createdApiKeys              ApiKey[]                 @relation("ApiKeyCreator")
+  createdOidcClients          OidcClient[]             @relation("OidcClientCreator")
+  oidcConsents                OidcConsent[]
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
 }
@@ -823,4 +825,71 @@ model ApiKey {
   updatedAt   DateTime  @updatedAt
 
   @@index([createdById])
+}
+
+/// An application that signs users in through the OpenID Connect provider.
+model OidcClient {
+  id                     String        @id @default(uuid())
+  clientId               String        @unique
+  name                   String
+  /// AES-256-GCM ciphertext (OIDC_CLIENT_SECRET_KEY). Null for public clients,
+  /// which authenticate with PKCE only.
+  clientSecretEncrypted  String?
+  redirectUris           String[]
+  postLogoutRedirectUris String[]
+  backchannelLogoutUri   String?
+  allowedScopes          String[]
+  /// Our own applications: no consent screen, silent logout with id_token_hint.
+  firstParty             Boolean       @default(false)
+  disabled               Boolean       @default(false)
+  createdById            String?
+  createdBy              User?         @relation("OidcClientCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  consents               OidcConsent[]
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@index([createdById])
+}
+
+/// Storage of the oidc-provider models: sessions, interactions, grants,
+/// authorization codes and tokens.
+model OidcPayload {
+  id           String
+  type         String
+  payload      Json
+  grantId      String?
+  uid          String?
+  userCode     String?
+  accountId    String?
+  /// UserSession whose login authorized this grant (Grant rows only). Ending
+  /// that session revokes the grant and every token issued from it.
+  aspSessionId String?
+  expiresAt    DateTime?
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@id([type, id])
+  @@index([grantId])
+  @@index([uid])
+  @@index([userCode])
+  @@index([accountId])
+  @@index([aspSessionId])
+  @@index([expiresAt])
+}
+
+/// Scopes a user allowed a client. Remembers consent across sessions and
+/// lists the user's connected apps.
+model OidcConsent {
+  id         String     @id @default(uuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId   String
+  client     OidcClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  scopes     String[]
+  lastUsedAt DateTime   @default(now())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([userId, clientId])
+  @@index([clientId])
 }
