@@ -13,7 +13,11 @@ import {
 import { SESSION_COOKIE_NAME } from 'src/modules/auth/auth.constants';
 import { UserRestrictionsService } from 'src/modules/users/user-restrictions.service';
 import { parseCookieHeader } from 'src/shared/utils/cookies';
-import { OIDC_ACCOUNT_SELECT, buildAccountClaims } from './oidc-claims';
+import {
+  OIDC_ACCOUNT_SELECT,
+  buildAccountClaims,
+  includeRolesClaims,
+} from './oidc-claims';
 import { toClientMetadata } from './oidc-client-metadata';
 import { OidcConfig, loadOidcConfig } from './oidc-config';
 import { createOidcAdapter } from './oidc-prisma.adapter';
@@ -100,6 +104,7 @@ export class OidcProviderService {
   }
 
   private async findAccount(
+    ctx: KoaContextWithOIDC,
     sub: string,
     token: { grantId?: string } | undefined,
   ) {
@@ -127,10 +132,15 @@ export class OidcProviderService {
     }
 
     const muted = this.userRestrictions.isCommunicationMuted(account);
+    const firstParty = ctx.oidc?.client?.metadata().first_party === true;
 
     return {
       accountId: account.id,
-      claims: () => buildAccountClaims(account, state, muted),
+      claims: (_use: string, scope: string) =>
+        buildAccountClaims(account, state, muted, {
+          frontendUrl: this.frontendUrl,
+          includeRoles: includeRolesClaims(scope, firstParty),
+        }),
     };
   }
 
@@ -230,7 +240,7 @@ export class OidcProviderService {
       adapter: createOidcAdapter(this.prisma, (clientId) =>
         this.loadClient(clientId),
       ),
-      findAccount: (_ctx, sub, token) => this.findAccount(sub, token),
+      findAccount: (ctx, sub, token) => this.findAccount(ctx, sub, token),
       claims: OIDC_SCOPE_CLAIMS,
       ...(config.allowPrivateNetworkFetch && {
         // Drops the provider's SSRF-protecting dispatcher (see OidcConfig).

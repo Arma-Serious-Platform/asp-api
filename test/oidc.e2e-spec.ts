@@ -414,7 +414,7 @@ describeE2e('OpenID Connect provider (e2e)', () => {
         name: 'E2EPlayer',
         nickname: 'E2EPlayer',
         email: 'e2eplayer@e2e.test',
-        asp_roles: ['USER'],
+        roles: ['USER'],
       });
 
       const claims = await readJson(await userinfo(tokens.access_token));
@@ -423,10 +423,35 @@ describeE2e('OpenID Connect provider (e2e)', () => {
         nickname: 'E2EPlayer',
         email: 'e2eplayer@e2e.test',
         email_verified: true,
-        asp_roles: ['USER'],
+        roles: ['USER'],
+        groups: ['USER'],
         game_access: true,
         banned_until: null,
         squad: null,
+      });
+    });
+
+    it('works with the default field names of popular apps', async () => {
+      // What Wiki.js, Nextcloud and Grafana ask for and read by default.
+      const { result, pkce, state } = await authorize(browser, firstParty, {
+        scope: 'openid profile email',
+      });
+      const code = expectCallback(result, firstParty, state);
+      const tokens = await exchangeCode(firstParty, code, pkce.verifier);
+
+      const claims = await readJson(await userinfo(tokens.access_token));
+      expect(claims).toMatchObject({
+        sub: player.id,
+        email: expect.any(String) as unknown,
+        name: expect.any(String) as unknown,
+        displayName: claims.name as string,
+        username: claims.preferred_username as string,
+        profile: `${FRONTEND_URL}/profile/${player.id}`,
+        locale: 'uk',
+        zoneinfo: 'Europe/Kyiv',
+        // First-party apps get roles with `profile`: Wiki.js and Nextcloud
+        // never ask for a separate scope.
+        groups: expect.arrayContaining(['USER']) as unknown,
       });
     });
 
@@ -449,7 +474,7 @@ describeE2e('OpenID Connect provider (e2e)', () => {
         sub: player.id,
         nickname: 'E2ERenamed',
         email: 'renamed@e2e.test',
-        asp_roles: ['USER', 'GAME_ADMIN'],
+        roles: ['USER', 'GAME_ADMIN'],
       });
     });
 
@@ -462,7 +487,7 @@ describeE2e('OpenID Connect provider (e2e)', () => {
 
       const claims = await readJson(await userinfo(tokens.access_token));
       expect(claims).toHaveProperty('nickname');
-      expect(claims).toHaveProperty('asp_roles');
+      expect(claims).toHaveProperty('roles');
       expect(claims).not.toHaveProperty('email');
       expect(claims).not.toHaveProperty('squad');
     });
@@ -479,6 +504,9 @@ describeE2e('OpenID Connect provider (e2e)', () => {
       const claims = await readJson(await userinfo(tokens.access_token));
       expect(claims).toHaveProperty('nickname');
       expect(claims).not.toHaveProperty('email');
+      // A third-party app gets roles only with the `roles` scope it asked for.
+      expect(claims).not.toHaveProperty('roles');
+      expect(claims).not.toHaveProperty('groups');
     });
 
     it('requires PKCE from browser apps', async () => {

@@ -78,8 +78,8 @@ Discovery: `<OIDC_ISSUER>/.well-known/openid-configuration`. Підходить 
   просять `openid profile email` за замовчуванням) — фактичні скоупи є в полі
   `scope` відповіді токен-ендпоінта.
 - **Ідентифікуйте користувача лише за `sub`.** Нікнейм і email змінюються.
-- `id_token` містить профіль на момент входу (`name`, `email`,
-  `asp_roles`…) — цього досить бібліотекам, які будують користувача з нього.
+- `id_token` містить профіль на момент входу (`name`, `email`, `roles`…) —
+  цього досить бібліотекам, які будують користувача з нього.
   Актуальні дані — у `userinfo`: не кешуйте його довше хвилини, тоді ролі,
   нікнейм і бан завжди свіжі.
 - Refresh-токен: скоуп `offline_access` разом із `prompt=consent` (так вимагає
@@ -93,12 +93,24 @@ Discovery: `<OIDC_ISSUER>/.well-known/openid-configuration`. Підходить 
 | Скоуп | Claims з `userinfo` |
 |---|---|
 | `openid` | `sub` |
-| `profile` | `name` (= нікнейм), `nickname`, `preferred_username`, `picture`, `updated_at` |
+| `profile` | `name`, `nickname`, `preferred_username` (усі = нікнейм), `picture`, `profile` (сторінка на VTG), `locale` (`uk`), `zoneinfo` (`Europe/Kyiv`), `updated_at`; псевдоніми `displayName` і `username`; власним додаткам ще `roles` і `groups` |
 | `email` | `email`, `email_verified` |
-| `roles` | `asp_roles` |
+| `roles` | `roles`, `groups` — масив ролей (`USER`, `GAME_ADMIN`, `SERVER_ADMIN`…) |
 | `squad` | `squad {id, name, tag}`, `squad_role`, `side` |
 | `game` | `steam_id`, `game_access`, `banned_until`, `muted` |
 | `offline_access` | refresh-токен (до 30 днів, не довше за сесію VTG) |
+
+Назви полів — стандарт OpenID Connect (Core 1.0, розділ 5.1) плюс ті, на які
+популярні застосунки дивляться за замовчуванням, щоб нічого не мапити вручну:
+
+- `displayName` — Wiki.js та інші застосунки на Passport.js;
+- `username` — Grafana (інакше вона бере за логін email);
+- `groups` / `roles` — синхронізація груп і ролей (Nextcloud, Wiki.js,
+  Gitea/Forgejo, Grafana через `role_attribute_path`).
+
+Ролі — дані чутливі, тож сторонній додаток отримує їх лише зі скоупом `roles`
+(його видно на екрані дозволу). Власні (`firstParty`) отримують їх і разом із
+`profile`, бо Wiki.js, Nextcloud тощо окремого скоупу не просять.
 
 Access-токен живе 10 хвилин; коди, токени й refresh-токени діють, лише доки
 жива сесія VTG, з якої їх видано.
@@ -117,7 +129,11 @@ Access-токен живе 10 хвилин; коди, токени й refresh-т
 }
 ```
 
-Ролі приходять у `profile.asp_roles` (на момент входу).
+Ролі приходять у `profile.roles` (на момент входу).
+
+Для Wiki.js 2.x («Generic OpenID Connect / OAuth2») значення за замовчуванням
+полів Email/Display Name/Picture/Groups Claim підходять як є; Issuer —
+`OIDC_ISSUER`, ендпоінти — `/auth`, `/token`, `/me` під ним.
 
 ## Якщо колись з'явиться зміна email
 
