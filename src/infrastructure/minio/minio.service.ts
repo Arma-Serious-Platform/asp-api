@@ -61,6 +61,39 @@ export class MinioService {
     return safeOriginalName;
   }
 
+  private getExtensionFromFilename(filename: string): string | undefined {
+    const parts = filename.split('.');
+    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : undefined;
+  }
+
+  private async resolveUploadNaming(file: Multer.File): Promise<{
+    extension: string | undefined;
+    isWebpConversion: boolean;
+  }> {
+    const detectedExtension = (await fileTypeFromBuffer(file.buffer))?.ext;
+    const fileExtension =
+      detectedExtension || this.getExtensionFromFilename(file.originalname as string);
+    const isWebpConversion = ['png', 'jpg', 'jpeg'].includes(fileExtension || '');
+
+    return {
+      extension: isWebpConversion ? 'webp' : fileExtension,
+      isWebpConversion,
+    };
+  }
+
+  /**
+   * Object key `uploadFile` will store. Null when the key is a generated id
+   * (image converted to webp) or the file type is unsupported.
+   */
+  async resolveStoredObjectName(file: Multer.File): Promise<string | null> {
+    const { extension, isWebpConversion } = await this.resolveUploadNaming(file);
+    if (!extension || isWebpConversion) {
+      return null;
+    }
+
+    return this.buildObjectName(file, '', extension, false);
+  }
+
   private isBucketAlreadyOwnedError(error: unknown) {
     return (
       typeof error === 'object' &&
@@ -113,19 +146,7 @@ export class MinioService {
       let buffer: Buffer = file.buffer as Buffer;
 
       const id = uuid();
-      const detectedExtension = (await fileTypeFromBuffer(file.buffer))?.ext;
-      
-      // Fallback to original filename extension if file-type can't detect it
-      const getExtensionFromFilename = (filename: string): string | undefined => {
-        const parts = filename.split('.');
-        return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : undefined;
-      };
-      
-      const fileExtension = detectedExtension || getExtensionFromFilename(file.originalname as string);
-      const isWebpConversion = ['png', 'jpg', 'jpeg'].includes(
-        fileExtension || '',
-      );
-      const extension = isWebpConversion ? 'webp' : fileExtension;
+      const { extension, isWebpConversion } = await this.resolveUploadNaming(file);
 
       if (isWebpConversion) {
         buffer = await this.convertImageToWebp(file);

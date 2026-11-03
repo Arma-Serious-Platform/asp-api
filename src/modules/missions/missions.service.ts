@@ -206,6 +206,25 @@ export class MissionsService {
     return mission.authorId === userId || mission.coauthors.some((coauthor) => coauthor.id === userId);
   }
 
+  private async assertUniqueMissionFileName(file: File, excludeVersionId?: string) {
+    const filename = await this.minioService.resolveStoredObjectName(file);
+    if (!filename) {
+      return;
+    }
+
+    const existing = await this.prisma.missionVersion.findFirst({
+      where: {
+        ...(excludeVersionId ? { id: { not: excludeVersionId } } : {}),
+        file: { filename },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Mission file name already exists');
+    }
+  }
+
   private canManageAnyMission(roles: UserRole[]) {
     return hasAnyRole(roles, [UserRole.OWNER, UserRole.SERVER_ADMIN, UserRole.UVK]);
   }
@@ -817,6 +836,8 @@ export class MissionsService {
       throw new ForbiddenException('You are not the author of this mission');
     }
 
+    await this.assertUniqueMissionFileName(dto.file);
+
     const friendly = this.resolveFriendlySideInput({
       attackSideType: dto.attackSideType,
       defenseSideType: dto.defenseSideType,
@@ -997,6 +1018,8 @@ export class MissionsService {
     const fileIdsToDeleteAfterUpdate: string[] = [];
 
     if (file) {
+      await this.assertUniqueMissionFileName(file, missionVersionId);
+
       const slotsBySide = await this.pboParserService.parseMissionSlots(file);
       const effectiveAttackSideType = dto.attackSideType ?? missionVersion.attackSideType;
       const effectiveDefenseSideType = dto.defenseSideType ?? missionVersion.defenseSideType;
