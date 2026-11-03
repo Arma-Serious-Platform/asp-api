@@ -206,15 +206,19 @@ export class MissionsService {
     return mission.authorId === userId || mission.coauthors.some((coauthor) => coauthor.id === userId);
   }
 
-  private async assertUniqueMissionFileName(file: File, excludeVersionId?: string) {
+  private async assertUniqueMissionFileName(file: File, currentFilename?: string) {
     const filename = await this.minioService.resolveStoredObjectName(file);
     if (!filename) {
       return;
     }
 
+    // Re-uploading under the version's current name is always allowed (legacy duplicates exist).
+    if (currentFilename && filename === currentFilename) {
+      return;
+    }
+
     const existing = await this.prisma.missionVersion.findFirst({
       where: {
-        ...(excludeVersionId ? { id: { not: excludeVersionId } } : {}),
         file: { filename },
       },
       select: { id: true },
@@ -1018,7 +1022,7 @@ export class MissionsService {
     const fileIdsToDeleteAfterUpdate: string[] = [];
 
     if (file) {
-      await this.assertUniqueMissionFileName(file, missionVersionId);
+      await this.assertUniqueMissionFileName(file, missionVersion.file.filename);
 
       const slotsBySide = await this.pboParserService.parseMissionSlots(file);
       const effectiveAttackSideType = dto.attackSideType ?? missionVersion.attackSideType;
