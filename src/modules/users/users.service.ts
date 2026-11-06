@@ -87,6 +87,7 @@ import {
   nextTokensValidAfter,
 } from 'src/modules/auth/jwt-revocation';
 import { AccessRevocationService } from 'src/infrastructure/access-revocation/access-revocation.service';
+import { OcapStatsService } from 'src/infrastructure/ocap-stats/ocap-stats.service';
 
 @Injectable()
 export class UsersService {
@@ -104,6 +105,7 @@ export class UsersService {
     private readonly configService: ConfigService,
     private readonly realtime: RealtimeService,
     private readonly accessRevocation: AccessRevocationService,
+    private readonly ocapStatsService: OcapStatsService,
   ) {}
 
   // Cuts off everything issued so far: JWTs (via tokensValidAfter), sessions,
@@ -1824,6 +1826,23 @@ export class UsersService {
     }
 
     return events;
+  }
+
+  async findStats(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { steamId: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.steamId) {
+      throw new BadRequestException('Steam is not connected');
+    }
+
+    return this.ocapStatsService.getPlayerBySteamId(user.steamId);
   }
 
   async delete(id: string) {

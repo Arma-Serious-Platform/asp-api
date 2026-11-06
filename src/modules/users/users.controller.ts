@@ -279,6 +279,12 @@ export class UsersController {
     return this.usersService.findHistory(userId);
   }
 
+  @Get(':userId/stats')
+  @UseGuards(AuthGuard)
+  findStats(@Param('userId') userId: string) {
+    return this.usersService.findStats(userId);
+  }
+
   @Post('/ban/:userId/permanent')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN'])

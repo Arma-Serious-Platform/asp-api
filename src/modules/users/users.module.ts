@@ -9,12 +9,14 @@ import { UsersHistoryService } from './users-history.service';
 import { UsersBanExpirationService } from './users-ban-expiration.service';
 import { UserRestrictionsService } from './user-restrictions.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { OcapStatsModule } from 'src/infrastructure/ocap-stats/ocap-stats.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     PrismaModule,
     MinioModule,
+    OcapStatsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '3d' },
