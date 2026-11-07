@@ -8,6 +8,7 @@ import { NotificationGroup, NotificationType, Prisma } from "@prisma/client";
 import { HeadquartersService } from "../headquarters/headquarters.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { ChannelAnnouncementsService } from "src/infrastructure/bots/channel-announcements.service";
+import { withPublicMissionSlots } from "../missions/mission-slots.util";
 
 @Injectable()
 export class WeekendsService {
@@ -136,6 +137,29 @@ export class WeekendsService {
     },
   } satisfies Prisma.MissionVersionSelect;
 
+  /** Raw slot trees — only selected for public read endpoints, mapped via `withPublicMissionSlots`. */
+  private readonly missionVersionSlotsSelect = {
+    missionAttackSlots: true,
+    missionDefenceSlots: true,
+    missionFriendlySlots: true,
+  } satisfies Prisma.MissionVersionSelect;
+
+  private withGamesPublicMissionSlots<
+    T extends {
+      games: Array<{
+        missionVersion: Parameters<typeof withPublicMissionSlots>[0];
+      }>;
+    },
+  >(weekend: T) {
+    return {
+      ...weekend,
+      games: weekend.games.map((game) => ({
+        ...game,
+        missionVersion: withPublicMissionSlots(game.missionVersion),
+      })),
+    };
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly headquartersService: HeadquartersService,
@@ -263,7 +287,10 @@ export class WeekendsService {
                 }
               },
               missionVersion: {
-                select: this.missionVersionSelectForWeekendList,
+                select: {
+                  ...this.missionVersionSelectForWeekendList,
+                  ...this.missionVersionSlotsSelect,
+                },
               },
               attackSide: {
                 select: {
@@ -297,7 +324,10 @@ export class WeekendsService {
 
     return {
       data: data.map((weekend) =>
-        this.attachAccessiblePlanId(weekend, accessibleSideId),
+        this.attachAccessiblePlanId(
+          this.withGamesPublicMissionSlots(weekend),
+          accessibleSideId,
+        ),
       ),
       total,
     };
@@ -315,7 +345,10 @@ export class WeekendsService {
         games: {
           include: {
             missionVersion: {
-              select: this.missionVersionSelectForWeekendGame,
+              select: {
+                ...this.missionVersionSelectForWeekendGame,
+                ...this.missionVersionSlotsSelect,
+              },
             },
             attackSide: {
               select: {
@@ -347,7 +380,10 @@ export class WeekendsService {
       throw new NotFoundException('Weekend not found');
     }
 
-    return this.attachAccessiblePlanId(weekend, accessibleSideId);
+    return this.attachAccessiblePlanId(
+      this.withGamesPublicMissionSlots(weekend),
+      accessibleSideId,
+    );
   }
 
   async create(dto: CreateWeekendDto, actorId?: string) {

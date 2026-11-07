@@ -35,24 +35,11 @@ import {
 } from 'src/shared/utils/sync-comment-attachments';
 import { UserRestrictionsService } from '../users/user-restrictions.service';
 import { NotificationsService } from '../notifications/notifications.service';
-
-/** In-game names may override the PBO group with `@A1-1` or `@[РЕЗЕРВ]А3-4`. */
-const IN_GAME_CALLSIGN_OVERRIDE =
-  /@(?:\[РЕЗЕРВ\])?\s*[AАaа]\s*(\d+)\s*-\s*(\d+)/u;
-
-function resolveSlotCallsign(
-  pboCallsign: string | undefined,
-  firstUnitName?: string,
-): string {
-  if (firstUnitName) {
-    const match = firstUnitName.match(IN_GAME_CALLSIGN_OVERRIDE);
-    if (match?.[1] && match[2]) {
-      return `Alpha ${match[1]}-${match[2]}`;
-    }
-  }
-
-  return pboCallsign ?? 'Unknown';
-}
+import {
+  extractSlotsArrayBySide,
+  ParsedMissionSlot,
+  resolveSlotCallsign,
+} from '../missions/mission-slots.util';
 
 const DEFAULT_CALLSIGNS = [
   'Alpha 1-1',
@@ -86,16 +73,6 @@ const DEFAULT_CALLSIGNS = [
   'Alpha 5-5',
   'Alpha 5-6',
 ];
-
-type ParsedMissionUnit = {
-  name?: string;
-};
-
-type ParsedMissionSlot = {
-  callsign?: string;
-  count?: number;
-  units?: ParsedMissionUnit[];
-};
 
 type MissionVersionSlotsSelect = {
   missionAttackSlots: Prisma.JsonValue | null;
@@ -727,7 +704,7 @@ export class HeadquartersService {
       friendlyTo &&
       friendlyTo === primarySideType
     ) {
-      const friendlySlots = this.extractSlotsArrayBySide(missionFriendlySlots);
+      const friendlySlots = extractSlotsArrayBySide(missionFriendlySlots);
       if (friendlySlots.length > 0) {
         pushSlots(friendlySlots, friendlySideType);
       }
@@ -748,13 +725,13 @@ export class HeadquartersService {
     sideId: string,
   ): ParsedMissionSlot[] {
     if (sideId === game.attackSideId) {
-      return this.extractSlotsArrayBySide(
+      return extractSlotsArrayBySide(
         game.missionVersion.missionAttackSlots,
       );
     }
 
     if (sideId === game.defenseSideId) {
-      return this.extractSlotsArrayBySide(
+      return extractSlotsArrayBySide(
         game.missionVersion.missionDefenceSlots,
       );
     }
@@ -762,35 +739,6 @@ export class HeadquartersService {
     return [];
   }
 
-  private extractSlotsArrayBySide(
-    slotsJson: Prisma.JsonValue | null,
-  ): ParsedMissionSlot[] {
-    if (
-      !slotsJson ||
-      typeof slotsJson !== 'object' ||
-      Array.isArray(slotsJson)
-    ) {
-      return [];
-    }
-
-    for (const side of [
-      MissionGameSide.BLUE,
-      MissionGameSide.RED,
-      MissionGameSide.GREEN,
-    ]) {
-      const slots = (slotsJson as Record<string, unknown>)[side];
-      if (!Array.isArray(slots)) {
-        continue;
-      }
-
-      return slots.filter(
-        (slot): slot is ParsedMissionSlot =>
-          typeof slot === 'object' && slot !== null,
-      );
-    }
-
-    return [];
-  }
 
   async findPlans(userId: string, dto: FindGamePlansDto) {
     const sideId = await this.getAllowedSideIdForUser(userId);
