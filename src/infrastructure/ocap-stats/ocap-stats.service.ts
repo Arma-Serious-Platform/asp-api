@@ -47,6 +47,12 @@ export class OcapStatsService {
       throw new BadGatewayException('OCAP stats service returned an error');
     }
 
-    return response.json();
+    // Steam IDs of other users are admin-only, and any logged-in user sees this.
+    const { steamId: _steamId, ...stats } = (await response.json()) as Record<
+      string,
+      unknown
+    >;
+
+    return stats;
   }
 }

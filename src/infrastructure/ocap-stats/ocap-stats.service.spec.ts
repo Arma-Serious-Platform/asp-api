@@ -38,6 +38,18 @@ describe('OcapStatsService', () => {
     expect(init.headers).toEqual({ Authorization: 'Bearer secret-token' });
   });
 
+  it('removes the Steam ID from the response', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ steamId: STEAM_ID, player: { name: 'Merc' } }),
+      ),
+    );
+
+    await expect(service.getPlayerBySteamId(STEAM_ID)).resolves.toEqual({
+      player: { name: 'Merc' },
+    });
+  });
+
   it('maps an unknown player to 404', async () => {
     fetchMock.mockResolvedValue(new Response('{}', { status: 404 }));
 
