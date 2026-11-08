@@ -62,7 +62,9 @@ export class PublicApiService {
     changesDescription: true,
     inGameTime: true,
     weather: true,
-    weaponry: true,
+    weaponry: {
+      orderBy: { position: 'asc' as const },
+    },
     rating: true,
     fileId: true,
     createdAt: true,

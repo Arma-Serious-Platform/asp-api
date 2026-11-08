@@ -16,6 +16,7 @@ import { HeadquartersService } from "src/modules/headquarters/headquarters.servi
 import { ChangeMissionStateDto } from "./dto/change-mission-state.dto";
 import { OrderType } from "src/shared/enums/order-type.enum";
 import { hasAnyRole } from "src/shared/utils/user-roles";
+import { withPublicMissionSlots } from "./mission-slots.util";
 
 @Injectable()
 export class MissionsService {
@@ -539,7 +540,9 @@ export class MissionsService {
           },
           include: {
             file: true,
-            weaponry: true,
+            weaponry: {
+              orderBy: { position: 'asc' },
+            },
             reviewer: {
               select: this.missionAuthorSelect,
             },
@@ -562,7 +565,7 @@ export class MissionsService {
 
     return {
       ...mission,
-      missionVersions: mission.missionVersions.map((version) => this.omitMissionSlotTrees(version)),
+      missionVersions: mission.missionVersions.map((version) => withPublicMissionSlots(version)),
     };
   }
 
@@ -901,11 +904,12 @@ export class MissionsService {
         status: MissionStatus.PENDING_APPROVAL,
         weaponry: dto.weaponry
           ? {
-            create: dto.weaponry.map((weaponry) => ({
+            create: dto.weaponry.map((weaponry, index) => ({
               name: weaponry.name,
               description: weaponry.description,
               count: weaponry.count,
               type: weaponry.type,
+              position: index,
             })),
           }
           : undefined,
@@ -933,7 +937,9 @@ export class MissionsService {
         } : undefined,
       },
       include: {
-        weaponry: true,
+        weaponry: {
+          orderBy: { position: 'asc' },
+        },
         reviewer: {
           select: this.missionAuthorSelect,
         },
@@ -1155,11 +1161,12 @@ export class MissionsService {
     if (dto.weaponry !== undefined) {
       updateDto.weaponry = {
         deleteMany: {},
-        create: dto.weaponry.map((weaponry) => ({
+        create: dto.weaponry.map((weaponry, index) => ({
           name: weaponry.name,
           description: weaponry.description,
           count: weaponry.count,
           type: weaponry.type,
+          position: index,
         })),
       };
     }

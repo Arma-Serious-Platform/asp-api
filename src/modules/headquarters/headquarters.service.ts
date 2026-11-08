@@ -1451,7 +1451,9 @@ export class HeadquartersService {
             friendlySideSlots: true,
             inGameTime: true,
             weather: true,
-            weaponry: true,
+            weaponry: {
+              orderBy: { position: 'asc' },
+            },
             file: {
               select: {
                 id: true,

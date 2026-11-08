@@ -107,7 +107,9 @@ export class WeekendsService {
 
   private readonly missionVersionSelectForWeekendList = {
     ...this.missionVersionBaseSelect,
-    weaponry: true,
+    weaponry: {
+      orderBy: { position: 'asc' as const },
+    },
     file: {
       select: {
         id: true,

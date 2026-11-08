@@ -385,6 +385,7 @@ model MissionWeaponry {
   description      String?
   count            Int
   type             MissionGameSide
+  position         Int             @default(0)
   missionVersion   MissionVersion  @relation("MissionVersionWeaponry", fields: [missionVersionId], references: [id])
   missionVersionId String
   createdAt        DateTime        @default(now())
