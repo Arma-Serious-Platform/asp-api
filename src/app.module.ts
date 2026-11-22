@@ -28,6 +28,7 @@ import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 import { UploadsModule } from './infrastructure/uploads/uploads.module';
 import { AccessRevocationModule } from './infrastructure/access-revocation/access-revocation.module';
 import { OidcModule } from './modules/oidc/oidc.module';
+import { TribunalModule } from './modules/tribunal/tribunal.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { OidcModule } from './modules/oidc/oidc.module';
     ApiKeysModule,
     PublicApiModule,
     OidcModule,
+    TribunalModule,
   ],
   controllers: [AppController],
   providers: [AppService],

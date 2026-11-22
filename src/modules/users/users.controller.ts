@@ -240,6 +240,12 @@ export class UsersController {
     return this.usersService.createWarning(userId, dto, req.userId, req.roles);
   }
 
+  @Get(':userId/active-warnings')
+  @UseGuards(AuthGuard)
+  findActiveWarnings(@Param('userId') userId: string) {
+    return this.usersService.findActiveWarnings(userId);
+  }
+
   @Get(':userId/warnings')
   @UseGuards(AuthGuard)
   @Roles(['OWNER', 'SERVER_ADMIN', 'GAME_ADMIN'])

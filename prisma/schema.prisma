@@ -23,6 +23,7 @@ model File {
   achievementIcons Achievement[] @relation("AchievementIcon")
   missionCommentAttachments MissionCommentAttachment[]
   messageAttachments MessageAttachment[]
+  tribunalComplaintAttachments TribunalComplaintAttachment[]
   gamePlanCommentAttachments GamePlanCommentAttachment[]
   newsImages News[] @relation("NewsImages")
   newsAttachments NewsAttachment[]
@@ -127,6 +128,11 @@ model User {
   specializations             Specialization[]  @relation("UserSpecializations")
   achievements                Achievement[]     @relation("UserAchievements")
   games                       Game[]
+  tribunalComplaintsFiled     TribunalComplaint[] @relation("TribunalComplaintAuthor")
+  tribunalComplaintsReceived  TribunalComplaint[] @relation("TribunalComplaintTarget")
+  tribunalComplaintsAssigned  TribunalComplaint[] @relation("TribunalComplaintAssignee")
+  tribunalComplaintsResolved  TribunalComplaint[] @relation("TribunalComplaintResolver")
+  tribunalMessages            TribunalMessage[]
   telegramUrl                 String?
   discordUrl                  String?
   youtubeUrl                  String?
@@ -223,6 +229,10 @@ model UserWarning {
   removedById       String?
   removedBy         User?            @relation("RemovedUserWarnings", fields: [removedById], references: [id], onDelete: SetNull)
   reason            String
+  ruleNumber        String?
+  ruleText          String?
+  comment           String?
+  weight            Int              @default(1)
   removeReason      String?
   removedAt         DateTime?
   createdAt         DateTime         @default(now())
@@ -249,11 +259,90 @@ model UserPunishment {
   isMuted       Boolean            @default(false)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+  tribunalComplaint TribunalComplaint?
 
   @@index([userId])
   @@index([adminId])
   @@index([warningId])
   @@index([type])
+}
+
+enum TribunalComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  PUNISHED
+  REJECTED
+}
+
+enum TribunalPunishmentKind {
+  NONE
+  WARNING
+  TEMP_BAN
+  PERMANENT_BAN
+}
+
+model TribunalComplaint {
+  id             String                  @id @default(uuid())
+  number         Int                     @unique @default(autoincrement())
+  authorId       String
+  author         User                    @relation("TribunalComplaintAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  targetUserId   String
+  target         User                    @relation("TribunalComplaintTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  assigneeId     String?
+  assignee       User?                   @relation("TribunalComplaintAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  ruleNumber     String?
+  ruleText       String?
+  violatedAt     DateTime
+  gameId         String?
+  game           Game?                   @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  description    String
+  status         TribunalComplaintStatus @default(OPEN)
+  punishmentKind TribunalPunishmentKind  @default(NONE)
+  warningWeight  Int?
+  punishmentId   String?                 @unique
+  punishment     UserPunishment?         @relation(fields: [punishmentId], references: [id], onDelete: SetNull)
+  bannedUntil    DateTime?
+  resolvedById   String?
+  resolvedBy     User?                   @relation("TribunalComplaintResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  messages       TribunalMessage[]
+  attachments    TribunalComplaintAttachment[]
+
+  @@index([authorId])
+  @@index([targetUserId])
+  @@index([assigneeId])
+  @@index([gameId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([resolvedById])
+}
+
+model TribunalComplaintAttachment {
+  id           String            @id @default(uuid())
+  complaintId  String
+  complaint    TribunalComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         File              @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  originalName String
+  mimeType     String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([complaintId])
+}
+
+model TribunalMessage {
+  id          String            @id @default(uuid())
+  complaintId String
+  complaint   TribunalComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body        String
+  createdAt   DateTime          @default(now())
+
+  @@index([complaintId, createdAt])
+  @@index([authorId])
 }
 
 model UserHistoryEvent {
@@ -519,6 +608,7 @@ model Game {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   gamePlans        GamePlan[]
+  tribunalComplaints TribunalComplaint[]
 
   @@index([attackHqSquadId])
   @@index([defenseHqSquadId])
