@@ -64,7 +64,9 @@ import {
 } from 'src/shared/utils/user-roles';
 import {
   buildWarningAutobanReason,
+  getWarningExpiresAt,
   getWarningWindowStart,
+  remainingBanDays,
   isPermanentBan,
   isWarningAutobanEnabled,
   parseWarningAutobanConfig,
@@ -132,6 +134,10 @@ export class UsersService {
       userId,
       exceptSessionId,
     });
+  }
+
+  async disconnectBannedUser(userId: string) {
+    await this.revokeUserAccess(userId);
   }
 
   private generateActivationToken(minutes = 10) {
@@ -828,13 +834,31 @@ export class UsersService {
     adminId: string,
     actorRoles: UserRole[],
   ) {
+    const result = await this.prisma.$transaction((tx) =>
+      this.createWarningInTransaction(tx, userId, dto, adminId, actorRoles),
+    );
+
+    return {
+      warning: result.warning,
+      autobanApplied: result.autobanApplied,
+      ...(result.bannedUntil ? { bannedUntil: result.bannedUntil } : {}),
+    };
+  }
+
+  async createWarningInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    dto: CreateUserWarningDto,
+    adminId: string,
+    actorRoles: UserRole[],
+  ) {
     const reason = dto.reason.trim();
 
     if (!reason) {
       throw new BadRequestException('Warning reason is required');
     }
 
-    const user = await this.prisma.user.findUnique({
+    const user = await tx.user.findUnique({
       where: { id: userId },
       select: { id: true, roles: true },
     });
@@ -846,13 +870,15 @@ export class UsersService {
     this.ensureCanModerateTarget(user.roles, actorRoles);
 
     const autobanConfig = this.getWarningAutobanConfig();
-
-    return this.prisma.$transaction(async (tx) => {
-      const warning = await tx.userWarning.create({
+    const warning = await tx.userWarning.create({
         data: {
           userId,
           adminId,
           reason,
+          ruleNumber: dto.ruleNumber?.trim() || null,
+          ruleText: dto.ruleText?.trim() || null,
+          comment: dto.comment?.trim() || null,
+          weight: dto.weight ?? 1,
         },
         include: {
           user: {
@@ -908,14 +934,31 @@ export class UsersService {
         config: autobanConfig,
       });
 
-      return {
-        warning,
-        autobanApplied: autoban.applied,
-        ...(autoban.bannedUntil
-          ? { bannedUntil: autoban.bannedUntil.toISOString() }
-          : {}),
-      };
+    return {
+      warning,
+      punishmentId: punishment.id,
+      autobanApplied: autoban.applied,
+      ...(autoban.bannedUntil
+        ? { bannedUntil: autoban.bannedUntil.toISOString() }
+        : {}),
+    };
+  }
+
+  private async countActiveWarningWeight(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    windowStart: Date,
+  ) {
+    const aggregate = await tx.userWarning.aggregate({
+      where: {
+        userId,
+        removedAt: null,
+        createdAt: { gte: windowStart },
+      },
+      _sum: { weight: true },
     });
+
+    return aggregate._sum.weight ?? 0;
   }
 
   private getWarningAutobanConfig(): WarningAutobanConfig {
@@ -946,13 +989,7 @@ export class UsersService {
     }
 
     const windowStart = getWarningWindowStart(config.warningWindowDays);
-    const warningCount = await tx.userWarning.count({
-      where: {
-        userId,
-        removedAt: null,
-        createdAt: { gte: windowStart },
-      },
-    });
+    const warningCount = await this.countActiveWarningWeight(tx, userId, windowStart);
 
     if (!shouldTriggerWarningAutoban(warningCount, config)) {
       return { applied: false };
@@ -1025,6 +1062,63 @@ export class UsersService {
     });
 
     return { applied: true, bannedUntil };
+  }
+
+  async findActiveWarnings(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, status: true, bannedUntil: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const config = this.getWarningAutobanConfig();
+    const windowStart = getWarningWindowStart(config.warningWindowDays);
+    const warnings = await this.prisma.userWarning.findMany({
+        where: {
+          userId,
+          removedAt: null,
+          createdAt: { gte: windowStart },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          reason: true,
+          ruleNumber: true,
+          ruleText: true,
+          comment: true,
+          weight: true,
+          createdAt: true,
+        },
+      });
+
+    const count = warnings.reduce((sum, warning) => sum + warning.weight, 0);
+    const reachedLimit = count >= config.warningCountUntilBan && config.warningCountUntilBan > 0;
+    const isBanned = user.status === 'BANNED';
+
+    return {
+      count,
+      limit: config.warningCountUntilBan,
+      ban:
+        reachedLimit && isBanned
+          ? {
+              bannedUntil: user.bannedUntil?.toISOString() ?? null,
+              days: user.bannedUntil ? remainingBanDays(user.bannedUntil) : null,
+            }
+          : null,
+      items: warnings.map((warning) => ({
+        id: warning.id,
+        reason: warning.reason,
+        ruleNumber: warning.ruleNumber,
+        ruleText: warning.ruleText,
+        comment: warning.comment,
+        weight: warning.weight,
+        createdAt: warning.createdAt,
+        expiresAt: getWarningExpiresAt(warning.createdAt, config.warningWindowDays),
+      })),
+    };
   }
 
   async findWarnings(userId: string, actorRoles: UserRole[]) {
@@ -1526,6 +1620,9 @@ export class UsersService {
   async findAll(dto: GetUsersDto, userRoles: UserRole[]) {
     const { search, take = 50, skip = 0 } = dto;
     const canSeeSensitiveUsersData = this.canSeeSensitiveUsersData(userRoles);
+    const warningWindowStart = getWarningWindowStart(
+      this.getWarningAutobanConfig().warningWindowDays,
+    );
 
     const options: Prisma.UserFindManyArgs = {};
 
@@ -1567,15 +1664,18 @@ export class UsersService {
     if (dto.warningCount !== undefined) {
       if (dto.warningCount === 0) {
         options.where = this.appendUserWhereAnd(options.where, {
-          warnings: { none: { removedAt: null } },
+          warnings: {
+            none: { removedAt: null, createdAt: { gte: warningWindowStart } },
+          },
         });
       } else {
         const rows = await this.prisma.$queryRaw<Array<{ userId: string }>>`
           SELECT "userId"
           FROM "UserWarning"
           WHERE "removedAt" IS NULL
+            AND "createdAt" >= ${warningWindowStart}
           GROUP BY "userId"
-          HAVING COUNT(*) = ${dto.warningCount}
+          HAVING COALESCE(SUM("weight"), 0) = ${dto.warningCount}
         `;
         const userIds = rows.map((row) => row.userId);
 
@@ -1643,9 +1743,10 @@ export class UsersService {
       warnings: {
         where: {
           removedAt: null,
+          createdAt: { gte: warningWindowStart },
         },
         select: {
-          id: true,
+          weight: true,
         },
       },
     };
@@ -1675,13 +1776,13 @@ export class UsersService {
     ]);
 
     const usersWithWarnings = data as Array<
-      (typeof data)[number] & { warnings: { id: string }[] }
+      (typeof data)[number] & { warnings: { weight: number }[] }
     >;
     const dataWithActiveWarningsCount = usersWithWarnings.map(
       ({ warnings, ...user }) => ({
         ...user,
         _count: {
-          warnings: warnings.length,
+          warnings: warnings.reduce((sum, warning) => sum + warning.weight, 0),
         },
       }),
     );
@@ -1868,7 +1969,21 @@ export class UsersService {
     adminId: string,
     actorRoles: UserRole[],
   ) {
-    const user = await this.prisma.user.findFirst({
+    await this.prisma.$transaction((tx) =>
+      this.banUserInTransaction(tx, dto, body, adminId, actorRoles),
+    );
+
+    return this.me(dto.userId);
+  }
+
+  async banUserInTransaction(
+    tx: Prisma.TransactionClient,
+    dto: BanUserDto,
+    body: BanPunishmentDto,
+    adminId: string,
+    actorRoles: UserRole[],
+  ) {
+    const user = await tx.user.findFirst({
       where: { id: dto.userId },
     });
 
@@ -1899,54 +2014,52 @@ export class UsersService {
       throw new BadRequestException('Ban reason is required');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: dto.userId },
-        data: {
-          status: 'BANNED',
-          bannedUntil,
-          isMuted,
-        },
-      });
-
-      const punishment = await tx.userPunishment.create({
-        data: {
-          userId: dto.userId,
-          adminId,
-          type: UserPunishmentType.TEMP_BAN,
-          reason,
-          bannedUntil,
-          isMuted,
-        },
-      });
-
-      await this.usersHistoryService.append(tx, {
-        userId: dto.userId,
-        actorId: adminId,
-        type: UserHistoryEventType.TEMP_BAN,
-        payload: {
-          reason,
-          bannedUntil: bannedUntil.toISOString(),
-          punishmentId: punishment.id,
-          isMuted,
-        },
-      });
-
-      await this.notificationsService.notify(tx, {
-        recipientIds: [dto.userId],
-        actorId: adminId,
-        type: NotificationType.TEMP_BAN,
-        group: NotificationGroup.PUNISHMENTS,
-        targetId: punishment.id,
-        payload: {
-          reason,
-          bannedUntil: bannedUntil.toISOString(),
-          isMuted,
-        },
-      });
+    await tx.user.update({
+      where: { id: dto.userId },
+      data: {
+        status: 'BANNED',
+        bannedUntil,
+        isMuted,
+      },
     });
 
-    return this.me(dto.userId);
+    const punishment = await tx.userPunishment.create({
+      data: {
+        userId: dto.userId,
+        adminId,
+        type: UserPunishmentType.TEMP_BAN,
+        reason,
+        bannedUntil,
+        isMuted,
+      },
+    });
+
+    await this.usersHistoryService.append(tx, {
+      userId: dto.userId,
+      actorId: adminId,
+      type: UserHistoryEventType.TEMP_BAN,
+      payload: {
+        reason,
+        bannedUntil: bannedUntil.toISOString(),
+        punishmentId: punishment.id,
+        isMuted,
+      },
+    });
+
+    await this.notificationsService.notify(tx, {
+      recipientIds: [dto.userId],
+      actorId: adminId,
+      type: NotificationType.TEMP_BAN,
+      group: NotificationGroup.PUNISHMENTS,
+      targetId: punishment.id,
+      payload: {
+        reason,
+        bannedUntil: bannedUntil.toISOString(),
+        isMuted,
+      },
+    });
+
+    return { punishmentId: punishment.id, bannedUntil };
   }
 
   async permanentlyBanUser(
@@ -1955,7 +2068,22 @@ export class UsersService {
     adminId: string,
     actorRoles: UserRole[],
   ) {
-    const user = await this.prisma.user.findFirst({
+    await this.prisma.$transaction((tx) =>
+      this.permanentlyBanUserInTransaction(tx, dto, body, adminId, actorRoles),
+    );
+    await this.revokeUserAccess(dto.userId);
+
+    return this.me(dto.userId);
+  }
+
+  async permanentlyBanUserInTransaction(
+    tx: Prisma.TransactionClient,
+    dto: UnbanUserDto,
+    body: PunishmentReasonDto,
+    adminId: string,
+    actorRoles: UserRole[],
+  ) {
+    const user = await tx.user.findFirst({
       where: { id: dto.userId },
     });
 
@@ -1975,52 +2103,48 @@ export class UsersService {
       throw new BadRequestException('Ban reason is required');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: dto.userId },
-        data: {
-          status: 'BANNED',
-          bannedUntil: null,
-          isMuted: false,
-        },
-      });
-
-      const punishment = await tx.userPunishment.create({
-        data: {
-          userId: dto.userId,
-          adminId,
-          type: UserPunishmentType.PERMANENT_BAN,
-          reason,
-          isMuted: false,
-        },
-      });
-
-      await this.usersHistoryService.append(tx, {
-        userId: dto.userId,
-        actorId: adminId,
-        type: UserHistoryEventType.PERMANENT_BAN,
-        payload: {
-          reason,
-          punishmentId: punishment.id,
-          isMuted: false,
-        },
-      });
-
-      await this.notificationsService.notify(tx, {
-        recipientIds: [dto.userId],
-        actorId: adminId,
-        type: NotificationType.PERMANENT_BAN,
-        group: NotificationGroup.PUNISHMENTS,
-        targetId: punishment.id,
-        payload: {
-          reason,
-        },
-      });
+    await tx.user.update({
+      where: { id: dto.userId },
+      data: {
+        status: 'BANNED',
+        bannedUntil: null,
+        isMuted: false,
+      },
     });
 
-    await this.revokeUserAccess(dto.userId);
+    const punishment = await tx.userPunishment.create({
+      data: {
+        userId: dto.userId,
+        adminId,
+        type: UserPunishmentType.PERMANENT_BAN,
+        reason,
+        isMuted: false,
+      },
+    });
 
-    return this.me(dto.userId);
+    await this.usersHistoryService.append(tx, {
+      userId: dto.userId,
+      actorId: adminId,
+      type: UserHistoryEventType.PERMANENT_BAN,
+      payload: {
+        reason,
+        punishmentId: punishment.id,
+        isMuted: false,
+      },
+    });
+
+    await this.notificationsService.notify(tx, {
+      recipientIds: [dto.userId],
+      actorId: adminId,
+      type: NotificationType.PERMANENT_BAN,
+      group: NotificationGroup.PUNISHMENTS,
+      targetId: punishment.id,
+      payload: {
+        reason,
+      },
+    });
+
+    return { punishmentId: punishment.id };
   }
 
   async unbanUser(

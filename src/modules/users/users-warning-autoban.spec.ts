@@ -4,7 +4,9 @@ import {
   DEFAULT_AUTOBAN_HOURS,
   DEFAULT_WARNING_COUNT_UNTIL_BAN,
   DEFAULT_WARNING_WINDOW_DAYS,
+  getWarningExpiresAt,
   getWarningWindowStart,
+  remainingBanDays,
   isPermanentBan,
   isWarningAutobanEnabled,
   parseWarningAutobanConfig,
@@ -67,6 +69,31 @@ describe('users-warning-autoban', () => {
 
     it('triggers above threshold', () => {
       expect(shouldTriggerWarningAutoban(4, config)).toBe(true);
+    });
+  });
+
+  describe('getWarningExpiresAt', () => {
+    it('adds the autoban window to the warning date', () => {
+      const createdAt = new Date('2026-07-30T12:00:00.000Z');
+      expect(getWarningExpiresAt(createdAt, 30).toISOString()).toBe(
+        '2026-08-29T12:00:00.000Z',
+      );
+    });
+  });
+
+  describe('remainingBanDays', () => {
+    const now = new Date('2026-08-29T12:00:00.000Z');
+
+    it('counts whole days left until bannedUntil', () => {
+      expect(remainingBanDays(new Date('2026-09-01T12:00:00.000Z'), now)).toBe(3);
+    });
+
+    it('rounds a partial day up', () => {
+      expect(remainingBanDays(new Date('2026-08-30T13:00:00.000Z'), now)).toBe(2);
+    });
+
+    it('returns 0 when the ban has already ended', () => {
+      expect(remainingBanDays(new Date('2026-08-29T11:00:00.000Z'), now)).toBe(0);
     });
   });
 

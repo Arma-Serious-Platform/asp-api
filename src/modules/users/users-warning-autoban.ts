@@ -97,6 +97,22 @@ export function getWarningWindowStart(
   return new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
 }
 
+export function getWarningExpiresAt(createdAt: Date, windowDays: number): Date {
+  return new Date(createdAt.getTime() + windowDays * 24 * 60 * 60 * 1000);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function remainingBanDays(bannedUntil: Date, now = new Date()): number {
+  const remainingMs = bannedUntil.getTime() - now.getTime();
+
+  if (remainingMs <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(remainingMs / DAY_MS);
+}
+
 export function buildWarningAutobanReason(config: WarningAutobanConfig): string {
   return `Автоматичний бан: отримано ${config.warningCountUntilBan} попереджень за ${config.warningWindowDays} днів`;
 }
